@@ -1,0 +1,164 @@
+{
+  "burger": {
+    "file": "/templates/images/burger.jpg",
+    "pixabay_id": 1156564,
+    "pageURL": "https://pixabay.com/photos/burger-cheeseburger-chips-food-1156564/",
+    "user": "RobertoCardona",
+    "tags": "burger, cheeseburger, chips, food, burger, burger, burger, burger, burger, cheeseburger"
+  },
+  "burger_meal": {
+    "file": "/templates/images/burger_meal.jpg",
+    "pixabay_id": 6868812,
+    "pageURL": "https://pixabay.com/photos/fast-food-burger-fries-fried-6868812/",
+    "user": "Isamand",
+    "tags": "fast food, burger, fries, fried, hamburger, food, french fries, fast food, burger, burger, burger, burger, burger, hamburger, french fries"
+  },
+  "pizza": {
+    "file": "/templates/images/pizza.jpg",
+    "pixabay_id": 3010062,
+    "pageURL": "https://pixabay.com/photos/pizza-plate-food-cheese-lunch-3010062/",
+    "user": "zuzi99",
+    "tags": "pizza, plate, food, cheese, lunch, vegetables, italian, vegetarian pizza, pizza slices, italian food, italian cuisine, composition, food photography, pizza, pizza, pizza, pizza, pizza, food, food, food"
+  },
+  "kebab": {
+    "file": "/templates/images/kebab.jpg",
+    "pixabay_id": 7414529,
+    "pageURL": "https://pixabay.com/photos/kebab-meat-sandwich-kebab-7414529/",
+    "user": "2SIF",
+    "tags": "kebab meat sandwich, kebab, meat sandwich, kebab sandwich, meal, food, snacks, delicious, kebab wrap, kebab, kebab, kebab, kebab, kebab"
+  },
+  "fries": {
+    "file": "/templates/images/fries.jpg",
+    "pixabay_id": 1846083,
+    "pageURL": "https://pixabay.com/photos/french-fries-potato-appetizer-1846083/",
+    "user": "Pexels",
+    "tags": "french fries, potato, appetizer, delicious, dish, fast food, food, fries, herbs, salt, meal, plate, food photography, french fries, french fries, french fries, french fries, french fries, potato, fast food, fast food, fast food, fries, fries, fries, fries"
+  },
+  "salad": {
+    "file": "/templates/images/salad.jpg",
+    "pixabay_id": 7249259,
+    "pageURL": "https://pixabay.com/photos/salad-asian-food-dish-meal-7249259/",
+    "user": "joannawielgosz",
+    "tags": "salad, asian, food, dish, meal, cuisine, delicious, tasty, kitchen, pasta, plate, tofu, peppers, healthy, coriander, salad, salad, salad, salad, salad, tofu, tofu"
+  },
+  "steak": {
+    "file": "/templates/images/steak.jpg",
+    "pixabay_id": 2169305,
+    "pageURL": "https://pixabay.com/photos/asparagus-steak-veal-steak-veal-2169305/",
+    "user": "RitaE",
+    "tags": "asparagus, steak, veal steak, veal, meat, barbecue, green asparagus, vegetables, eat, meal, healthy, low carb, diet, food, plate, dish, healthy meal, food photography, close up, steak, meat, diet, food, food, food, food, food"
+  },
+  "pasta": {
+    "file": "/templates/images/pasta.jpg",
+    "pixabay_id": 2931846,
+    "pageURL": "https://pixabay.com/photos/spaghetti-pasta-noodles-italian-2931846/",
+    "user": "Divily",
+    "tags": "spaghetti, pasta, noodles, italian, eat, food, carbohydrates, cook, lunch, italy, vegetarian, meal, nutrition, tasty, delicious, fork, cutlery, italian food, italian cuisine, food photography, pasta, pasta, food, food, food, food, food"
+  },
+  "dessert": {
+    "file": "/templates/images/dessert.jpg",
+    "pixabay_id": 1971552,
+    "pageURL": "https://pixabay.com/photos/cake-piece-plate-dessert-pastry-1971552/",
+    "user": "Daria-Yakovleva",
+    "tags": "cake, piece, plate, dessert, pastry, sweet, chocolate, cake slice, piece of cake, confectionery, bake, food, delicious, sweets, calories, eat, food photography, cake, cake, cake, cake, cake, dessert, food, food"
+  },
+  "chicken": {
+    "file": "/templates/images/chicken.jpg",
+    "pixabay_id": 3949947,
+    "pageURL": "https://pixabay.com/photos/fried-chicken-food-fried-chicken-3949947/",
+    "user": "NikkkOO",
+    "tags": "fried, chicken, food, fried chicken, fried chicken, fried chicken, fried chicken, fried chicken, fried chicken"
+  },
+  "tacos": {
+    "file": "/templates/images/tacos.jpg",
+    "pixabay_id": 5388580,
+    "pageURL": "https://pixabay.com/photos/food-food-mexican-taco-burrito-5388580/",
+    "user": "hekoer_1",
+    "tags": "food, food mexican, taco, burrito, tacos, mexican, tortilla, taco arabe, taco, burrito, burrito, tacos, tacos, tacos, tacos, tacos"
+  },
+  "sushi": {
+    "file": "/templates/images/sushi.jpg",
+    "pixabay_id": 8113165,
+    "pageURL": "https://pixabay.com/photos/sushi-menu-restaurant-food-kitchen-8113165/",
+    "user": "Mekan_4",
+    "tags": "sushi, menu, restaurant, food, kitchen, dining, sushi, sushi, sushi, sushi, sushi, restaurant, food"
+  },
+  "drink": {
+    "file": "/templates/images/drink.jpg",
+    "pixabay_id": 462776,
+    "pageURL": "https://pixabay.com/photos/drink-soda-glasses-can-beverage-462776/",
+    "user": "stevepb",
+    "tags": "drink, soda, glasses, can, beverage, refreshment, carbonated drink, soft drink, cold drink, fizzy, coca cola, coke, cola, drink, soda, soda, cold drink, cold drink, coca cola, coca cola, coca cola, coca cola, coca cola, coke, coke, cola"
+  },
+  "hotdog": {
+    "file": "/templates/images/hotdog.jpg",
+    "pixabay_id": 2707798,
+    "pageURL": "https://pixabay.com/photos/hot-dog-sausage-fast-food-snack-2707798/",
+    "user": "maxmann",
+    "tags": "hot dog, sausage, fast food, snack, ketchup, mustard, nourishment, usa, america, hot dog, hot dog, hot dog, hot dog, hot dog"
+  },
+  "foodtruck": {
+    "file": "/templates/images/foodtruck.jpg",
+    "pixabay_id": 1662327,
+    "pageURL": "https://pixabay.com/photos/food-truck-ice-cream-dessert-van-1662327/",
+    "user": "smcaleer",
+    "tags": "food truck, ice-cream, dessert, van, food truck, food truck, food truck, food truck, food truck"
+  },
+  "wrap": {
+    "file": "/templates/images/wrap.jpg",
+    "pixabay_id": 7061741,
+    "pageURL": "https://pixabay.com/photos/wrap-burrito-shawarma-lunch-meal-7061741/",
+    "user": "MurrrPhoto",
+    "tags": "wrap, burrito, shawarma, lunch, meal, meat, dinner, snack, chicken, shawarma, shawarma, shawarma, shawarma, shawarma"
+  },
+  "cocktail": {
+    "file": "/templates/images/cocktail.jpg",
+    "pixabay_id": 4271392,
+    "pageURL": "https://pixabay.com/photos/cocktail-drinks-bar-bartender-4271392/"
+  },
+  "beer": {
+    "file": "/templates/images/beer.jpg",
+    "pixabay_id": 1998293,
+    "pageURL": "https://pixabay.com/photos/beer-glass-bottle-craft-beer-ale-1998293/"
+  },
+  "wine": {
+    "file": "/templates/images/wine.jpg",
+    "pixabay_id": 1004255,
+    "pageURL": "https://pixabay.com/photos/red-wine-glass-drink-wine-glass-1004255/"
+  },
+  "coffee": {
+    "file": "/templates/images/coffee.jpg",
+    "pixabay_id": 2306471,
+    "pageURL": "https://pixabay.com/photos/coffee-pen-notebook-open-notebook-2306471/"
+  },
+  "cappuccino": {
+    "file": "/templates/images/cappuccino.jpg",
+    "pixabay_id": 3120750,
+    "pageURL": "https://pixabay.com/photos/coffee-drink-hot-cup-cappuccino-3120750/"
+  },
+  "croissant": {
+    "file": "/templates/images/croissant.jpg",
+    "pixabay_id": 1284438,
+    "pageURL": "https://pixabay.com/photos/bread-croissant-morning-puff-paste-1284438/"
+  },
+  "avocado": {
+    "file": "/templates/images/avocado.jpg",
+    "pixabay_id": 4824364,
+    "pageURL": "https://pixabay.com/photos/breakfast-eggs-food-meal-brunch-4824364/"
+  },
+  "guacamole": {
+    "file": "/templates/images/guacamole.jpg",
+    "pixabay_id": 4454941,
+    "pageURL": "https://pixabay.com/photos/nachos-chips-food-mexican-plate-4454941/"
+  },
+  "margarita": {
+    "file": "/templates/images/margarita.jpg",
+    "pixabay_id": 1839361,
+    "pageURL": "https://pixabay.com/photos/margarita-cocktail-cold-drink-bar-1839361/"
+  },
+  "tiramisu": {
+    "file": "/templates/images/tiramisu.jpg",
+    "pixabay_id": 8503073,
+    "pageURL": "https://pixabay.com/photos/tiramisu-dessert-cake-food-cream-8503073/"
+  }
+}

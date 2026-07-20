@@ -1,0 +1,43 @@
+{
+  "name": "menu-builder",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "dev": "concurrently -n vite,api -c cyan,magenta \"npm run dev:vite\" \"npm run dev:api\"",
+    "dev:vite": "vite",
+    "dev:frontend": "vite",
+    "dev:api": "wrangler pages dev dist --compatibility-date=2026-01-01 --port 8788",
+    "build": "tsc -b && vite build",
+    "lint": "oxlint",
+    "preview": "vite preview",
+    "db:migrate": "wrangler d1 execute menu-db --local --file=./migrations/0001_initial.sql && wrangler d1 execute menu-db --local --file=./migrations/0002_seed_templates.sql && wrangler d1 execute menu-db --local --file=./migrations/0003_update_templates.sql && wrangler d1 execute menu-db --local --file=./migrations/0004_magnific_templates.sql && wrangler d1 execute menu-db --local --file=./migrations/0005_replace_category_templates.sql",
+    "db:migrate:remote": "wrangler d1 execute menu-db --remote --file=./migrations/0001_initial.sql && wrangler d1 execute menu-db --remote --file=./migrations/0002_seed_templates.sql && wrangler d1 execute menu-db --remote --file=./migrations/0003_update_templates.sql && wrangler d1 execute menu-db --remote --file=./migrations/0004_magnific_templates.sql && wrangler d1 execute menu-db --remote --file=./migrations/0005_replace_category_templates.sql",
+    "db:update-templates": "wrangler d1 execute menu-db --local --file=./migrations/0003_update_templates.sql",
+    "db:add-magnific-templates": "wrangler d1 execute menu-db --local --file=./migrations/0004_magnific_templates.sql",
+    "db:replace-category-templates": "wrangler d1 execute menu-db --local --file=./migrations/0005_replace_category_templates.sql",
+    "cf-typegen": "wrangler types"
+  },
+  "dependencies": {
+    "browser-image-compression": "^2.0.2",
+    "fabric": "^7.4.0",
+    "jose": "^6.2.3",
+    "jspdf": "^4.2.1",
+    "qrcode.react": "^4.2.0",
+    "react": "^19.2.7",
+    "react-dom": "^19.2.7",
+    "react-router-dom": "^7.18.1"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "^4.20260702.1",
+    "@types/node": "^24.13.2",
+    "@types/react": "^19.2.17",
+    "@types/react-dom": "^19.2.3",
+    "@vitejs/plugin-react": "^6.0.3",
+    "concurrently": "^9.2.4",
+    "oxlint": "^1.71.0",
+    "typescript": "~6.0.2",
+    "vite": "^8.1.1",
+    "wrangler": "^4.86.0"
+  }
+}
