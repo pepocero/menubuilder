@@ -6,6 +6,43 @@ import type { MenuPage } from '@/types/canvas';
 import { A4_HEIGHT, A4_WIDTH, normalizeCanvasData } from '@/types/canvas';
 import { loadPageOntoCanvas } from '@/lib/canvas-serializer';
 
+function enablePublicCanvasTouchScroll(canvas: Canvas): void {
+  canvas.allowTouchScrolling = true;
+  const upper = canvas.upperCanvasEl;
+  const lower = canvas.lowerCanvasEl;
+  const container = canvas.getElement().parentElement;
+  for (const el of [upper, lower, container]) {
+    if (el) {
+      el.style.touchAction = 'pan-y pinch-zoom';
+      el.style.pointerEvents = 'none';
+    }
+  }
+}
+
+function replaceCanvasWithImage(fabricCanvas: Canvas, wrapper: HTMLElement): boolean {
+  try {
+    const dataUrl = fabricCanvas.toDataURL({
+      format: 'png',
+      multiplier: window.devicePixelRatio > 1 ? 2 : 1,
+    });
+    fabricCanvas.dispose();
+
+    const img = document.createElement('img');
+    img.src = dataUrl;
+    img.alt = '';
+    img.className = 'public-page-image';
+    img.draggable = false;
+    img.decoding = 'async';
+    img.loading = 'lazy';
+
+    wrapper.replaceChildren(img);
+    return true;
+  } catch {
+    enablePublicCanvasTouchScroll(fabricCanvas);
+    return false;
+  }
+}
+
 export function PublicMenuPage() {
   const { slug } = useParams<{ slug: string }>();
   const containerRef = useRef<HTMLDivElement>(null);
@@ -44,10 +81,14 @@ export function PublicMenuPage() {
           const page = doc.pages[i];
           if (!el || !page) continue;
 
+          const wrap = el.closest<HTMLElement>('.public-canvas');
+          if (!wrap) continue;
+
           const fabricCanvas = new Canvas(el, {
             width: A4_WIDTH,
             height: A4_HEIGHT,
             selection: false,
+            allowTouchScrolling: true,
           });
           fabricCanvas.selection = false;
           fabricCanvases.push(fabricCanvas);
@@ -57,6 +98,10 @@ export function PublicMenuPage() {
             obj.set({ selectable: false, evented: false });
           });
           fabricCanvas.requestRenderAll();
+
+          if (replaceCanvasWithImage(fabricCanvas, wrap)) {
+            fabricCanvases.pop();
+          }
         }
       } catch {
         if (!disposed) {

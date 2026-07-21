@@ -1376,7 +1376,11 @@ textarea {
 
 .public-menu-page {
   min-height: 100vh;
+  min-height: 100dvh;
   background: #e8e8e8;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  touch-action: pan-y pinch-zoom;
 }
 
 .public-menu-header {
@@ -1399,7 +1403,8 @@ textarea {
   flex-direction: column;
   align-items: center;
   padding: 1.5rem 1rem 3rem;
-  overflow-x: auto;
+  width: 100%;
+  touch-action: pan-y pinch-zoom;
 }
 
 .pages-stack {
@@ -1474,6 +1479,19 @@ textarea {
 
 .template-preview-canvas {
   position: relative;
+}
+
+.public-canvas {
+  width: 100%;
+  max-width: min(595px, 100%);
+}
+
+.public-page-image {
+  display: block;
+  width: 100%;
+  height: auto;
+  user-select: none;
+  -webkit-user-drag: none;
 }
 
 .public-canvas.hidden-canvas {
@@ -1687,11 +1705,17 @@ textarea {
     gap: 0.75rem;
   }
 
-  .public-canvas,
+  .public-canvas.editor-canvas-wrap {
+    width: 100%;
+    max-width: 100%;
+  }
+
   .public-canvas .canvas-container,
   .public-canvas canvas {
     max-width: 100% !important;
     height: auto !important;
+    touch-action: pan-y pinch-zoom;
+    pointer-events: none;
   }
 }
 
