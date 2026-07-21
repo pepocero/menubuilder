@@ -1,5 +1,6 @@
 import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom';
 import { AuthProvider } from '@/lib/auth-context';
+import { DocumentSeo } from '@/components/DocumentSeo';
 import { ProtectedRoute, PublicOnlyRoute } from '@/components/ProtectedRoute';
 import { DashboardPage } from '@/routes/DashboardPage';
 import { EditorPage } from '@/routes/EditorPage';
@@ -14,6 +15,7 @@ export default function App() {
   return (
     <AuthProvider>
       <BrowserRouter>
+        <DocumentSeo />
         <Routes>
           <Route path="/" element={<LandingPage />} />
 

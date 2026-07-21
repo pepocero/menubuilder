@@ -1,0 +1,14 @@
+User-agent: *
+Allow: /
+Allow: /landing/
+Allow: /templates/images/
+
+Disallow: /login
+Disallow: /register
+Disallow: /dashboard
+Disallow: /templates
+Disallow: /qrs
+Disallow: /editor/
+Disallow: /api/
+
+Sitemap: https://menubuilder.carlinitools.com/sitemap.xml

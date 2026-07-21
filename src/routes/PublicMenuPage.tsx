@@ -3,6 +3,7 @@ import { useParams } from 'react-router-dom';
 import { HtmlRenderer } from '@/components/html-renderer';
 import { PublicPageView } from '@/components/public/PublicPageView';
 import { getPublicMenu } from '@/lib/api';
+import { SITE_NAME, applyPageSeo } from '@/lib/seo';
 import type { MenuPage } from '@/types/canvas';
 import { A4_HEIGHT, A4_WIDTH, normalizeCanvasData } from '@/types/canvas';
 import { parseMenuDocument, type MenuDocument } from '@shared/menu-document';
@@ -26,9 +27,14 @@ export function PublicMenuPage() {
         const { menu } = await getPublicMenu(slug);
         if (disposed) return;
 
-        if (menu.title) {
-          document.title = menu.title;
-        }
+        applyPageSeo({
+          title: menu.title?.trim() || 'Carta digital',
+          description: menu.title?.trim()
+            ? `${menu.title.trim()} — carta de menú digital publicada con ${SITE_NAME}.`
+            : `Carta de menú digital publicada con ${SITE_NAME}.`,
+          path: `/p/${slug}`,
+          index: true,
+        });
 
         const doc = parseMenuDocument(menu.menu_document);
         if (doc) {

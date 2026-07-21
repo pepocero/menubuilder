@@ -68,15 +68,21 @@ export async function revokeAllUserRefreshTokens(db: D1Database, userId: string)
     .run();
 }
 
+/** Listado del dashboard: no pide canvas ni columnas de export (evita 500 si falta migración 0006). */
 export async function listMenusByUser(db: D1Database, userId: string): Promise<MenuRow[]> {
   const result = await db
     .prepare(
-      `SELECT id, user_id, title, template_id, canvas_data, thumbnail_url, menu_document, export_png_url, is_public, public_slug, created_at, updated_at
+      `SELECT id, user_id, title, template_id, thumbnail_url, is_public, public_slug, created_at, updated_at
        FROM menus WHERE user_id = ? ORDER BY updated_at DESC`,
     )
     .bind(userId)
     .all<MenuRow>();
-  return result.results ?? [];
+  return (result.results ?? []).map((row) => ({
+    ...row,
+    canvas_data: row.canvas_data ?? '',
+    menu_document: row.menu_document ?? null,
+    export_png_url: row.export_png_url ?? null,
+  }));
 }
 
 export async function getMenuById(db: D1Database, id: string): Promise<MenuRow | null> {
