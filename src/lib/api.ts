@@ -8,6 +8,10 @@ export class ApiError extends Error {
   }
 }
 
+function hasRefreshCookie(): boolean {
+  return document.cookie.split(';').some((part) => part.trim().startsWith('refresh_token='));
+}
+
 async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
   let response: Response;
   try {
@@ -156,6 +160,9 @@ export async function login(email: string, password: string): Promise<AuthRespon
 }
 
 export async function refreshSession(): Promise<AuthResponse> {
+  if (!hasRefreshCookie()) {
+    throw new ApiError('No hay sesión activa', 401);
+  }
   return api.post('/api/auth/refresh');
 }
 
@@ -237,6 +244,9 @@ export async function getPublicMenu(slug: string): Promise<{
   menu: {
     title: string;
     canvas_data: import('@/types/canvas').CanvasData;
+    menu_document: import('@shared/menu-document/types').MenuDocument | null;
+    export_png_url: string | null;
+    thumbnail_url: string | null;
     updated_at: string;
     public_slug: string;
   };
@@ -271,6 +281,19 @@ export async function uploadAsset(
   return api.upload('/api/assets', file);
 }
 
+export interface AssetSummary {
+  id: string;
+  type: string | null;
+  url: string | null;
+  r2_key: string;
+  source: string | null;
+  created_at: string;
+}
+
+export async function listAssets(): Promise<{ assets: AssetSummary[] }> {
+  return api.get('/api/assets');
+}
+
 export async function importStockImage(data: {
   stockImageId: string;
   fullUrl: string;
@@ -279,10 +302,12 @@ export async function importStockImage(data: {
   return api.post('/api/assets/import-stock', data);
 }
 
-/** Borra de R2+D1 si el asset ya no se usa en otros menús del usuario */
+/** Borra de R2+D1. Con force=true elimina aunque esté referenciado en menús. */
 export async function deleteAsset(data: {
-  url: string;
+  id?: string;
+  url?: string;
   exclude_menu_id?: string;
-}): Promise<{ deleted: boolean; kept?: boolean; reason?: string }> {
+  force?: boolean;
+}): Promise<{ deleted: boolean; kept?: boolean; reason?: string; url?: string | null; id?: string }> {
   return api.delete('/api/assets', data);
 }

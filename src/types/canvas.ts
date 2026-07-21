@@ -30,6 +30,8 @@ export interface LayerBase {
   zIndex: number;
   visible?: boolean;
   locked?: boolean;
+  /** Nombre personalizado para identificar la capa en el panel */
+  name?: string;
   opacity?: number;
 }
 

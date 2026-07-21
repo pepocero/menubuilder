@@ -7,8 +7,13 @@ import {
   getMenuById,
   updateMenu,
 } from '../../lib/db';
-import { deleteFromR2, parseR2KeyFromAssetUrl } from '../../lib/r2';
+import { deleteMenuExportPng, uploadMenuExportPng } from '../../lib/menu-export';
+import { deleteFromR2, getAssetPublicUrl, parseR2KeyFromAssetUrl } from '../../lib/r2';
 import { errorResponse, jsonResponse, parseJson } from '../../lib/types';
+import {
+  canvasDataToMenuDocument,
+  serializeMenuDocument,
+} from '../../../shared/menu-document/converter';
 
 interface UpdateMenuBody {
   title?: string;
@@ -119,7 +124,40 @@ export const onRequestPut: PagesFunction<Env> = async (context) => {
   const thumbnailUrl =
     body.thumbnail_url !== undefined ? body.thumbnail_url : menu.thumbnail_url;
 
-  const updated = await updateMenu(env.DB, menuId, userId, title, canvasData, thumbnailUrl);
+  const parsedCanvas = JSON.parse(canvasData);
+  const menuDoc = canvasDataToMenuDocument(parsedCanvas, {
+    title,
+    sourceMenuId: menuId,
+  });
+  const menuDocumentJson = menuDoc ? serializeMenuDocument(menuDoc) : null;
+
+  let exportPngUrl = menu.export_png_url;
+  if (
+    typeof thumbnailUrl === 'string' &&
+    thumbnailUrl.startsWith('data:image/png')
+  ) {
+    const uploaded = await uploadMenuExportPng(
+      env.MEDIA,
+      userId,
+      menuId,
+      thumbnailUrl,
+      (key) => getAssetPublicUrl(request, key),
+    );
+    if (uploaded) {
+      exportPngUrl = uploaded;
+    }
+  }
+
+  const updated = await updateMenu(
+    env.DB,
+    menuId,
+    userId,
+    title,
+    canvasData,
+    thumbnailUrl,
+    menuDocumentJson,
+    exportPngUrl,
+  );
   if (!updated) {
     return errorResponse('No se pudo actualizar', 500);
   }
@@ -165,6 +203,8 @@ export const onRequestDelete: PagesFunction<Env> = async (context) => {
     await deleteFromR2(env.MEDIA, asset.r2_key);
     await deleteAssetRow(env.DB, asset.id, userId);
   }
+
+  await deleteMenuExportPng(env.MEDIA, userId, menuId);
 
   return jsonResponse({ ok: true });
 };

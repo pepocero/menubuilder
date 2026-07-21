@@ -19,6 +19,15 @@ import { A4_HEIGHT, A4_WIDTH, normalizeCanvasData } from '@/types/canvas';
 
 const ORIGIN = { originX: 'left' as const, originY: 'top' as const };
 
+function layerDataFromLayer(layer: CanvasLayer) {
+  return {
+    layerId: layer.id,
+    layerType: layer.type,
+    layerName: layer.name,
+    locked: layer.locked === true,
+  };
+}
+
 export function isTextObject(obj: FabricObject): boolean {
   return obj.type === 'textbox' || obj.type === 'i-text' || obj.type === 'text';
 }
@@ -29,6 +38,70 @@ export function isImageObject(obj: FabricObject): boolean {
 
 export function isShapeObject(obj: FabricObject): boolean {
   return obj.type === 'rect' || obj.type === 'circle' || obj.type === 'line';
+}
+
+/**
+ * Tras pegar texto largo, Fabric a menudo deja estilos por carácter y un ancho/alto
+ * inválidos: el cuadro parece vacío aunque `text` tenga contenido.
+ * Normaliza el Textbox para que vuelva a verse y quepa en el A4.
+ */
+export function refreshTextboxLayout(obj: FabricObject): void {
+  if (!isTextObject(obj)) return;
+
+  const text = obj as Textbox;
+  const content = text.text ?? '';
+  const fontSize = Math.max(8, Math.min(120, Number(text.fontSize) || 16));
+
+  // Pegados ricos (Word, web…) dejan styles que pueden ocultar o colapsar el texto
+  text.styles = {};
+  text.set('styles', {});
+
+  let width = Number(text.width) || 0;
+  if (!Number.isFinite(width) || width < 48) {
+    const estimated = Math.max(160, Math.min(content.length * fontSize * 0.4, A4_WIDTH - 48));
+    width = estimated;
+  }
+  width = Math.min(Math.max(width, 48), A4_WIDTH - 24);
+
+  const fillRaw = text.fill;
+  const fill =
+    typeof fillRaw === 'string' &&
+    fillRaw !== '' &&
+    fillRaw !== 'transparent' &&
+    fillRaw !== 'rgba(0,0,0,0)'
+      ? fillRaw
+      : '#333333';
+
+  const scaleX = !Number.isFinite(text.scaleX) || (text.scaleX ?? 1) === 0 ? 1 : text.scaleX;
+  const scaleY = !Number.isFinite(text.scaleY) || (text.scaleY ?? 1) === 0 ? 1 : text.scaleY;
+  const opacity =
+    !Number.isFinite(text.opacity as number) || (text.opacity ?? 1) <= 0
+      ? 1
+      : (text.opacity as number);
+
+  text.set({
+    text: content,
+    fontSize,
+    width,
+    fill,
+    scaleX,
+    scaleY,
+    opacity,
+    visible: true,
+    dirty: true,
+  });
+
+  text.initDimensions();
+
+  const minHeight = fontSize * 1.25;
+  if ((text.height ?? 0) < minHeight && content.trim().length > 0) {
+    // Forzar un segundo cálculo: a veces el primer initDimensions falla tras un paste
+    text.set({ text: content, width, dirty: true });
+    text.initDimensions();
+  }
+
+  text.setCoords();
+  text.canvas?.requestRenderAll();
 }
 
 function toHexColor(value: unknown, fallback = '#000000'): string {
@@ -73,10 +146,7 @@ export function layerToFabricObject(layer: CanvasLayer): FabricObject | null {
       textAlign: textLayer.style.align,
       fontWeight: textLayer.style.fontWeight ?? 'normal',
     });
-    (obj as FabricObject & { data?: unknown }).data = {
-      layerId: layer.id,
-      layerType: layer.type,
-    };
+    (obj as FabricObject & { data?: unknown }).data = layerDataFromLayer(layer);
     return obj;
   }
 
@@ -111,8 +181,7 @@ export function layerToFabricObject(layer: CanvasLayer): FabricObject | null {
     }
 
     (obj as FabricObject & { data?: unknown }).data = {
-      layerId: layer.id,
-      layerType: 'shape',
+      ...layerDataFromLayer(layer),
       shape: shapeLayer.shape,
     };
     return obj;
@@ -140,8 +209,7 @@ export async function imageLayerToFabricObject(layer: ImageLayer): Promise<Fabri
   });
 
   (img as FabricObject & { data?: unknown }).data = {
-    layerId: layer.id,
-    layerType: 'image',
+    ...layerDataFromLayer(layer),
     src: layer.src,
     assetId: (layer as ImageLayer & { assetId?: string }).assetId,
   };
@@ -208,11 +276,12 @@ export async function loadCanvasData(canvas: Canvas, data: CanvasData): Promise<
 
 export function fabricObjectToLayer(obj: FabricObject, zIndex: number): CanvasLayer | null {
   const data =
-    ((obj as FabricObject & { data?: { layerId?: string; layerType?: string; src?: string; shape?: string } })
+    ((obj as FabricObject & { data?: { layerId?: string; layerType?: string; layerName?: string; locked?: boolean; src?: string; shape?: string } })
       .data) ?? {};
   const id = data.layerId ?? crypto.randomUUID();
   const base = {
     id,
+    name: data.layerName?.trim() || undefined,
     x: obj.left ?? 0,
     y: obj.top ?? 0,
     width: (obj.width ?? 0) * (obj.scaleX ?? 1),
@@ -220,7 +289,7 @@ export function fabricObjectToLayer(obj: FabricObject, zIndex: number): CanvasLa
     rotation: obj.angle ?? 0,
     zIndex,
     visible: obj.visible !== false,
-    locked: obj.selectable === false,
+    locked: typeof data.locked === 'boolean' ? data.locked : obj.selectable === false,
     opacity: obj.opacity ?? 1,
   };
 
@@ -324,8 +393,8 @@ export function canvasToPageData(canvas: Canvas, pageId: string): MenuPage {
 /** Documento de una sola página (compat / utilidades) */
 export function canvasToCanvasData(canvas: Canvas, pageId = 'page_1'): CanvasData {
   return {
-    width: canvas.getWidth() || A4_WIDTH,
-    height: canvas.getHeight() || A4_HEIGHT,
+    width: A4_WIDTH,
+    height: A4_HEIGHT,
     pages: [canvasToPageData(canvas, pageId)],
   };
 }
@@ -337,7 +406,7 @@ export function createTextLayer(x = 80, y = 120): TextLayer {
     content: 'Nuevo texto',
     x,
     y,
-    width: 280,
+    width: 400,
     height: 40,
     rotation: 0,
     zIndex: 1,
@@ -398,8 +467,8 @@ export function fitImageToA4(
   canvas: Canvas,
   mode: 'cover' | 'contain' = 'cover',
 ): void {
-  const cw = canvas.getWidth();
-  const ch = canvas.getHeight();
+  const cw = A4_WIDTH;
+  const ch = A4_HEIGHT;
   const iw = img.width || 1;
   const ih = img.height || 1;
 
@@ -424,9 +493,26 @@ export function fitImageToA4(
   canvas.requestRenderAll();
 }
 
+/**
+ * Zoom de vista del editor: redimensiona el canvas de Fabric para que no se vea borroso
+ * (a diferencia de un CSS transform: scale sobre el bitmap).
+ */
+export function applyCanvasZoom(canvas: Canvas, zoomPercent: number): void {
+  // Tras dispose() Fabric deja `lower` en undefined; no tocar el canvas muerto.
+  const lower = (canvas as Canvas & { lower?: { el?: HTMLCanvasElement } }).lower;
+  if (!lower?.el) return;
+
+  const zoom = Math.max(0.25, Math.min(2, zoomPercent / 100));
+  canvas.setZoom(zoom);
+  canvas.setDimensions({
+    width: A4_WIDTH * zoom,
+    height: A4_HEIGHT * zoom,
+  });
+  canvas.calcOffset();
+  canvas.requestRenderAll();
+}
+
 export function ensureA4Canvas(canvas: Canvas): void {
-  if (canvas.getWidth() !== A4_WIDTH || canvas.getHeight() !== A4_HEIGHT) {
-    canvas.setDimensions({ width: A4_WIDTH, height: A4_HEIGHT });
-    canvas.requestRenderAll();
-  }
+  const zoomPercent = Math.round((canvas.getZoom() || 1) * 100);
+  applyCanvasZoom(canvas, zoomPercent);
 }

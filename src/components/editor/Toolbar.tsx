@@ -1,20 +1,29 @@
 export interface UploadProgressState {
-  phase: 'compress' | 'upload' | 'place';
+  phase: 'compress' | 'upload' | 'place' | 'ocr' | 'import';
   percent: number;
 }
 
 interface ToolbarProps {
+  onUndo: () => void;
+  onRedo: () => void;
+  canUndo: boolean;
+  canRedo: boolean;
+  onClearCanvas: () => void;
+  canClearCanvas: boolean;
   onAddText: () => void;
   onAddRect: () => void;
   onAddLine: () => void;
   onAddCircle: () => void;
   onUploadImage: (file: File) => void;
   onOpenStock: () => void;
+  onOpenImportMenu: () => void;
+  onOpenAssets: () => void;
   onFitImageToA4: () => void;
   canFitImage: boolean;
   onChangeBackground: (color: string) => void;
   onExportPng: () => void;
   onExportPdf: () => void;
+  onExportJson: () => void;
   onOpenQr: () => void;
   onAddPage: () => void;
   onDeletePage: () => void;
@@ -26,17 +35,26 @@ interface ToolbarProps {
 }
 
 export function Toolbar({
+  onUndo,
+  onRedo,
+  canUndo,
+  canRedo,
+  onClearCanvas,
+  canClearCanvas,
   onAddText,
   onAddRect,
   onAddLine,
   onAddCircle,
   onUploadImage,
   onOpenStock,
+  onOpenImportMenu,
+  onOpenAssets,
   onFitImageToA4,
   canFitImage,
   onChangeBackground,
   onExportPng,
   onExportPdf,
+  onExportJson,
   onOpenQr,
   onAddPage,
   onDeletePage,
@@ -61,10 +79,44 @@ export function Toolbar({
         ? 'Subiendo'
         : uploadProgress?.phase === 'place'
           ? 'Añadiendo al lienzo'
-          : '';
+          : uploadProgress?.phase === 'ocr'
+            ? 'Analizando texto'
+            : uploadProgress?.phase === 'import'
+              ? 'Creando capas'
+              : '';
 
   return (
     <div className="toolbar">
+      <div className="toolbar-group">
+        <span className="toolbar-label">Editar</span>
+        <button
+          type="button"
+          onClick={onUndo}
+          disabled={!canUndo}
+          title="Deshacer (Ctrl+Z)"
+          aria-label="Deshacer"
+        >
+          ↶
+        </button>
+        <button
+          type="button"
+          onClick={onRedo}
+          disabled={!canRedo}
+          title="Rehacer (Ctrl+Y)"
+          aria-label="Rehacer"
+        >
+          ↷
+        </button>
+        <button
+          type="button"
+          onClick={onClearCanvas}
+          disabled={!canClearCanvas}
+          title="Quitar todas las capas de la página activa"
+        >
+          Limpiar lienzo
+        </button>
+      </div>
+
       <div className="toolbar-group">
         <span className="toolbar-label">Añadir</span>
         <button type="button" onClick={onAddText} title="Texto">
@@ -116,6 +168,23 @@ export function Toolbar({
         </button>
         <button
           type="button"
+          className="btn-primary"
+          onClick={onOpenImportMenu}
+          disabled={uploading}
+          title="Importar carta desde imagen con OCR"
+        >
+          Importar carta
+        </button>
+        <button
+          type="button"
+          onClick={onOpenAssets}
+          disabled={uploading}
+          title="Ver y eliminar archivos subidos"
+        >
+          Archivos
+        </button>
+        <button
+          type="button"
           onClick={onFitImageToA4}
           disabled={!canFitImage}
           title="Ajustar la imagen seleccionada al tamaño A4 del lienzo"
@@ -158,6 +227,9 @@ export function Toolbar({
         </span>
         <button type="button" onClick={onExportPng} title="Exportar página activa a PNG">
           PNG
+        </button>
+        <button type="button" onClick={onExportJson} title="Exportar diseño a menu.json">
+          JSON
         </button>
         <button type="button" onClick={onExportPdf} title="Exportar todas las páginas a PDF">
           PDF

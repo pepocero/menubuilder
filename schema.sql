@@ -34,6 +34,8 @@ CREATE TABLE IF NOT EXISTS menus (
   template_id TEXT REFERENCES templates(id),
   canvas_data TEXT NOT NULL,
   thumbnail_url TEXT,
+  menu_document TEXT,
+  export_png_url TEXT,
   is_public INTEGER DEFAULT 0,
   public_slug TEXT UNIQUE,
   created_at TEXT DEFAULT (datetime('now')),

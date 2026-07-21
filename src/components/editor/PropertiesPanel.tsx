@@ -1,11 +1,23 @@
 import { useState } from 'react';
-import type { FabricObject } from 'fabric';
-import { fitImageToA4, isImageObject, isShapeObject, isTextObject, toHexColor } from '@/lib/canvas-serializer';
-import type { FabricImage } from 'fabric';
+import type { FabricImage, FabricObject, Textbox } from 'fabric';
+import { fitImageToA4, isImageObject, isShapeObject, isTextObject, refreshTextboxLayout, toHexColor } from '@/lib/canvas-serializer';
+import { EDITOR_FONTS, ensureEditorFontLoaded } from '@/lib/google-fonts';
+import { getLayerDisplayName, getLayerObjectData, setLayerObjectData } from '@/lib/layer-utils';
 
 interface PropertiesPanelProps {
   activeObject: FabricObject | null;
   onUpdate: () => void;
+}
+
+function asTextbox(obj: FabricObject): Textbox {
+  return obj as Textbox;
+}
+
+/** Estilos por carácter (p. ej. tras pegar) que anulan la fuente/tamaño del cuadro. */
+function hasCharacterStyles(obj: FabricObject): boolean {
+  const styles = asTextbox(obj).styles;
+  if (!styles || typeof styles !== 'object') return false;
+  return Object.keys(styles).length > 0;
 }
 
 export function PropertiesPanel({ activeObject, onUpdate }: PropertiesPanelProps) {
@@ -33,20 +45,63 @@ export function PropertiesPanel({ activeObject, onUpdate }: PropertiesPanelProps
     refresh();
   }
 
-  const textObj = isTextObject(activeObject) ? (activeObject as FabricObject & {
-    text?: string;
-    fontFamily?: string;
-    fontSize?: number;
-    fill?: string;
-    textAlign?: string;
-  }) : null;
+  /** Cambia estilo de texto y unifica: elimina overrides por carácter. */
+  function updateTextStyle(props: Record<string, unknown>) {
+    if (!activeObject || !isTextObject(activeObject)) return;
+    activeObject.set(props);
+    refreshTextboxLayout(activeObject);
+    activeObject.setCoords();
+    activeObject.canvas?.requestRenderAll();
+    refresh();
+  }
+
+  function handleUnifyFormat() {
+    if (!activeObject || !isTextObject(activeObject)) return;
+    refreshTextboxLayout(activeObject);
+    activeObject.canvas?.requestRenderAll();
+    refresh();
+  }
+
+  const layerData = getLayerObjectData(activeObject);
+  const layerName = layerData.layerName ?? '';
+
+  const textObj = isTextObject(activeObject)
+    ? (activeObject as FabricObject & {
+        text?: string;
+        fontFamily?: string;
+        fontSize?: number;
+        fontWeight?: string | number;
+        fontStyle?: string;
+        fill?: string;
+        textAlign?: string;
+      })
+    : null;
 
   const fillColor = toHexColor(activeObject.fill, '#cccccc');
   const strokeColor = toHexColor(activeObject.stroke, '#000000');
+  const mixedStyles = textObj ? hasCharacterStyles(activeObject) : false;
+  const isBold =
+    textObj?.fontWeight === 'bold' ||
+    textObj?.fontWeight === '700' ||
+    Number(textObj?.fontWeight) >= 600;
+  const isItalic = textObj?.fontStyle === 'italic' || textObj?.fontStyle === 'oblique';
 
   return (
     <div className="properties-panel">
       <h3>Propiedades</h3>
+
+      <label>
+        Nombre de capa
+        <input
+          type="text"
+          value={layerName}
+          placeholder={getLayerDisplayName(activeObject)}
+          onChange={(e) => {
+            setLayerObjectData(activeObject, { layerName: e.target.value.trim() || undefined });
+            refresh();
+          }}
+        />
+      </label>
 
       <label>
         X
@@ -92,7 +147,7 @@ export function PropertiesPanel({ activeObject, onUpdate }: PropertiesPanelProps
               value={textObj.text ?? ''}
               onChange={(e) => {
                 textObj.set({ text: e.target.value });
-                textObj.canvas?.requestRenderAll();
+                refreshTextboxLayout(activeObject);
                 refresh();
               }}
               rows={4}
@@ -102,14 +157,17 @@ export function PropertiesPanel({ activeObject, onUpdate }: PropertiesPanelProps
             Fuente
             <select
               value={textObj.fontFamily ?? 'Arial'}
-              onChange={(e) => updateObject({ fontFamily: e.target.value })}
+              onChange={(e) => {
+                ensureEditorFontLoaded(e.target.value);
+                updateTextStyle({ fontFamily: e.target.value });
+              }}
             >
-              <option value="Arial">Arial</option>
-              <option value="Georgia">Georgia</option>
-              <option value="Playfair Display">Playfair Display</option>
-              <option value="Times New Roman">Times New Roman</option>
-              <option value="Courier New">Courier New</option>
-              <option value="Verdana">Verdana</option>
+              {EDITOR_FONTS.map((font) => (
+                <option key={font.value} value={font.value}>
+                  {font.label}
+                  {font.local ? ' (local)' : ''}
+                </option>
+              ))}
             </select>
           </label>
           <label>
@@ -119,7 +177,7 @@ export function PropertiesPanel({ activeObject, onUpdate }: PropertiesPanelProps
               min={8}
               max={120}
               value={textObj.fontSize ?? 16}
-              onChange={(e) => updateObject({ fontSize: Number(e.target.value) })}
+              onChange={(e) => updateTextStyle({ fontSize: Number(e.target.value) })}
             />
           </label>
           <label>
@@ -127,20 +185,93 @@ export function PropertiesPanel({ activeObject, onUpdate }: PropertiesPanelProps
             <input
               type="color"
               value={toHexColor(textObj.fill, '#000000')}
-              onChange={(e) => updateObject({ fill: e.target.value })}
+              onChange={(e) => updateTextStyle({ fill: e.target.value })}
             />
           </label>
-          <label>
-            Alineación
-            <select
-              value={textObj.textAlign ?? 'left'}
-              onChange={(e) => updateObject({ textAlign: e.target.value })}
+          <div className="properties-text-style-row">
+            <button
+              type="button"
+              className={isBold ? 'is-active' : undefined}
+              title="Negrita"
+              aria-pressed={isBold}
+              onClick={() =>
+                updateTextStyle({ fontWeight: isBold ? 'normal' : 'bold' })
+              }
             >
-              <option value="left">Izquierda</option>
-              <option value="center">Centro</option>
-              <option value="right">Derecha</option>
-            </select>
-          </label>
+              <strong>N</strong>
+            </button>
+            <button
+              type="button"
+              className={isItalic ? 'is-active' : undefined}
+              title="Cursiva"
+              aria-pressed={isItalic}
+              onClick={() =>
+                updateTextStyle({ fontStyle: isItalic ? 'normal' : 'italic' })
+              }
+            >
+              <em>C</em>
+            </button>
+          </div>
+          <div className="properties-align-row" role="group" aria-label="Alineación">
+            <button
+              type="button"
+              className={(textObj.textAlign ?? 'left') === 'left' ? 'is-active' : undefined}
+              title="Alinear a la izquierda"
+              aria-pressed={(textObj.textAlign ?? 'left') === 'left'}
+              onClick={() => updateTextStyle({ textAlign: 'left' })}
+            >
+              <svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true">
+                <rect x="1" y="2" width="14" height="1.5" fill="currentColor" />
+                <rect x="1" y="5.5" width="9" height="1.5" fill="currentColor" />
+                <rect x="1" y="9" width="14" height="1.5" fill="currentColor" />
+                <rect x="1" y="12.5" width="9" height="1.5" fill="currentColor" />
+              </svg>
+            </button>
+            <button
+              type="button"
+              className={textObj.textAlign === 'center' ? 'is-active' : undefined}
+              title="Centrar"
+              aria-pressed={textObj.textAlign === 'center'}
+              onClick={() => updateTextStyle({ textAlign: 'center' })}
+            >
+              <svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true">
+                <rect x="1" y="2" width="14" height="1.5" fill="currentColor" />
+                <rect x="3.5" y="5.5" width="9" height="1.5" fill="currentColor" />
+                <rect x="1" y="9" width="14" height="1.5" fill="currentColor" />
+                <rect x="3.5" y="12.5" width="9" height="1.5" fill="currentColor" />
+              </svg>
+            </button>
+            <button
+              type="button"
+              className={textObj.textAlign === 'right' ? 'is-active' : undefined}
+              title="Alinear a la derecha"
+              aria-pressed={textObj.textAlign === 'right'}
+              onClick={() => updateTextStyle({ textAlign: 'right' })}
+            >
+              <svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true">
+                <rect x="1" y="2" width="14" height="1.5" fill="currentColor" />
+                <rect x="6" y="5.5" width="9" height="1.5" fill="currentColor" />
+                <rect x="1" y="9" width="14" height="1.5" fill="currentColor" />
+                <rect x="6" y="12.5" width="9" height="1.5" fill="currentColor" />
+              </svg>
+            </button>
+          </div>
+
+          {mixedStyles && (
+            <p className="panel-hint properties-mixed-hint">
+              Este cuadro tiene formatos mezclados (p. ej. tras pegar texto). Usa «Unificar formato»
+              o cambia fuente/tamaño para aplicar un solo estilo a todo.
+            </p>
+          )}
+          <button
+            type="button"
+            className="btn-secondary"
+            style={{ width: '100%', marginBottom: '0.75rem' }}
+            title="Elimina negritas, tamaños y colores distintos por carácter y deja el estilo del cuadro"
+            onClick={handleUnifyFormat}
+          >
+            Unificar formato
+          </button>
         </>
       )}
 

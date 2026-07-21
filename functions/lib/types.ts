@@ -27,6 +27,8 @@ export interface MenuRow {
   template_id: string | null;
   canvas_data: string;
   thumbnail_url: string | null;
+  menu_document: string | null;
+  export_png_url: string | null;
   is_public: number;
   public_slug: string | null;
   created_at: string;

@@ -16,6 +16,9 @@ export const onRequestGet: PagesFunction<Env> = async (context) => {
     menu: {
       title: menu.title,
       canvas_data: JSON.parse(menu.canvas_data),
+      menu_document: menu.menu_document ? JSON.parse(menu.menu_document) : null,
+      export_png_url: menu.export_png_url,
+      thumbnail_url: menu.thumbnail_url,
       updated_at: menu.updated_at,
       public_slug: menu.public_slug,
     },
