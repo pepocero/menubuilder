@@ -164,8 +164,8 @@ export function ImportMenuModal({
 
         <form onSubmit={handleSubmit} className="import-menu-form">
           <p className="import-menu-hint">
-            Usa una foto nítida y bien iluminada (mejor «Subir nueva» que un archivo ya comprimido
-            de la biblioteca). Elige el idioma del texto de la carta para mejorar el OCR.
+            Usa una foto nítida y bien iluminada. Con idioma «Automático» el OCR combina catalán,
+            castellano e inglés. Activa «Agrupar por títulos» para el patrón categoría → contenido.
           </p>
 
           <p className="import-menu-warning">
@@ -297,8 +297,8 @@ export function ImportMenuModal({
             <span>
               <strong>Agrupar texto por títulos</strong>
               <small>
-                Por cada categoría (TAPES, BIKINIS…) crea una capa de título y otra con todo su
-                contenido debajo. Si hay columnas o una línea vertical, las trata por separado.
+                Una capa por categoría en mayúsculas (TAPES, BIKINIS…) y otra con el contenido
+                debajo. Si hay dos columnas, las separa. Desactívalo para una capa por línea.
               </small>
             </span>
           </label>

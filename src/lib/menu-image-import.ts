@@ -18,64 +18,99 @@ export interface OcrLine {
   text: string;
   bbox: OcrBBox;
   confidence: number;
-  words?: Array<{
-    text: string;
-    confidence: number;
-    bbox: OcrBBox;
-  }>;
 }
 
 export interface MenuImageOcrResult {
   lines: OcrLine[];
   imageWidth: number;
   imageHeight: number;
-  /** Eje X del divisor de columnas si se detectó (hueco / línea vertical). */
-  columnSplitX?: number | null;
 }
 
-/** Idiomas OCR disponibles en el modal de importación. */
+/** Idiomas OCR: «auto» elige según el texto detectado (cat/spa/eng). */
 export const OCR_LANGUAGE_PRESETS = [
-  { id: 'cat', label: 'Català', langs: ['cat'] as const, hint: 'Cartes en catalán' },
-  { id: 'spa', label: 'Español', langs: ['spa'] as const, hint: 'Cartes en castellano' },
+  {
+    id: 'auto',
+    label: 'Automático',
+    langs: ['spa', 'cat', 'eng'] as const,
+    hint: 'Detecta solo el idioma de la carta (recomendado)',
+  },
+  { id: 'cat', label: 'Català', langs: ['cat'] as const, hint: 'Forzar catalán' },
+  { id: 'spa', label: 'Español', langs: ['spa'] as const, hint: 'Forzar castellano' },
   {
     id: 'cat-spa',
     label: 'Català + Español',
     langs: ['cat', 'spa'] as const,
-    hint: 'Mezcla o menús bilingües',
+    hint: 'Menús bilingües CAT/ES',
   },
-  { id: 'eng', label: 'English', langs: ['eng'] as const, hint: 'Menus in English' },
+  { id: 'eng', label: 'English', langs: ['eng'] as const, hint: 'Forzar inglés' },
   {
     id: 'spa-eng',
     label: 'Español + English',
     langs: ['spa', 'eng'] as const,
-    hint: 'Turismo / bilingüe',
+    hint: 'Menús bilingües ES/EN',
   },
 ] as const;
 
 export type OcrLanguagePresetId = (typeof OCR_LANGUAGE_PRESETS)[number]['id'];
 
-export const DEFAULT_OCR_LANGUAGE: OcrLanguagePresetId = 'cat';
+export const DEFAULT_OCR_LANGUAGE: OcrLanguagePresetId = 'auto';
 
 export function resolveOcrLanguages(presetId: OcrLanguagePresetId): string[] {
   const preset = OCR_LANGUAGE_PRESETS.find((p) => p.id === presetId);
-  return [...(preset?.langs ?? ['cat'])];
+  return [...(preset?.langs ?? ['spa', 'cat', 'eng'])];
+}
+
+/**
+ * Elige idiomas a partir de una muestra de texto OCR (útil si se fuerza un preset).
+ * Prioriza catalán si hay marcas claras (·, à/è/ò, léxico CAT).
+ */
+export function detectOcrLanguagesFromText(sample: string): string[] {
+  const t = sample.toLowerCase();
+  if (!t.trim()) return ['spa', 'cat', 'eng'];
+
+  const catMarks =
+    (t.match(/·/g)?.length ?? 0) * 4 +
+    (t.match(/[àèò]/g)?.length ?? 0) * 2 +
+    (t.match(/ç/g)?.length ?? 0) * 2 +
+    (
+      t.match(
+        /\b(amb|dels?|unes?|pizzes?|tapes|amanides?|formatge|pernil|tom[aà]quet|enciam|ceba|vedella|hamburgueses|entrepans?|frankfurts?)\b/g,
+      )?.length ?? 0
+    ) *
+      2;
+
+  const spaMarks =
+    (t.match(/[áéíóúñ]/g)?.length ?? 0) +
+    (
+      t.match(
+        /\b(con|los|las|una|pizzas?|tapas|ensaladas?|queso|jam[oó]n|tomate|ternera|hamburguesas|bocadillos?)\b/g,
+      )?.length ?? 0
+    ) *
+      2;
+
+  const engMarks =
+    (t.match(/\b(with|and|the|cheese|burger|pizza|salad|fries|homemade)\b/g)?.length ?? 0) * 2;
+
+  if (catMarks >= spaMarks && catMarks >= engMarks && catMarks > 0) {
+    return spaMarks > 0 ? ['cat', 'spa'] : ['cat'];
+  }
+  if (engMarks > spaMarks && engMarks > catMarks) {
+    return spaMarks > 0 ? ['eng', 'spa'] : ['eng'];
+  }
+  if (spaMarks > 0) {
+    return engMarks > 0 ? ['spa', 'eng'] : ['spa'];
+  }
+  return ['spa', 'cat', 'eng'];
 }
 
 /** Umbral bajo: en cartas decorativas la confianza suele ser peor que en documentos. */
-const MIN_CONFIDENCE = 15;
+const MIN_CONFIDENCE = 20;
 const MIN_TEXT_LENGTH = 1;
-
-type OcrWordNode = {
-  text: string;
-  confidence: number;
-  bbox: OcrBBox;
-};
 
 type OcrLineNode = {
   text: string;
   confidence: number;
   bbox: OcrBBox;
-  words?: OcrWordNode[];
 };
 
 type OcrPageLike = {
@@ -97,19 +132,6 @@ function extractOcrLines(page: OcrPageLike): OcrLine[] {
         if (text.length < MIN_TEXT_LENGTH) continue;
         if ((line.confidence ?? 0) < MIN_CONFIDENCE) continue;
 
-        const words = (line.words ?? [])
-          .map((w) => ({
-            text: w.text.replace(/\s+/g, ' ').trim(),
-            confidence: w.confidence ?? 0,
-            bbox: {
-              x0: w.bbox.x0,
-              y0: w.bbox.y0,
-              x1: w.bbox.x1,
-              y1: w.bbox.y1,
-            },
-          }))
-          .filter((w) => w.text.length > 0);
-
         lines.push({
           text,
           bbox: {
@@ -119,7 +141,6 @@ function extractOcrLines(page: OcrPageLike): OcrLine[] {
             y1: line.bbox.y1,
           },
           confidence: line.confidence ?? 0,
-          words: words.length > 0 ? words : undefined,
         });
       }
     }
@@ -179,25 +200,23 @@ export function getImageDimensions(file: Blob): Promise<{ width: number; height:
 }
 
 /**
- * Prepara la imagen para OCR: escala razonable y canvas RGB limpio.
- * Evita contraste agresivo: en tipografías “grunge”/decorativas empeora el reconocimiento.
+ * Prepara la imagen para OCR: escala razonable y canvas RGB.
+ * Tesseract rinde peor con imágenes muy pequeñas o muy grandes.
  */
 export async function prepareImageForOcr(file: Blob): Promise<{
   blob: Blob;
   width: number;
   height: number;
-  canvas: HTMLCanvasElement;
 }> {
   const dims = await getImageDimensions(file);
   const maxSide = Math.max(dims.width, dims.height);
   const minSide = Math.min(dims.width, dims.height);
 
-  // Cartas escaneadas ~700px necesitan upscale; Tesseract rinde mejor cerca de 1500–2000 px.
   let targetScale = 1;
-  if (minSide < 1600) {
-    targetScale = 1600 / minSide;
-  } else if (maxSide > 3200) {
-    targetScale = 3200 / maxSide;
+  if (minSide < 900) {
+    targetScale = 900 / minSide;
+  } else if (maxSide > 2800) {
+    targetScale = 2800 / maxSide;
   }
 
   const width = Math.max(1, Math.round(dims.width * targetScale));
@@ -215,27 +234,14 @@ export async function prepareImageForOcr(file: Blob): Promise<{
     const canvas = document.createElement('canvas');
     canvas.width = width;
     canvas.height = height;
-    const ctx = canvas.getContext('2d', { willReadFrequently: true });
+    const ctx = canvas.getContext('2d');
     if (!ctx) {
-      throw new Error('No se pudo preparar la imagen para OCR');
+      return { blob: file, width: dims.width, height: dims.height };
     }
 
     ctx.fillStyle = '#ffffff';
     ctx.fillRect(0, 0, width, height);
-    ctx.imageSmoothingEnabled = true;
-    ctx.imageSmoothingQuality = 'high';
     ctx.drawImage(img, 0, 0, width, height);
-
-    // Solo gris suave (sin contraste fuerte) para estabilizar color de papel / foto.
-    const imageData = ctx.getImageData(0, 0, width, height);
-    const data = imageData.data;
-    for (let i = 0; i < data.length; i += 4) {
-      const gray = 0.299 * data[i]! + 0.587 * data[i + 1]! + 0.114 * data[i + 2]!;
-      data[i] = gray;
-      data[i + 1] = gray;
-      data[i + 2] = gray;
-    }
-    ctx.putImageData(imageData, 0, 0);
 
     const blob = await new Promise<Blob>((resolve, reject) => {
       canvas.toBlob(
@@ -248,147 +254,10 @@ export async function prepareImageForOcr(file: Blob): Promise<{
       );
     });
 
-    return { blob, width, height, canvas };
+    return { blob, width, height };
   } finally {
     URL.revokeObjectURL(url);
   }
-}
-
-/** Corrige errores típicos de OCR en precios de carta (8,00€ leído como 800€). */
-export function normalizeMenuOcrText(text: string): string {
-  return text
-    .replace(/\b([1-9])00\s*€/g, '$1,00€')
-    .replace(/\b([1-9])00\s*eur(?:os?)?\b/gi, '$1,00€')
-    .replace(/\s{2,}/g, ' ')
-    .trim();
-}
-
-function normalizeOcrLines(lines: OcrLine[]): OcrLine[] {
-  return lines
-    .map((line) => ({
-      ...line,
-      text: normalizeMenuOcrText(line.text),
-    }))
-    .filter((line) => line.text.length >= MIN_TEXT_LENGTH);
-}
-
-/**
- * Une trozos de la misma fila que Tesseract partió en varias “líneas”
- * (p. ej. título a ancho de página: "BAR LES" + "PISCINES L'ALEIXAR").
- * No une texto de columnas distintas si se conoce el eje del divisor.
- */
-export function mergeFragmentedOcrLines(
-  lines: OcrLine[],
-  columnSplitX?: number | null,
-): OcrLine[] {
-  if (lines.length < 2) return lines;
-
-  const sorted = sortReadingOrder(lines);
-  const medianH = median(sorted.map(lineHeight)) || 16;
-  const merged: OcrLine[] = [];
-
-  for (const line of sorted) {
-    const prev = merged[merged.length - 1];
-    if (!prev) {
-      merged.push({
-        ...line,
-        bbox: { ...line.bbox },
-        words: line.words ? line.words.map((w) => ({ ...w, bbox: { ...w.bbox } })) : undefined,
-      });
-      continue;
-    }
-
-    const prevMidY = (prev.bbox.y0 + prev.bbox.y1) / 2;
-    const lineMidY = (line.bbox.y0 + line.bbox.y1) / 2;
-    const sameRow =
-      Math.abs(prevMidY - lineMidY) <= medianH * 0.65 &&
-      Math.abs(prev.bbox.y0 - line.bbox.y0) <= medianH * 0.75;
-
-    const gap = line.bbox.x0 - prev.bbox.x1;
-    const maxGap = Math.max(medianH * 2.2, 36);
-
-    const crossesColumns =
-      columnSplitX != null &&
-      ((lineMidX(prev) < columnSplitX) !== (lineMidX(line) < columnSplitX));
-
-    if (sameRow && !crossesColumns && gap >= -12 && gap <= maxGap) {
-      const joiner = gap < medianH * 0.15 ? '' : ' ';
-      prev.text = `${prev.text}${joiner}${line.text}`.replace(/\s+/g, ' ').trim();
-      prev.bbox = unionBBox([prev.bbox, line.bbox]);
-      prev.confidence = Math.min(prev.confidence, line.confidence);
-      if (prev.words || line.words) {
-        prev.words = [...(prev.words ?? []), ...(line.words ?? [])];
-      }
-      continue;
-    }
-
-    merged.push({
-      ...line,
-      bbox: { ...line.bbox },
-      words: line.words ? line.words.map((w) => ({ ...w, bbox: { ...w.bbox } })) : undefined,
-    });
-  }
-
-  return merged;
-}
-
-/**
- * Si Tesseract juntó platos de dos columnas en una sola línea, los separa
- * con las cajas de palabras. No recorta la imagen (eso rompía títulos anchos).
- */
-export function splitCrossColumnOcrLines(
-  lines: OcrLine[],
-  imageWidth: number,
-  preferredSplitX?: number | null,
-): OcrLine[] {
-  const splitX = findColumnSplitX(lines, imageWidth, preferredSplitX);
-  if (splitX == null) return lines;
-
-  const gutter = Math.max(10, imageWidth * 0.02);
-  const result: OcrLine[] = [];
-
-  for (const line of lines) {
-    const crosses = line.bbox.x0 < splitX - gutter && line.bbox.x1 > splitX + gutter;
-    const wide = line.bbox.x1 - line.bbox.x0 >= imageWidth * 0.55;
-
-    if (!crosses || !line.words || line.words.length < 2) {
-      result.push(line);
-      continue;
-    }
-
-    const leftWords = line.words.filter((w) => (w.bbox.x0 + w.bbox.x1) / 2 < splitX);
-    const rightWords = line.words.filter((w) => (w.bbox.x0 + w.bbox.x1) / 2 >= splitX);
-
-    if (leftWords.length === 0 || rightWords.length === 0) {
-      result.push(line);
-      continue;
-    }
-
-    const leftEdge = Math.max(...leftWords.map((w) => w.bbox.x1));
-    const rightEdge = Math.min(...rightWords.map((w) => w.bbox.x0));
-    const midGap = rightEdge - leftEdge;
-
-    // Título / línea continua a ancho de página (poco hueco entre palabras)
-    if (wide && midGap < gutter * 1.25) {
-      result.push(line);
-      continue;
-    }
-
-    result.push({
-      text: leftWords.map((w) => w.text).join(' ').replace(/\s+/g, ' ').trim(),
-      bbox: unionBBox(leftWords.map((w) => w.bbox)),
-      confidence: median(leftWords.map((w) => w.confidence)) || line.confidence,
-      words: leftWords,
-    });
-    result.push({
-      text: rightWords.map((w) => w.text).join(' ').replace(/\s+/g, ' ').trim(),
-      bbox: unionBBox(rightWords.map((w) => w.bbox)),
-      confidence: median(rightWords.map((w) => w.confidence)) || line.confidence,
-      words: rightWords,
-    });
-  }
-
-  return result.filter((l) => l.text.length >= MIN_TEXT_LENGTH);
 }
 
 /** Mapea coordenadas de píxeles de la imagen al lienzo A4 con modo cover. */
@@ -487,38 +356,25 @@ function inferImageWidth(lines: OcrLine[]): number {
 
 /**
  * Busca el eje vertical del divisor entre columnas (hueco / línea central).
- * Usa centros de palabras (no el ancho de la línea): si una línea OCR cruza
- * las dos columnas, rellenar bins con el bbox completo ocultaba el hueco.
+ * Usa un mapa de ocupación en X: el valle vacío cerca del centro suele ser la separación.
  */
-export function findColumnSplitX(
-  lines: OcrLine[],
-  imageWidth: number,
-  preferredSplitX?: number | null,
-): number | null {
-  if (lines.length < 6 || imageWidth < 120) return null;
+export function findColumnSplitX(lines: OcrLine[], imageWidth: number): number | null {
+  if (lines.length < 8 || imageWidth < 120) return null;
 
-  const bins = 64;
+  const bins = 56;
   const occupancy = new Float64Array(bins);
 
-  const addMid = (mid: number, weight = 1) => {
-    const b = Math.floor((Math.min(imageWidth - 1, Math.max(0, mid)) / imageWidth) * bins);
-    if (b >= 0 && b < bins) occupancy[b] += weight;
-  };
-
   for (const line of lines) {
-    if (line.words && line.words.length > 0) {
-      for (const w of line.words) {
-        addMid((w.bbox.x0 + w.bbox.x1) / 2, 1);
-      }
-    } else {
-      // Solo el centro: no pintar todo el tramo (rompe la detección del gutter).
-      addMid(lineMidX(line), 1);
+    const start = Math.floor((Math.max(0, line.bbox.x0) / imageWidth) * bins);
+    const end = Math.ceil((Math.min(imageWidth, line.bbox.x1) / imageWidth) * bins);
+    for (let b = Math.max(0, start); b < Math.min(bins, Math.max(start + 1, end)); b++) {
+      occupancy[b] += 1;
     }
   }
 
-  const lo = Math.floor(bins * 0.28);
-  const hi = Math.ceil(bins * 0.72);
-  const emptyThreshold = Math.max(0.75, lines.length * 0.02);
+  const lo = Math.floor(bins * 0.25);
+  const hi = Math.ceil(bins * 0.75);
+  const emptyThreshold = Math.max(0.5, lines.length * 0.035);
 
   let bestStart = -1;
   let bestLen = 0;
@@ -539,127 +395,35 @@ export function findColumnSplitX(
     }
   }
 
-  const minGutterBins = Math.max(2, Math.floor(bins * 0.025));
-  let splitFromBins: number | null = null;
+  const minGutterBins = Math.max(2, Math.floor(bins * 0.03));
   if (bestStart >= 0 && bestLen >= minGutterBins) {
     const midBin = bestStart + bestLen / 2;
-    splitFromBins = (midBin / bins) * imageWidth;
+    return (midBin / bins) * imageWidth;
   }
 
-  // Fallback: mayor salto entre centros de palabra cerca del centro
-  const mids: number[] = [];
-  for (const line of lines) {
-    if (line.words && line.words.length > 0) {
-      for (const w of line.words) mids.push((w.bbox.x0 + w.bbox.x1) / 2);
-    } else {
-      mids.push(lineMidX(line));
-    }
-  }
-  mids.sort((a, b) => a - b);
-
+  // Fallback: mayor salto entre centros de línea cerca del centro de la página
+  const byMid = [...lines].sort((a, b) => lineMidX(a) - lineMidX(b));
   const pageMid = imageWidth / 2;
   let bestScore = 0;
   let bestSplit: number | null = null;
-  for (let i = 0; i < mids.length - 1; i++) {
-    const leftMid = mids[i]!;
-    const rightMid = mids[i + 1]!;
+
+  for (let i = 0; i < byMid.length - 1; i++) {
+    const leftMid = lineMidX(byMid[i]!);
+    const rightMid = lineMidX(byMid[i + 1]!);
     const gap = rightMid - leftMid;
-    if (gap < imageWidth * 0.05) continue;
+    if (gap < imageWidth * 0.06) continue;
+
     const gapCenter = (leftMid + rightMid) / 2;
     const centerBias = 1 - Math.min(1, Math.abs(gapCenter - pageMid) / (imageWidth * 0.35));
-    const score = gap * (0.35 + 0.65 * centerBias);
+    const score = gap * (0.4 + 0.6 * centerBias);
     if (score > bestScore) {
       bestScore = score;
       bestSplit = gapCenter;
     }
   }
 
-  const fromGap =
-    bestSplit != null && bestScore >= imageWidth * 0.045 ? bestSplit : null;
-
-  // Preferencia: pixel/hint → bins → gap entre palabras
-  const candidates = [preferredSplitX ?? null, splitFromBins, fromGap].filter(
-    (v): v is number => typeof v === 'number' && Number.isFinite(v),
-  );
-  if (candidates.length === 0) return null;
-
-  // Elige el candidato más cercano al centro de la página (divisor típico)
-  candidates.sort(
-    (a, b) => Math.abs(a - pageMid) - Math.abs(b - pageMid),
-  );
-  return candidates[0]!;
-}
-
-/**
- * Detecta un gutter / línea vertical por proyección de tinta en la zona central.
- */
-export function findPixelGutterX(canvas: HTMLCanvasElement): number | null {
-  const width = canvas.width;
-  const height = canvas.height;
-  if (width < 200 || height < 200) return null;
-
-  const ctx = canvas.getContext('2d', { willReadFrequently: true });
-  if (!ctx) return null;
-
-  const { data } = ctx.getImageData(0, 0, width, height);
-  const ink = new Float64Array(width);
-  const darkThreshold = 145;
-  // Cuerpo de la carta (evita cabecera/logo y pie ilustrado)
-  const y0 = Math.floor(height * 0.14);
-  const y1 = Math.floor(height * 0.88);
-
-  for (let y = y0; y < y1; y++) {
-    const row = y * width * 4;
-    for (let x = 0; x < width; x++) {
-      if (data[row + x * 4]! < darkThreshold) ink[x] += 1;
-    }
-  }
-
-  const smooth = new Float64Array(width);
-  const radius = Math.max(2, Math.floor(width * 0.006));
-  for (let x = 0; x < width; x++) {
-    let sum = 0;
-    let n = 0;
-    for (let k = -radius; k <= radius; k++) {
-      const i = x + k;
-      if (i < 0 || i >= width) continue;
-      sum += ink[i]!;
-      n += 1;
-    }
-    smooth[x] = sum / n;
-  }
-
-  const lo = Math.floor(width * 0.3);
-  const hi = Math.ceil(width * 0.7);
-  const pageMid = width / 2;
-  let bestX = -1;
-  let bestScore = Number.POSITIVE_INFINITY;
-
-  for (let x = lo; x < hi; x++) {
-    const centerBias = 1 + Math.abs(x - pageMid) / (width * 0.5);
-    const score = smooth[x]! * centerBias;
-    if (score < bestScore) {
-      bestScore = score;
-      bestX = x;
-    }
-  }
-  if (bestX < 0) return null;
-
-  const leftAvg = averageRange(smooth, Math.floor(width * 0.08), Math.floor(width * 0.26));
-  const rightAvg = averageRange(smooth, Math.ceil(width * 0.74), Math.floor(width * 0.92));
-  const sideAvg = (leftAvg + rightAvg) / 2;
-  if (sideAvg <= 0) return null;
-  // Valle claro (línea o hueco entre columnas)
-  if (smooth[bestX]! > sideAvg * 0.55) return null;
-  return bestX;
-}
-
-function averageRange(values: Float64Array, from: number, to: number): number {
-  const a = Math.max(0, Math.min(values.length, from));
-  const b = Math.max(a + 1, Math.min(values.length, to));
-  let sum = 0;
-  for (let i = a; i < b; i++) sum += values[i]!;
-  return sum / (b - a);
+  if (bestSplit == null || bestScore < imageWidth * 0.05) return null;
+  return bestSplit;
 }
 
 /**
@@ -669,11 +433,10 @@ function averageRange(values: Float64Array, from: number, to: number): number {
 export function splitLinesIntoColumns(
   lines: OcrLine[],
   imageWidth: number,
-  preferredSplitX?: number | null,
 ): OcrLine[][] {
   if (lines.length === 0) return [];
 
-  const splitX = findColumnSplitX(lines, imageWidth, preferredSplitX);
+  const splitX = findColumnSplitX(lines, imageWidth);
   if (splitX == null) {
     return [sortReadingOrder(lines)];
   }
@@ -689,7 +452,7 @@ export function splitLinesIntoColumns(
       line.bbox.x0 < splitX - gutterPad && line.bbox.x1 > splitX + gutterPad;
 
     // Cabeceras / títulos a ancho de página
-    if (crossesGutter && width >= imageWidth * 0.5) {
+    if (crossesGutter && width >= imageWidth * 0.42) {
       spanning.push(line);
       continue;
     }
@@ -698,7 +461,7 @@ export function splitLinesIntoColumns(
     else right.push(line);
   }
 
-  const minPerCol = Math.max(2, Math.floor(lines.length * 0.12));
+  const minPerCol = Math.max(2, Math.floor(lines.length * 0.15));
   if (left.length < minPerCol || right.length < minPerCol) {
     return [sortReadingOrder(lines)];
   }
@@ -710,20 +473,24 @@ export function splitLinesIntoColumns(
   return columns;
 }
 
-const PRICE_TOKEN_RE =
-  /\d+[.,]\d{2}\s*€?|\b\d{1,3}\s*€|€\s*\d|\b\d+[.,]\d{2}\b/i;
+const PRICE_RE =
+  /(?:€|\$|£)\s*\d|^\d+[.,]\d{2}\b|\b\d+[.,]\d{2}\s*(?:€|\$|eur|euros?)?\s*$|\d+[.,]\d{2}\s*€|\b\d+\s*€/i;
 
-function hasPriceToken(text: string): boolean {
-  return PRICE_TOKEN_RE.test(text);
+function looksLikePriceLine(text: string): boolean {
+  return PRICE_RE.test(text.trim());
 }
 
-/** Categorías habituales de carta (ES/CAT) — refuerzo de detección de títulos. */
+function hasPriceToken(text: string): boolean {
+  return /\d+[.,]\d{2}|\d+\s*€|€\s*\d/.test(text);
+}
+
+/** Categorías típicas de carta (refuerzo; no marca platos como "Classic"). */
 const SECTION_NAME_RE =
-  /^(tapas?|tapes|bikinis?|hamburgueses?|hamburguesas?|pizzes?|pizzas?|entrepans?|bocadillos?|bocatas?|frankfurts?|amanides?|ensaladas?|postres?|begudes?|bebidas?|caf[eè]s?|vins?|vinos?|combinats?|menus?|primer(?:s|os)?|segon(?:s|os)?|carn|peix|pescado|arro[cs]e?s?|pasta|especialitats?|especialidades?)$/i;
+  /^(tapas?|tapes|bikinis?|hamburgueses?|hamburguesas?|pizzes?|pizzas?|entrepans?|bocadillos?|bocatas?|frankfurts?|amanides?|ensaladas?|postres?|begudes?|bebidas?|caf[eè]s?|vins?|vinos?|menus?|especialitats?|especialidades?)$/i;
 
 /**
- * Detecta si una línea es título/categoría de carta (Tapas, Hamburguesas…).
- * Patrón esperado: capa título → capa con todo el contenido debajo → repetir.
+ * Detecta título/categoría de carta (TAPES, BIKINIS…).
+ * Solo mayúsculas cortas o nombres de sección conocidos — evita marcar platos como título.
  */
 function isLikelySectionTitle(
   line: OcrLine,
@@ -733,40 +500,39 @@ function isLikelySectionTitle(
   medianGap: number,
 ): boolean {
   const text = line.text.trim();
-  if (!text || hasPriceToken(text)) return false;
+  if (!text || hasPriceToken(text) || looksLikePriceLine(text)) return false;
 
   const words = text.split(/\s+/).filter(Boolean);
-  if (words.length === 0 || words.length > 5) return false;
-  if (text.length > 36) return false;
+  if (words.length === 0 || words.length > 4) return false;
+  if (text.length > 32) return false;
+
+  const letters = text.replace(/[^a-zA-ZÁÉÍÓÚÜÑáéíóúüñÇç]/g, '');
+  const isAllCaps = letters.length >= 3 && letters === letters.toUpperCase();
+  const isKnown = SECTION_NAME_RE.test(text);
+
+  // Sin mayúsculas de sección ni nombre conocido → no es título de categoría
+  if (!isAllCaps && !isKnown) return false;
 
   let score = 0;
   const h = lineHeight(line);
-  const letters = text.replace(/[^a-zA-ZÁÉÍÓÚÜÑáéíóúüñÇç]/g, '');
-  const isAllCaps =
-    letters.length >= 3 && letters === letters.toUpperCase();
 
-  if (SECTION_NAME_RE.test(text.replace(/\s+/g, ' ').trim())) score += 5;
-  if (isAllCaps && words.length <= 3) score += 4;
-  if (isAllCaps && words.length === 1) score += 2;
-
-  if (h >= medianH * 1.15) score += 2;
-  if (h >= medianH * 1.4) score += 1;
-  if (words.length <= 3) score += 1;
+  if (isKnown) score += 5;
+  if (isAllCaps) score += 3;
   if (words.length <= 2) score += 1;
-  if (text.length <= 22) score += 1;
+  if (text.length <= 20) score += 1;
+  if (h >= medianH * 1.2) score += 2;
+  if (h >= medianH * 1.45) score += 1;
 
   if (index > 0) {
     const prev = sorted[index - 1]!;
     const gap = line.bbox.y0 - prev.bbox.y1;
-    if (medianGap > 0 && gap >= medianGap * 1.5) score += 2;
-    if (medianGap > 0 && gap >= medianGap * 2.2) score += 1;
-    // Tras un bloque de ítems con precio, un corto en mayúsculas suele ser categoría
-    if (hasPriceToken(prev.text) && isAllCaps && words.length <= 3) score += 2;
+    if (medianGap > 0 && gap >= medianGap * 1.75) score += 2;
+    if (hasPriceToken(prev.text) && isAllCaps) score += 1;
   } else {
     score += 1;
   }
 
-  return score >= 4;
+  return score >= 5;
 }
 
 export interface MenuTextBlock {
@@ -791,23 +557,12 @@ function groupSingleColumnByTitles(lines: OcrLine[]): MenuTextBlock[] {
   }
   const medianGap = median(gaps) || medianH * 0.4;
 
-  let titleFlags = sorted.map((line, index) =>
+  const titleFlags = sorted.map((line, index) =>
     isLikelySectionTitle(line, index, sorted, medianH, medianGap),
   );
 
-  // Si no hay títulos, reintento más permisivo: mayúsculas cortas sin precio
-  if (!titleFlags.some(Boolean)) {
-    titleFlags = sorted.map((line) => {
-      const text = line.text.trim();
-      if (!text || hasPriceToken(text)) return false;
-      const words = text.split(/\s+/).filter(Boolean);
-      if (words.length === 0 || words.length > 3 || text.length > 28) return false;
-      const letters = text.replace(/[^a-zA-ZÁÉÍÓÚÜÑáéíóúüñÇç]/g, '');
-      return letters.length >= 3 && letters === letters.toUpperCase();
-    });
-  }
-
-  if (!titleFlags.some(Boolean)) {
+  const titleCount = titleFlags.filter(Boolean).length;
+  if (titleCount === 0) {
     return [
       {
         role: 'body',
@@ -853,17 +608,17 @@ function groupSingleColumnByTitles(lines: OcrLine[]): MenuTextBlock[] {
 
 /**
  * Agrupa líneas OCR en secciones: título + bloque de contenido multilínea.
- * Si hay 2 columnas (hueco/línea vertical), procesa cada columna por separado.
+ * Si hay 2 columnas (hueco/divisor vertical), procesa cada columna por separado
+ * para no mezclar TAPES con BIKINIS, etc.
  */
 export function groupOcrLinesByTitles(
   lines: OcrLine[],
   imageWidth?: number,
-  preferredSplitX?: number | null,
 ): MenuTextBlock[] {
   if (lines.length === 0) return [];
 
   const width = imageWidth && imageWidth > 0 ? imageWidth : inferImageWidth(lines);
-  const columns = splitLinesIntoColumns(lines, width, preferredSplitX);
+  const columns = splitLinesIntoColumns(lines, width);
 
   const blocks: MenuTextBlock[] = [];
   for (const column of columns) {
@@ -916,21 +671,17 @@ export function buildTextLayersFromOcr(
   lines: OcrLine[],
   imageWidth: number,
   imageHeight: number,
-  options: { groupByTitles: boolean; columnSplitX?: number | null },
+  options: { groupByTitles: boolean },
 ): TextLayer[] {
   if (!options.groupByTitles) {
     // Una capa por línea, pero en orden de columnas (izq → der) si aplica
-    const ordered = splitLinesIntoColumns(
-      lines,
-      imageWidth,
-      options.columnSplitX,
-    ).flat();
+    const ordered = splitLinesIntoColumns(lines, imageWidth).flat();
     return ordered.map((line, index) =>
       ocrLineToTextLayer(line, imageWidth, imageHeight, index + 1),
     );
   }
 
-  const blocks = groupOcrLinesByTitles(lines, imageWidth, options.columnSplitX);
+  const blocks = groupOcrLinesByTitles(lines, imageWidth);
   return blocks.map((block, index) =>
     ocrBlockToTextLayer(block, imageWidth, imageHeight, index + 1),
   );
@@ -939,67 +690,89 @@ export function buildTextLayersFromOcr(
 export async function recognizeMenuImage(
   file: Blob,
   onProgress?: (percent: number, status: string) => void,
-  languages: string[] = resolveOcrLanguages(DEFAULT_OCR_LANGUAGE),
+  languages?: string[],
 ): Promise<MenuImageOcrResult> {
   onProgress?.(0, 'Preparando imagen…');
   const prepared = await prepareImageForOcr(file);
 
-  const langs = languages.length > 0 ? languages : resolveOcrLanguages(DEFAULT_OCR_LANGUAGE);
-  const langLabel = langs.join('+').toUpperCase();
-
   onProgress?.(8, 'Cargando motor OCR…');
   const { createWorker, PSM } = await import('tesseract.js');
 
-  // blocks hay que pedirlo explícitamente (en tesseract.js v5+ solo text viene activo).
-  const worker = await createWorker(langs, undefined, {
-    logger: (message) => {
-      if (message.status === 'loading tesseract core') {
-        onProgress?.(12, 'Cargando motor OCR…');
-      } else if (message.status === 'initializing tesseract') {
-        onProgress?.(16, 'Inicializando OCR…');
-      } else if (message.status === 'loading language traineddata') {
-        onProgress?.(22, `Cargando idioma (${langLabel})…`);
-      } else if (message.status === 'recognizing text') {
-        onProgress?.(28 + Math.round((message.progress ?? 0) * 68), 'Reconociendo texto…');
-      }
-    },
-  });
+  const isAuto =
+    !languages ||
+    languages.length === 0 ||
+    (languages.length === 3 &&
+      languages.includes('spa') &&
+      languages.includes('cat') &&
+      languages.includes('eng'));
 
-  try {
-    /**
-     * Página completa (sin recortar): el título y HAMBURGUESES cruzan el centro.
-     * Columnas: se detectan por hueco/línea vertical y se separan después
-     * (palabras + proyección de tinta), luego título → contenido por columna.
-     */
-    onProgress?.(26, 'Reconociendo texto (página completa)…');
-    await worker.setParameters({
-      tessedit_pageseg_mode: PSM.AUTO,
-      preserve_interword_spaces: '1',
-      user_defined_dpi: '300',
+  const runPass = async (
+    langs: string[],
+    label: string,
+    progressFrom: number,
+    progressTo: number,
+  ) => {
+    const span = Math.max(1, progressTo - progressFrom);
+    const worker = await createWorker(langs, undefined, {
+      logger: (message) => {
+        if (message.status === 'loading language traineddata') {
+          onProgress?.(progressFrom, `Cargando ${label}…`);
+        } else if (message.status === 'recognizing text') {
+          onProgress?.(
+            progressFrom + Math.round((message.progress ?? 0) * span),
+            'Reconociendo texto…',
+          );
+        }
+      },
     });
-
-    const { data } = await worker.recognize(prepared.blob, {}, { blocks: true, text: true });
-
-    let lines = extractOcrLines(data);
-    if (lines.length === 0 && data.text?.trim()) {
-      lines = linesFromPlainText(data.text, prepared.width, prepared.height);
+    try {
+      await worker.setParameters({
+        tessedit_pageseg_mode: PSM.AUTO,
+        preserve_interword_spaces: '1',
+        user_defined_dpi: '300',
+      });
+      return await worker.recognize(prepared.blob, {}, { blocks: true, text: true });
+    } finally {
+      await worker.terminate();
     }
+  };
 
-    const pixelGutter = findPixelGutterX(prepared.canvas);
-    lines = mergeFragmentedOcrLines(lines, pixelGutter);
-    lines = splitCrossColumnOcrLines(lines, prepared.width, pixelGutter);
-    lines = normalizeOcrLines(lines);
-    onProgress?.(100, 'OCR completado');
+  onProgress?.(12, 'Inicializando OCR…');
 
-    return {
-      lines,
-      imageWidth: prepared.width,
-      imageHeight: prepared.height,
-      columnSplitX: findColumnSplitX(lines, prepared.width, pixelGutter),
-    };
-  } finally {
-    await worker.terminate();
+  let result = await runPass(
+    isAuto ? ['spa', 'cat', 'eng'] : languages!,
+    isAuto ? 'idiomas' : languages!.join('+').toUpperCase(),
+    20,
+    isAuto ? 55 : 98,
+  );
+
+  // Automático: afina a cat / spa / eng según la muestra y vuelve a reconocer si conviene.
+  if (isAuto && result.data.text?.trim()) {
+    const detected = detectOcrLanguagesFromText(result.data.text);
+    const alreadyBroad = detected.length >= 3;
+    const sameAsBootstrap =
+      detected.length === 3 &&
+      detected.includes('spa') &&
+      detected.includes('cat') &&
+      detected.includes('eng');
+    if (!alreadyBroad && !sameAsBootstrap && detected.length > 0) {
+      onProgress?.(58, `Idioma detectado: ${detected.join('+').toUpperCase()}…`);
+      result = await runPass(detected, detected.join('+').toUpperCase(), 60, 98);
+    }
   }
+
+  let lines = extractOcrLines(result.data);
+  if (lines.length === 0 && result.data.text?.trim()) {
+    lines = linesFromPlainText(result.data.text, prepared.width, prepared.height);
+  }
+
+  onProgress?.(100, 'OCR completado');
+
+  return {
+    lines,
+    imageWidth: prepared.width,
+    imageHeight: prepared.height,
+  };
 }
 
 export async function applyMenuImportToCanvas(
@@ -1011,7 +784,6 @@ export async function applyMenuImportToCanvas(
     imageWidth: number;
     imageHeight: number;
     groupByTitles?: boolean;
-    columnSplitX?: number | null;
   },
 ): Promise<number> {
   canvas.clear();
@@ -1052,10 +824,7 @@ export async function applyMenuImportToCanvas(
     params.lines,
     params.imageWidth,
     params.imageHeight,
-    {
-      groupByTitles: params.groupByTitles === true,
-      columnSplitX: params.columnSplitX,
-    },
+    { groupByTitles: params.groupByTitles === true },
   );
 
   let zIndex = 1;

@@ -600,7 +600,6 @@ export function EditorPage() {
         imageWidth: ocrResult.imageWidth,
         imageHeight: ocrResult.imageHeight,
         groupByTitles: options.groupByTitles,
-        columnSplitX: ocrResult.columnSplitX,
       });
 
       setImportPhase('import', 100);
