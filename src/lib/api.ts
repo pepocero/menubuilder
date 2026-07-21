@@ -355,6 +355,35 @@ export async function uploadAsset(
   return api.upload('/api/assets', file);
 }
 
+/** OCR de carta por visión (servidor: OpenAI o Workers AI). */
+export async function recognizeMenuWithVision(
+  image: Blob,
+  onProgress?: (percent: number) => void,
+): Promise<{ menu: import('@shared/menu-ocr').MenuOcrResult }> {
+  const file =
+    image instanceof File
+      ? image
+      : new File([image], 'menu-ocr.jpg', { type: image.type || 'image/jpeg' });
+
+  onProgress?.(8);
+  let tick = 8;
+  const timer = window.setInterval(() => {
+    tick = Math.min(92, tick + 4);
+    onProgress?.(tick);
+  }, 400);
+
+  try {
+    const result = await api.upload<{ menu: import('@shared/menu-ocr').MenuOcrResult }>(
+      '/api/ocr/menu',
+      file,
+    );
+    onProgress?.(100);
+    return result;
+  } finally {
+    window.clearInterval(timer);
+  }
+}
+
 export interface AssetSummary {
   id: string;
   type: string | null;

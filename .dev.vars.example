@@ -2,3 +2,7 @@ JWT_SECRET=dev-secret-change-in-production-min-32-chars
 STOCK_PROVIDER=pixabay
 PIXABAY_API_KEY=your-pixabay-api-key
 PEXELS_API_KEY=
+# OCR por visión (calidad tipo ChatGPT). Sin esto se usa Workers AI si el binding AI está activo.
+OPENAI_API_KEY=
+# Opcional: gpt-4o-mini (default) | gpt-4o
+OPENAI_OCR_MODEL=gpt-4o-mini

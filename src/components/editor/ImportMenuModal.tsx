@@ -1,15 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
 import { ApiError, listAssets, type AssetSummary } from '@/lib/api';
-import {
-  DEFAULT_OCR_LANGUAGE,
-  OCR_LANGUAGE_PRESETS,
-  type OcrLanguagePresetId,
-} from '@/lib/menu-image-import';
-
-export interface ImportMenuOptions {
-  groupByTitles: boolean;
-  ocrLanguage: OcrLanguagePresetId;
-}
 
 export type ImportMenuSource =
   | { type: 'file'; file: File }
@@ -18,26 +8,12 @@ export type ImportMenuSource =
 interface ImportMenuModalProps {
   open: boolean;
   onClose: () => void;
-  onImport: (source: ImportMenuSource, options: ImportMenuOptions) => void;
+  onImport: (source: ImportMenuSource) => void;
   busy?: boolean;
   pageIndex: number;
 }
 
 type SourceTab = 'upload' | 'library';
-
-const OCR_LANG_STORAGE_KEY = 'menubuilder.ocrLanguage';
-
-function readStoredOcrLanguage(): OcrLanguagePresetId {
-  try {
-    const raw = localStorage.getItem(OCR_LANG_STORAGE_KEY);
-    if (raw && OCR_LANGUAGE_PRESETS.some((p) => p.id === raw)) {
-      return raw as OcrLanguagePresetId;
-    }
-  } catch {
-    /* ignore */
-  }
-  return DEFAULT_OCR_LANGUAGE;
-}
 
 function assetDisplayName(asset: AssetSummary): string {
   const key = asset.r2_key ?? '';
@@ -60,16 +36,12 @@ export function ImportMenuModal({
   const [tab, setTab] = useState<SourceTab>('upload');
   const [file, setFile] = useState<File | null>(null);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
-  const [groupByTitles, setGroupByTitles] = useState(true);
-  const [ocrLanguage, setOcrLanguage] = useState<OcrLanguagePresetId>(DEFAULT_OCR_LANGUAGE);
   const [assets, setAssets] = useState<AssetSummary[]>([]);
   const [assetsLoading, setAssetsLoading] = useState(false);
   const [assetsError, setAssetsError] = useState('');
   const [selectedAssetId, setSelectedAssetId] = useState<string | null>(null);
 
   const selectedAsset = assets.find((a) => a.id === selectedAssetId) ?? null;
-  const selectedLangHint =
-    OCR_LANGUAGE_PRESETS.find((p) => p.id === ocrLanguage)?.hint ?? '';
 
   const loadAssets = useCallback(async () => {
     setAssetsLoading(true);
@@ -97,13 +69,10 @@ export function ImportMenuModal({
   useEffect(() => {
     if (!open) {
       setFile(null);
-      setGroupByTitles(true);
       setTab('upload');
       setSelectedAssetId(null);
       setAssetsError('');
-      return;
     }
-    setOcrLanguage(readStoredOcrLanguage());
   }, [open]);
 
   useEffect(() => {
@@ -111,17 +80,6 @@ export function ImportMenuModal({
       void loadAssets();
     }
   }, [open, tab, loadAssets]);
-
-  function handleLanguageChange(value: string) {
-    if (!OCR_LANGUAGE_PRESETS.some((p) => p.id === value)) return;
-    const id = value as OcrLanguagePresetId;
-    setOcrLanguage(id);
-    try {
-      localStorage.setItem(OCR_LANG_STORAGE_KEY, id);
-    } catch {
-      /* ignore */
-    }
-  }
 
   function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
     const selected = e.target.files?.[0];
@@ -136,15 +94,13 @@ export function ImportMenuModal({
     e.preventDefault();
     if (busy) return;
 
-    const options: ImportMenuOptions = { groupByTitles, ocrLanguage };
-
     if (tab === 'upload' && file) {
-      onImport({ type: 'file', file }, options);
+      onImport({ type: 'file', file });
       return;
     }
 
     if (tab === 'library' && selectedAsset?.url) {
-      onImport({ type: 'asset', asset: selectedAsset }, options);
+      onImport({ type: 'asset', asset: selectedAsset });
     }
   }
 
@@ -164,30 +120,13 @@ export function ImportMenuModal({
 
         <form onSubmit={handleSubmit} className="import-menu-form">
           <p className="import-menu-hint">
-            Usa una foto nítida y bien iluminada. Con idioma «Automático» el OCR combina catalán,
-            castellano e inglés. Activa «Agrupar por títulos» para el patrón categoría → contenido.
+            El reconocimiento usa visión por IA (calidad similar a ChatGPT): lee columnas,
+            secciones y precios sin mezclar el texto.
           </p>
 
           <p className="import-menu-warning">
             Se reemplazará el contenido de la <strong>página {pageIndex + 1}</strong>.
           </p>
-
-          <label className={`import-menu-field${busy ? ' is-disabled' : ''}`}>
-            <span className="import-menu-field-label">Idioma de la carta</span>
-            <select
-              value={ocrLanguage}
-              onChange={(e) => handleLanguageChange(e.target.value)}
-              disabled={busy}
-              aria-describedby="import-ocr-lang-hint"
-            >
-              {OCR_LANGUAGE_PRESETS.map((preset) => (
-                <option key={preset.id} value={preset.id}>
-                  {preset.label}
-                </option>
-              ))}
-            </select>
-            <small id="import-ocr-lang-hint">{selectedLangHint}</small>
-          </label>
 
           <div className="import-menu-tabs" role="tablist" aria-label="Origen de la imagen">
             <button
@@ -287,25 +226,9 @@ export function ImportMenuModal({
             </div>
           )}
 
-          <label className={`import-menu-option${busy ? ' is-disabled' : ''}`}>
-            <input
-              type="checkbox"
-              checked={groupByTitles}
-              onChange={(e) => setGroupByTitles(e.target.checked)}
-              disabled={busy}
-            />
-            <span>
-              <strong>Agrupar texto por títulos</strong>
-              <small>
-                Una capa por categoría en mayúsculas (TAPES, BIKINIS…) y otra con el contenido
-                debajo. Si hay dos columnas, las separa. Desactívalo para una capa por línea.
-              </small>
-            </span>
-          </label>
-
           <ul className="import-menu-notes">
             <li>Funciona mejor con fotos nítidas y buena iluminación.</li>
-            <li>Las fuentes decorativas y fondos recargados pueden dar posiciones aproximadas.</li>
+            <li>Tras importar, revisa precios y capas antes de guardar.</li>
             <li>Si eliges un archivo ya subido, no se vuelve a subir a R2.</li>
           </ul>
 

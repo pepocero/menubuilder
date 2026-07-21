@@ -5,6 +5,11 @@ export interface Env {
   STOCK_PROVIDER?: string;
   PIXABAY_API_KEY?: string;
   PEXELS_API_KEY?: string;
+  /** OCR por visión (recomendado). gpt-4o-mini por defecto. */
+  OPENAI_API_KEY?: string;
+  OPENAI_OCR_MODEL?: string;
+  /** Fallback OCR visión sin OpenAI. */
+  AI?: Ai;
 }
 
 export interface AuthUser {

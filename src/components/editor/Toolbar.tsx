@@ -80,7 +80,7 @@ export function Toolbar({
         : uploadProgress?.phase === 'place'
           ? 'Añadiendo al lienzo'
           : uploadProgress?.phase === 'ocr'
-            ? 'Analizando texto'
+            ? 'Leyendo carta con IA'
             : uploadProgress?.phase === 'import'
               ? 'Creando capas'
               : '';

@@ -5,6 +5,9 @@ interface Env {
   STOCK_PROVIDER?: string;
   PIXABAY_API_KEY?: string;
   PEXELS_API_KEY?: string;
+  OPENAI_API_KEY?: string;
+  OPENAI_OCR_MODEL?: string;
+  AI?: Ai;
 }
 
 interface AuthContext {
@@ -22,5 +25,8 @@ declare namespace Cloudflare {
     STOCK_PROVIDER?: string;
     PIXABAY_API_KEY?: string;
     PEXELS_API_KEY?: string;
+    OPENAI_API_KEY?: string;
+    OPENAI_OCR_MODEL?: string;
+    AI?: Ai;
   }
 }

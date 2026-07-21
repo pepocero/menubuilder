@@ -13,6 +13,7 @@ import {
   deleteAsset,
   getMenu,
   importStockImage,
+  recognizeMenuWithVision,
   updateMenu,
   uploadAsset,
 } from '@/lib/api';
@@ -35,7 +36,10 @@ import {
   undoHistory,
   type PageHistoryState,
 } from '@/lib/canvas-history';
-import { applyMenuImportToCanvas, recognizeMenuImage, resolveOcrLanguages } from '@/lib/menu-image-import';
+import {
+  applyVisionMenuImportToCanvas,
+  prepareImageForVisionOcr,
+} from '@/lib/vision-menu-import';
 import { exportMenuDocumentJson, exportPagesToPdf } from '@/lib/export';
 import { preloadCommonEditorFonts } from '@/lib/google-fonts';
 import { isLayerLocked, setLayerObjectData } from '@/lib/layer-utils';
@@ -45,7 +49,7 @@ import { LayersPanel } from '@/components/editor/LayersPanel';
 import { PropertiesPanel } from '@/components/editor/PropertiesPanel';
 import { PublishQrModal } from '@/components/editor/PublishQrModal';
 import { AssetManagerModal } from '@/components/editor/AssetManagerModal';
-import { ImportMenuModal, type ImportMenuOptions, type ImportMenuSource } from '@/components/editor/ImportMenuModal';
+import { ImportMenuModal, type ImportMenuSource } from '@/components/editor/ImportMenuModal';
 import { StockImageSearch } from '@/components/editor/StockImageSearch';
 import { Toolbar, type UploadProgressState } from '@/components/editor/Toolbar';
 
@@ -521,7 +525,7 @@ export function EditorPage() {
     }
   }
 
-  async function handleImportFromImage(source: ImportMenuSource, options: ImportMenuOptions) {
+  async function handleImportFromImage(source: ImportMenuSource) {
     const canvas = getActiveCanvas();
     if (!canvas || uploadInFlightRef.current) return;
     uploadInFlightRef.current = true;
@@ -544,7 +548,7 @@ export function EditorPage() {
     try {
       ensureA4Canvas(canvas);
 
-      let ocrInput: Blob;
+      let sourceBlob: Blob;
       let assetId: string;
       let imageUrl: string;
 
@@ -557,25 +561,24 @@ export function EditorPage() {
         if (!response.ok) {
           throw new Error('No se pudo cargar la imagen desde tus archivos');
         }
-        ocrInput = await response.blob();
+        sourceBlob = await response.blob();
         assetId = source.asset.id;
         imageUrl = source.asset.url;
       } else {
-        ocrInput = source.file;
+        sourceBlob = source.file;
         assetId = '';
         imageUrl = '';
       }
 
-      // OCR sobre el original (sin comprimir): la compresión agresiva empeora el reconocimiento.
-      const ocrResult = await recognizeMenuImage(
-        ocrInput,
-        (p) => setImportPhase('ocr', p),
-        resolveOcrLanguages(options.ocrLanguage),
+      setImportPhase('ocr', 2);
+      const visionInput = await prepareImageForVisionOcr(sourceBlob);
+      const { menu } = await recognizeMenuWithVision(visionInput, (p) =>
+        setImportPhase('ocr', p),
       );
 
-      if (ocrResult.lines.length === 0) {
+      if (!menu.headerTitle && menu.sections.length === 0) {
         throw new Error(
-          'No se detectó texto legible en la imagen. Prueba con una foto más nítida, sin ángulo extremo y con buen contraste.',
+          'No se detectó texto legible en la imagen. Prueba con una foto más nítida y buen contraste.',
         );
       }
 
@@ -588,18 +591,32 @@ export function EditorPage() {
         assetId = asset.id;
         imageUrl = asset.url;
       } else {
-        // Reutiliza el asset existente: no vuelve a subirse a R2
         setImportPhase('upload', 100);
       }
 
+      const dimsUrl = URL.createObjectURL(sourceBlob);
+      let imageWidth = 595;
+      let imageHeight = 842;
+      try {
+        const dims = await new Promise<{ w: number; h: number }>((resolve, reject) => {
+          const img = new Image();
+          img.onload = () => resolve({ w: img.naturalWidth, h: img.naturalHeight });
+          img.onerror = () => reject(new Error('No se pudieron leer las dimensiones'));
+          img.src = dimsUrl;
+        });
+        imageWidth = dims.w;
+        imageHeight = dims.h;
+      } finally {
+        URL.revokeObjectURL(dimsUrl);
+      }
+
       setImportPhase('import', 20);
-      const textCount = await applyMenuImportToCanvas(canvas, {
+      const textCount = await applyVisionMenuImportToCanvas(canvas, {
         imageUrl,
         assetId,
-        lines: ocrResult.lines,
-        imageWidth: ocrResult.imageWidth,
-        imageHeight: ocrResult.imageHeight,
-        groupByTitles: options.groupByTitles,
+        imageWidth,
+        imageHeight,
+        menu,
       });
 
       setImportPhase('import', 100);
@@ -608,11 +625,9 @@ export function EditorPage() {
       handleChange();
 
       setEditorError('');
-      const modeHint = options.groupByTitles
-        ? 'agrupadas por títulos (título + contenido por sección)'
-        : 'una por cada línea detectada';
+      const providerHint = menu.provider ? ` (${menu.provider})` : '';
       alert(
-        `Importación completada: ${textCount} capas de texto (${modeHint}). Revisa y ajusta antes de guardar.`,
+        `Importación completada${providerHint}: ${textCount} capas de texto por secciones. Revisa y ajusta antes de guardar.`,
       );
     } catch (err) {
       setEditorError(
