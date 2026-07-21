@@ -8,26 +8,67 @@ export class ApiError extends Error {
   }
 }
 
-function hasRefreshCookie(): boolean {
-  return document.cookie.split(';').some((part) => part.trim().startsWith('refresh_token='));
+/** Evita varios /api/auth/refresh en paralelo cuando caduca el access token. */
+let refreshInFlight: Promise<boolean> | null = null;
+
+function isAuthPath(path: string): boolean {
+  return path.startsWith('/api/auth/');
 }
 
-async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
+async function tryRefreshSession(): Promise<boolean> {
+  if (refreshInFlight) return refreshInFlight;
+
+  refreshInFlight = (async () => {
+    try {
+      // refresh_token es HttpOnly: va en credentials; no se puede leer con document.cookie.
+      const response = await fetch('/api/auth/refresh', {
+        method: 'POST',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+      });
+      return response.ok;
+    } catch {
+      return false;
+    } finally {
+      refreshInFlight = null;
+    }
+  })();
+
+  return refreshInFlight;
+}
+
+function buildFetchInit(options: RequestInit = {}): RequestInit {
+  return {
+    ...options,
+    credentials: 'include',
+    headers: {
+      ...(options.body instanceof FormData ? {} : { 'Content-Type': 'application/json' }),
+      ...options.headers,
+    },
+  };
+}
+
+async function request<T>(
+  path: string,
+  options: RequestInit = {},
+  retried = false,
+): Promise<T> {
   let response: Response;
   try {
-    response = await fetch(path, {
-      ...options,
-      credentials: 'include',
-      headers: {
-        ...(options.body instanceof FormData ? {} : { 'Content-Type': 'application/json' }),
-        ...options.headers,
-      },
-    });
+    response = await fetch(path, buildFetchInit(options));
   } catch {
     throw new ApiError(
       'No se pudo conectar con la API. Comprueba que npm run dev esté activo y la API en el puerto 8788.',
       0,
     );
+  }
+
+  // Access token ~15 min: renovar con refresh y reintentar una vez.
+  if (response.status === 401 && !retried && !isAuthPath(path)) {
+    const refreshed = await tryRefreshSession();
+    if (refreshed) {
+      return request<T>(path, options, true);
+    }
   }
 
   const data = await response.json().catch(() => ({}));
@@ -80,60 +121,77 @@ export const api = {
     file: File,
     onProgress?: (percent: number) => void,
   ): Promise<T> {
-    return new Promise((resolve, reject) => {
-      const xhr = new XMLHttpRequest();
-      const formData = new FormData();
-      formData.append('file', file);
+    const send = (retried: boolean) =>
+      new Promise<T>((resolve, reject) => {
+        const xhr = new XMLHttpRequest();
+        const formData = new FormData();
+        formData.append('file', file);
 
-      xhr.open('POST', path);
-      xhr.withCredentials = true;
+        xhr.open('POST', path);
+        xhr.withCredentials = true;
 
-      xhr.upload.onprogress = (event) => {
-        if (!onProgress) return;
-        if (event.lengthComputable && event.total > 0) {
-          onProgress(Math.min(100, Math.round((event.loaded / event.total) * 100)));
-        } else {
-          onProgress(0);
-        }
-      };
+        xhr.upload.onprogress = (event) => {
+          if (!onProgress) return;
+          if (event.lengthComputable && event.total > 0) {
+            onProgress(Math.min(100, Math.round((event.loaded / event.total) * 100)));
+          } else {
+            onProgress(0);
+          }
+        };
 
-      xhr.onload = () => {
-        let data: unknown = {};
-        try {
-          data = xhr.responseText ? JSON.parse(xhr.responseText) : {};
-        } catch {
-          data = {};
-        }
+        xhr.onload = () => {
+          void (async () => {
+            if (xhr.status === 401 && !retried && !isAuthPath(path)) {
+              const refreshed = await tryRefreshSession();
+              if (refreshed) {
+                try {
+                  resolve(await send(true));
+                } catch (err) {
+                  reject(err);
+                }
+                return;
+              }
+            }
 
-        if (xhr.status >= 200 && xhr.status < 300) {
-          onProgress?.(100);
-          resolve(data as T);
-          return;
-        }
+            let data: unknown = {};
+            try {
+              data = xhr.responseText ? JSON.parse(xhr.responseText) : {};
+            } catch {
+              data = {};
+            }
 
-        reject(
-          new ApiError(
-            (data as { error?: string }).error ?? 'Error de servidor',
-            xhr.status,
-          ),
-        );
-      };
+            if (xhr.status >= 200 && xhr.status < 300) {
+              onProgress?.(100);
+              resolve(data as T);
+              return;
+            }
 
-      xhr.onerror = () => {
-        reject(
-          new ApiError(
-            'No se pudo conectar con la API. Comprueba que npm run dev esté activo y la API en el puerto 8788.',
-            0,
-          ),
-        );
-      };
+            reject(
+              new ApiError(
+                (data as { error?: string }).error ?? 'Error de servidor',
+                xhr.status,
+              ),
+            );
+          })();
+        };
 
-      xhr.onabort = () => {
-        reject(new ApiError('Subida cancelada', 0));
-      };
+        xhr.onerror = () => {
+          reject(
+            new ApiError(
+              'No se pudo conectar con la API. Comprueba que npm run dev esté activo y la API en el puerto 8788.',
+              0,
+            ),
+          );
+        };
 
-      xhr.send(formData);
-    });
+        xhr.onabort = () => {
+          reject(new ApiError('Subida cancelada', 0));
+        };
+
+        xhr.send(formData);
+      });
+
+    return send(false);
   },
 };
 
@@ -160,10 +218,26 @@ export async function login(email: string, password: string): Promise<AuthRespon
 }
 
 export async function refreshSession(): Promise<AuthResponse> {
-  if (!hasRefreshCookie()) {
-    throw new ApiError('No hay sesión activa', 401);
+  // No usar request() aquí: evita bucles de refresh-on-401.
+  let response: Response;
+  try {
+    response = await fetch('/api/auth/refresh', {
+      method: 'POST',
+      credentials: 'include',
+      headers: { 'Content-Type': 'application/json' },
+    });
+  } catch {
+    throw new ApiError('No se pudo conectar con la API.', 0);
   }
-  return api.post('/api/auth/refresh');
+
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    throw new ApiError(
+      (data as { error?: string }).error ?? 'Sesión expirada',
+      response.status,
+    );
+  }
+  return data as AuthResponse;
 }
 
 export async function logout(): Promise<void> {

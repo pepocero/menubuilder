@@ -147,8 +147,16 @@ export function EditorPage() {
           thumbnail_url: thumbnailUrl,
         });
         setSaveStatus('saved');
-      } catch {
+        setEditorError('');
+      } catch (err) {
         setSaveStatus('unsaved');
+        if (err instanceof ApiError && err.status === 401) {
+          setEditorError('Sesión expirada. Vuelve a iniciar sesión para guardar los cambios.');
+        } else if (err instanceof ApiError) {
+          setEditorError(`No se pudo guardar: ${err.message}`);
+        } else {
+          setEditorError('No se pudieron guardar los cambios. Revisa la conexión e inténtalo de nuevo.');
+        }
       }
     }, 2500);
   }, [menuId, collectDocument]);
