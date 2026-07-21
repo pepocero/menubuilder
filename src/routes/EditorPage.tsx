@@ -35,7 +35,7 @@ import {
   undoHistory,
   type PageHistoryState,
 } from '@/lib/canvas-history';
-import { applyMenuImportToCanvas, recognizeMenuImage } from '@/lib/menu-image-import';
+import { applyMenuImportToCanvas, recognizeMenuImage, resolveOcrLanguages } from '@/lib/menu-image-import';
 import { exportMenuDocumentJson, exportPagesToPdf } from '@/lib/export';
 import { preloadCommonEditorFonts } from '@/lib/google-fonts';
 import { isLayerLocked, setLayerObjectData } from '@/lib/layer-utils';
@@ -559,7 +559,11 @@ export function EditorPage() {
       }
 
       // OCR sobre el original (sin comprimir): la compresión agresiva empeora el reconocimiento.
-      const ocrResult = await recognizeMenuImage(ocrInput, (p) => setImportPhase('ocr', p));
+      const ocrResult = await recognizeMenuImage(
+        ocrInput,
+        (p) => setImportPhase('ocr', p),
+        resolveOcrLanguages(options.ocrLanguage),
+      );
 
       if (ocrResult.lines.length === 0) {
         throw new Error(

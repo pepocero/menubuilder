@@ -26,6 +26,34 @@ export interface MenuImageOcrResult {
   imageHeight: number;
 }
 
+/** Idiomas OCR disponibles en el modal de importación. */
+export const OCR_LANGUAGE_PRESETS = [
+  { id: 'cat', label: 'Català', langs: ['cat'] as const, hint: 'Cartes en catalán' },
+  { id: 'spa', label: 'Español', langs: ['spa'] as const, hint: 'Cartes en castellano' },
+  {
+    id: 'cat-spa',
+    label: 'Català + Español',
+    langs: ['cat', 'spa'] as const,
+    hint: 'Mezcla o menús bilingües',
+  },
+  { id: 'eng', label: 'English', langs: ['eng'] as const, hint: 'Menus in English' },
+  {
+    id: 'spa-eng',
+    label: 'Español + English',
+    langs: ['spa', 'eng'] as const,
+    hint: 'Turismo / bilingüe',
+  },
+] as const;
+
+export type OcrLanguagePresetId = (typeof OCR_LANGUAGE_PRESETS)[number]['id'];
+
+export const DEFAULT_OCR_LANGUAGE: OcrLanguagePresetId = 'cat';
+
+export function resolveOcrLanguages(presetId: OcrLanguagePresetId): string[] {
+  const preset = OCR_LANGUAGE_PRESETS.find((p) => p.id === presetId);
+  return [...(preset?.langs ?? ['cat'])];
+}
+
 /** Umbral bajo: en cartas decorativas la confianza suele ser peor que en documentos. */
 const MIN_CONFIDENCE = 20;
 const MIN_TEXT_LENGTH = 1;
@@ -123,23 +151,25 @@ export function getImageDimensions(file: Blob): Promise<{ width: number; height:
 }
 
 /**
- * Prepara la imagen para OCR: escala razonable y canvas RGB.
- * Tesseract rinde peor con imágenes muy pequeñas o muy grandes.
+ * Prepara la imagen para OCR: escala, fondo blanco, contraste y escala de grises.
+ * Tesseract rinde peor con fotos pequeñas, comprimidas (webp de R2) o bajo contraste.
  */
 export async function prepareImageForOcr(file: Blob): Promise<{
   blob: Blob;
   width: number;
   height: number;
+  canvas: HTMLCanvasElement;
 }> {
   const dims = await getImageDimensions(file);
   const maxSide = Math.max(dims.width, dims.height);
   const minSide = Math.min(dims.width, dims.height);
 
+  // Subir resolución mínima (imprescindible si viene de compressImage 1920/webp).
   let targetScale = 1;
-  if (minSide < 900) {
-    targetScale = 900 / minSide;
-  } else if (maxSide > 2800) {
-    targetScale = 2800 / maxSide;
+  if (minSide < 1400) {
+    targetScale = 1400 / minSide;
+  } else if (maxSide > 3600) {
+    targetScale = 3600 / maxSide;
   }
 
   const width = Math.max(1, Math.round(dims.width * targetScale));
@@ -157,14 +187,30 @@ export async function prepareImageForOcr(file: Blob): Promise<{
     const canvas = document.createElement('canvas');
     canvas.width = width;
     canvas.height = height;
-    const ctx = canvas.getContext('2d');
+    const ctx = canvas.getContext('2d', { willReadFrequently: true });
     if (!ctx) {
-      return { blob: file, width: dims.width, height: dims.height };
+      throw new Error('No se pudo preparar la imagen para OCR');
     }
 
     ctx.fillStyle = '#ffffff';
     ctx.fillRect(0, 0, width, height);
+    ctx.imageSmoothingEnabled = true;
+    ctx.imageSmoothingQuality = 'high';
     ctx.drawImage(img, 0, 0, width, height);
+
+    // Escala de grises + contraste suave: mejora tipografías decorativas y fotos de móvil.
+    const imageData = ctx.getImageData(0, 0, width, height);
+    const data = imageData.data;
+    const contrast = 1.35;
+    const intercept = 128 * (1 - contrast);
+    for (let i = 0; i < data.length; i += 4) {
+      const gray = 0.299 * data[i]! + 0.587 * data[i + 1]! + 0.114 * data[i + 2]!;
+      const v = Math.max(0, Math.min(255, gray * contrast + intercept));
+      data[i] = v;
+      data[i + 1] = v;
+      data[i + 2] = v;
+    }
+    ctx.putImageData(imageData, 0, 0);
 
     const blob = await new Promise<Blob>((resolve, reject) => {
       canvas.toBlob(
@@ -177,10 +223,124 @@ export async function prepareImageForOcr(file: Blob): Promise<{
       );
     });
 
-    return { blob, width, height };
+    return { blob, width, height, canvas };
   } finally {
     URL.revokeObjectURL(url);
   }
+}
+
+/**
+ * Detecta el eje del divisor entre 2 columnas con proyección vertical de tinta.
+ * Evita que Tesseract fusione platos de izquierda y derecha en la misma línea.
+ */
+export function findPixelColumnSplitX(
+  canvas: HTMLCanvasElement,
+): number | null {
+  const width = canvas.width;
+  const height = canvas.height;
+  if (width < 200 || height < 200) return null;
+
+  const ctx = canvas.getContext('2d', { willReadFrequently: true });
+  if (!ctx) return null;
+
+  const { data } = ctx.getImageData(0, 0, width, height);
+  const ink = new Float64Array(width);
+  const darkThreshold = 140;
+  // Ignora márgenes superior/inferior (logos, pies) al medir columnas.
+  const y0 = Math.floor(height * 0.08);
+  const y1 = Math.floor(height * 0.92);
+
+  for (let y = y0; y < y1; y++) {
+    const row = y * width * 4;
+    for (let x = 0; x < width; x++) {
+      if (data[row + x * 4]! < darkThreshold) ink[x] += 1;
+    }
+  }
+
+  // Suavizado horizontal
+  const smooth = new Float64Array(width);
+  const radius = Math.max(2, Math.floor(width * 0.008));
+  for (let x = 0; x < width; x++) {
+    let sum = 0;
+    let n = 0;
+    for (let k = -radius; k <= radius; k++) {
+      const i = x + k;
+      if (i < 0 || i >= width) continue;
+      sum += ink[i]!;
+      n += 1;
+    }
+    smooth[x] = sum / n;
+  }
+
+  const lo = Math.floor(width * 0.28);
+  const hi = Math.ceil(width * 0.72);
+  let bestX = -1;
+  let bestScore = Number.POSITIVE_INFINITY;
+  const pageMid = width / 2;
+
+  for (let x = lo; x < hi; x++) {
+    const centerBias = 1 + Math.abs(x - pageMid) / (width * 0.5);
+    const score = smooth[x]! * centerBias;
+    if (score < bestScore) {
+      bestScore = score;
+      bestX = x;
+    }
+  }
+
+  if (bestX < 0) return null;
+
+  // El valle debe ser claramente más vacío que la media de las bandas laterales.
+  const leftBand = averageRange(smooth, Math.floor(width * 0.08), Math.floor(width * 0.25));
+  const rightBand = averageRange(smooth, Math.ceil(width * 0.75), Math.floor(width * 0.92));
+  const sideAvg = (leftBand + rightBand) / 2;
+  if (sideAvg <= 0) return null;
+  if (smooth[bestX]! > sideAvg * 0.42) return null;
+
+  // Comprueba que hay contenido a ambos lados
+  const leftInk = averageRange(smooth, Math.floor(width * 0.05), bestX - Math.floor(width * 0.04));
+  const rightInk = averageRange(smooth, bestX + Math.floor(width * 0.04), Math.floor(width * 0.95));
+  if (leftInk < sideAvg * 0.35 || rightInk < sideAvg * 0.35) return null;
+
+  return bestX;
+}
+
+function averageRange(values: Float64Array, from: number, to: number): number {
+  const a = Math.max(0, Math.min(values.length, from));
+  const b = Math.max(a + 1, Math.min(values.length, to));
+  let sum = 0;
+  for (let i = a; i < b; i++) sum += values[i]!;
+  return sum / (b - a);
+}
+
+/** Corrige errores típicos de OCR en precios de carta (8,00€ leído como 800€). */
+export function normalizeMenuOcrText(text: string): string {
+  return text
+    .replace(/\b([1-9])00\s*€/g, '$1,00€')
+    .replace(/\b([1-9])00\s*eur(?:os?)?\b/gi, '$1,00€')
+    .replace(/\s{2,}/g, ' ')
+    .trim();
+}
+
+function normalizeOcrLines(lines: OcrLine[]): OcrLine[] {
+  return lines
+    .map((line) => ({
+      ...line,
+      text: normalizeMenuOcrText(line.text),
+    }))
+    .filter((line) => line.text.length >= MIN_TEXT_LENGTH);
+}
+
+function offsetLineBBoxes(lines: OcrLine[], offsetX: number): OcrLine[] {
+  if (offsetX === 0) return lines;
+  return lines.map((line) => ({
+    ...line,
+    bbox: {
+      x0: line.bbox.x0 + offsetX,
+      y0: line.bbox.y0,
+      x1: line.bbox.x1 + offsetX,
+      y1: line.bbox.y1,
+    },
+  }));
 }
 
 /** Mapea coordenadas de píxeles de la imagen al lienzo A4 con modo cover. */
@@ -611,23 +771,26 @@ export function buildTextLayersFromOcr(
 export async function recognizeMenuImage(
   file: Blob,
   onProgress?: (percent: number, status: string) => void,
+  languages: string[] = resolveOcrLanguages(DEFAULT_OCR_LANGUAGE),
 ): Promise<MenuImageOcrResult> {
   onProgress?.(0, 'Preparando imagen…');
   const prepared = await prepareImageForOcr(file);
 
+  const langs = languages.length > 0 ? languages : resolveOcrLanguages(DEFAULT_OCR_LANGUAGE);
+  const langLabel = langs.join('+').toUpperCase();
+
   onProgress?.(8, 'Cargando motor OCR…');
   const { createWorker, PSM } = await import('tesseract.js');
 
-  // spa+eng: cartas suelen mezclar idiomas; blocks hay que pedirlo explícitamente
-  // (en tesseract.js v5+ solo text viene activo por defecto).
-  const worker = await createWorker(['spa', 'eng'], undefined, {
+  // blocks hay que pedirlo explícitamente (en tesseract.js v5+ solo text viene activo).
+  const worker = await createWorker(langs, undefined, {
     logger: (message) => {
       if (message.status === 'loading tesseract core') {
         onProgress?.(12, 'Cargando motor OCR…');
       } else if (message.status === 'initializing tesseract') {
         onProgress?.(16, 'Inicializando OCR…');
       } else if (message.status === 'loading language traineddata') {
-        onProgress?.(22, 'Cargando idiomas…');
+        onProgress?.(22, `Cargando idioma (${langLabel})…`);
       } else if (message.status === 'recognizing text') {
         onProgress?.(28 + Math.round((message.progress ?? 0) * 68), 'Reconociendo texto…');
       }
@@ -635,20 +798,83 @@ export async function recognizeMenuImage(
   });
 
   try {
+    const splitX = findPixelColumnSplitX(prepared.canvas);
+    const gutter = Math.max(4, Math.round(prepared.width * 0.008));
+
+    type Region = { blob: Blob; width: number; height: number; offsetX: number; label: string };
+    const regions: Region[] = [];
+
+    if (splitX != null) {
+      onProgress?.(26, 'Detectadas 2 columnas; OCR por columna…');
+      const leftW = Math.max(1, splitX - gutter);
+      const rightX = Math.min(prepared.width - 1, splitX + gutter);
+      const rightW = Math.max(1, prepared.width - rightX);
+      regions.push({
+        blob: await cropCanvasToPng(prepared.canvas, 0, 0, leftW, prepared.height),
+        width: leftW,
+        height: prepared.height,
+        offsetX: 0,
+        label: 'Columna izquierda',
+      });
+      regions.push({
+        blob: await cropCanvasToPng(prepared.canvas, rightX, 0, rightW, prepared.height),
+        width: rightW,
+        height: prepared.height,
+        offsetX: rightX,
+        label: 'Columna derecha',
+      });
+    } else {
+      regions.push({
+        blob: prepared.blob,
+        width: prepared.width,
+        height: prepared.height,
+        offsetX: 0,
+        label: 'Página',
+      });
+    }
+
+    // SINGLE_COLUMN evita que Tesseract fusione platos de dos columnas en una sola línea.
     await worker.setParameters({
-      tessedit_pageseg_mode: PSM.AUTO,
+      tessedit_pageseg_mode: PSM.SINGLE_COLUMN,
       preserve_interword_spaces: '1',
       user_defined_dpi: '300',
     });
 
-    const { data } = await worker.recognize(prepared.blob, {}, { blocks: true, text: true });
+    let lines: OcrLine[] = [];
 
-    let lines = extractOcrLines(data);
+    for (let i = 0; i < regions.length; i++) {
+      const region = regions[i]!;
+      const base = 28 + Math.round((i / regions.length) * 60);
+      onProgress?.(
+        base,
+        regions.length > 1 ? `${region.label} (${i + 1}/${regions.length})…` : 'Reconociendo texto…',
+      );
 
-    if (lines.length === 0 && data.text?.trim()) {
-      lines = linesFromPlainText(data.text, prepared.width, prepared.height);
+      const { data } = await worker.recognize(region.blob, {}, { blocks: true, text: true });
+
+      let regionLines = extractOcrLines(data);
+      if (regionLines.length === 0 && data.text?.trim()) {
+        regionLines = linesFromPlainText(data.text, region.width, region.height);
+      }
+      lines.push(...offsetLineBBoxes(regionLines, region.offsetX));
     }
 
+    // Si el recorte por columnas no dio nada útil, reintenta página completa.
+    if (lines.length === 0 && regions.length > 1) {
+      onProgress?.(40, 'Reintentando OCR a página completa…');
+      await worker.setParameters({
+        tessedit_pageseg_mode: PSM.AUTO,
+        preserve_interword_spaces: '1',
+        user_defined_dpi: '300',
+      });
+      const { data } = await worker.recognize(prepared.blob, {}, { blocks: true, text: true });
+      lines = extractOcrLines(data);
+      if (lines.length === 0 && data.text?.trim()) {
+        lines = linesFromPlainText(data.text, prepared.width, prepared.height);
+      }
+    }
+
+    lines = normalizeOcrLines(lines);
     onProgress?.(100, 'OCR completado');
 
     return {
@@ -659,6 +885,33 @@ export async function recognizeMenuImage(
   } finally {
     await worker.terminate();
   }
+}
+
+async function cropCanvasToPng(
+  source: HTMLCanvasElement,
+  x: number,
+  y: number,
+  width: number,
+  height: number,
+): Promise<Blob> {
+  const canvas = document.createElement('canvas');
+  canvas.width = width;
+  canvas.height = height;
+  const ctx = canvas.getContext('2d');
+  if (!ctx) throw new Error('No se pudo recortar la columna para OCR');
+  ctx.fillStyle = '#ffffff';
+  ctx.fillRect(0, 0, width, height);
+  ctx.drawImage(source, x, y, width, height, 0, 0, width, height);
+  return new Promise((resolve, reject) => {
+    canvas.toBlob(
+      (result) => {
+        if (result) resolve(result);
+        else reject(new Error('No se pudo recortar la columna para OCR'));
+      },
+      'image/png',
+      1,
+    );
+  });
 }
 
 export async function applyMenuImportToCanvas(
