@@ -297,8 +297,8 @@ export function ImportMenuModal({
             <span>
               <strong>Agrupar texto por títulos</strong>
               <small>
-                Crea una capa por cada categoría (p. ej. Tapas) y otra con todo su contenido en un
-                solo cuadro de texto. Desactívalo si prefieres una capa por cada línea.
+                Por cada categoría (TAPES, BIKINIS…) crea una capa de título y otra con todo su
+                contenido debajo. Si hay columnas o una línea vertical, las trata por separado.
               </small>
             </span>
           </label>
