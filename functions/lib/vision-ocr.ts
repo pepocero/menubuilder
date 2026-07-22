@@ -2,8 +2,9 @@ import type { MenuOcrResult, MenuOcrSection } from '../../shared/menu-ocr';
 import {
   MENU_OCR_JSON_SCHEMA,
   MENU_OCR_SYSTEM_PROMPT,
-  MENU_OCR_USER_PROMPT,
+  buildMenuOcrUserPrompt,
   parseMenuOcrBox,
+  sanitizeMenuOcrPromptExtra,
 } from '../../shared/menu-ocr';
 import {
   isOcrProviderRetryableError,
@@ -17,6 +18,7 @@ type OcrExtractor = (
   env: Env,
   imageBytes: ArrayBuffer,
   mime: string,
+  promptExtra?: string,
 ) => Promise<MenuOcrResult>;
 
 /** Gemma 4: visión + OCR estructurado (sin licencia Meta / UE). */
@@ -223,12 +225,14 @@ async function extractWithOpenAI(
   env: Env,
   imageBytes: ArrayBuffer,
   mime: string,
+  promptExtra?: string,
 ): Promise<MenuOcrResult> {
   const key = env.OPENAI_API_KEY;
   if (!key) throw new Error('OPENAI_API_KEY no configurada');
 
   const b64 = arrayBufferToBase64(imageBytes);
   const dataUrl = `data:${mime};base64,${b64}`;
+  const userText = buildMenuOcrUserPrompt(promptExtra);
 
   const response = await fetch('https://api.openai.com/v1/chat/completions', {
     method: 'POST',
@@ -239,12 +243,13 @@ async function extractWithOpenAI(
     body: JSON.stringify({
       model: env.OPENAI_OCR_MODEL?.trim() || 'gpt-4o-mini',
       temperature: 0,
+      max_tokens: 8192,
       messages: [
         { role: 'system', content: MENU_OCR_SYSTEM_PROMPT },
         {
           role: 'user',
           content: [
-            { type: 'text', text: MENU_OCR_USER_PROMPT },
+            { type: 'text', text: userText },
             { type: 'image_url', image_url: { url: dataUrl, detail: 'high' } },
           ],
         },
@@ -262,7 +267,7 @@ async function extractWithOpenAI(
 
   const payload = (await response.json()) as {
     error?: { message?: string; code?: string; type?: string };
-    choices?: Array<{ message?: { content?: string } }>;
+    choices?: Array<{ message?: { content?: string }; finish_reason?: string }>;
   };
 
   if (!response.ok) {
@@ -274,8 +279,14 @@ async function extractWithOpenAI(
     throw new Error(detail);
   }
 
-  const content = payload.choices?.[0]?.message?.content;
+  const choice = payload.choices?.[0];
+  const content = choice?.message?.content;
   if (!content) throw new Error('OpenAI no devolvió contenido OCR');
+  if (choice.finish_reason === 'length') {
+    throw new Error(
+      'OpenAI truncó la transcripción (respuesta incompleta). Vuelve a intentar o usa una imagen más nítida.',
+    );
+  }
 
   const result = parseMenuOcrJson(content);
   result.provider = 'openai';
@@ -286,17 +297,19 @@ async function extractWithWorkersAi(
   env: Env,
   imageBytes: ArrayBuffer,
   mime: string,
+  promptExtra?: string,
 ): Promise<MenuOcrResult> {
   if (!env.AI) throw new Error('Workers AI no está configurado');
 
   const b64 = arrayBufferToBase64(imageBytes);
   const dataUrl = `data:${mime || 'image/jpeg'};base64,${b64}`;
+  const userText = buildMenuOcrUserPrompt(promptExtra);
   const messages = [
     { role: 'system', content: MENU_OCR_SYSTEM_PROMPT },
     {
       role: 'user',
       content: [
-        { type: 'text', text: MENU_OCR_USER_PROMPT },
+        { type: 'text', text: userText },
         { type: 'image_url', image_url: { url: dataUrl, detail: 'high' } },
       ],
     },
@@ -380,13 +393,14 @@ async function runExtractor(
   env: Env,
   imageBytes: ArrayBuffer,
   mime: string,
+  promptExtra?: string,
 ): Promise<MenuOcrResult> {
   if (!providerAvailable(env, id)) {
     if (id === 'openai') throw new Error('OPENAI_API_KEY no configurada');
     if (id === 'workers-ai') throw new Error('Workers AI no está configurado');
     throw new Error(`Proveedor OCR no disponible: ${id}`);
   }
-  return OCR_EXTRACTORS[id](env, imageBytes, mime);
+  return OCR_EXTRACTORS[id](env, imageBytes, mime, promptExtra);
 }
 
 /** OCR de carta con visión según la preferencia del usuario. */
@@ -395,11 +409,13 @@ export async function extractMenuWithVision(
   imageBytes: ArrayBuffer,
   mime: string,
   providerChoice: MenuOcrProviderChoice | string = 'workers-ai',
+  promptExtra?: string,
 ): Promise<MenuOcrResult> {
   const choice = parseOcrProviderChoice(providerChoice);
+  const extra = sanitizeMenuOcrPromptExtra(promptExtra ?? '');
 
   if (choice !== 'auto') {
-    return runExtractor(choice, env, imageBytes, mime);
+    return runExtractor(choice, env, imageBytes, mime, extra);
   }
 
   const chain = autoProviderChain(env);
@@ -413,7 +429,7 @@ export async function extractMenuWithVision(
   for (let i = 0; i < chain.length; i++) {
     const id = chain[i];
     try {
-      return await runExtractor(id, env, imageBytes, mime);
+      return await runExtractor(id, env, imageBytes, mime, extra);
     } catch (err) {
       lastError = err instanceof Error ? err : new Error(String(err));
       const hasNext = i < chain.length - 1;

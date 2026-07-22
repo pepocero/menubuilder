@@ -4,6 +4,7 @@ import {
 } from './auth';
 import type { AuthUser, Env } from './types';
 import { errorResponse } from './types';
+import { isSystemAdminEmail, resolveUserRole } from '../../shared/roles';
 
 export async function getAuthUser(request: Request, env: Env): Promise<AuthUser | null> {
   if (!env.JWT_SECRET) return null;
@@ -15,7 +16,11 @@ export async function getAuthUser(request: Request, env: Env): Promise<AuthUser 
   const payload = await verifyAccessToken(accessToken, env.JWT_SECRET);
   if (!payload) return null;
 
-  return { userId: payload.sub, email: payload.email };
+  return {
+    userId: payload.sub,
+    email: payload.email,
+    role: resolveUserRole(payload.email),
+  };
 }
 
 export async function requireAuth(
@@ -27,6 +32,19 @@ export async function requireAuth(
     return { response: errorResponse('No autenticado', 401) };
   }
   return { user };
+}
+
+/** Exige administrador global del sistema (p. ej. pepocero@gmail.com). */
+export async function requireSystemAdmin(
+  request: Request,
+  env: Env,
+): Promise<{ user: AuthUser } | { response: Response }> {
+  const auth = await requireAuth(request, env);
+  if ('response' in auth) return auth;
+  if (!isSystemAdminEmail(auth.user.email)) {
+    return { response: errorResponse('Acceso denegado', 403) };
+  }
+  return auth;
 }
 
 export function isPublicApiPath(pathname: string, method: string): boolean {

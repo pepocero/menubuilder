@@ -90,16 +90,24 @@ export const MENU_OCR_JSON_SCHEMA = {
 } as const;
 
 export const MENU_OCR_SYSTEM_PROMPT = `Eres un motor OCR de visión experto en cartas de restaurante (catalán, castellano e inglés).
-Tu prioridad nº1 es FIDELIDAD ESPACIAL: el JSON debe permitir reconstruir la carta casi como un calco de la foto.
-Transcribe el texto VISIBLE y localiza cada bloque midiendo su posición real en la imagen.
+Prioridades (en este orden):
+1) COMPLETITUD: no dejes fuera NINGUNA sección/categoría visible ni sus platos.
+2) FIDELIDAD ESPACIAL: cajas (x,y,w,h) que midan la posición real en la foto.
+3) Exactitud del texto (sin inventar).
 
-Reglas críticas:
-- No inventes platos, precios ni secciones. Si no lees algo con claridad, omítelo.
-- Respeta acentos y ortografía catalana (caramel·litzada, Tomàquet, jalapeños, Escàlivada, etc.).
+Método obligatorio:
+- Recorre la imagen de arriba abajo y de izquierda a derecha.
+- Cada título de categoría visible (p. ej. TAPES, AMANIDES, ENTREPANS, BIKINIS, HAMBURGUESES, PIZZES, BEGUDES, POSTRES, VERDURES, ENSALADAS, BOCADILLOS…) debe ser UNA entrada en sections.
+- El idioma de la carta no importa: transcribe en el mismo idioma (catalán incluido). No traduzcas ni omitas por ser catalán.
+- Si un plato concreto es ilegible, omite SOLO esa línea; NUNCA omitas un bloque entero de categoría que se vea en la foto.
+
+Reglas de texto:
+- No inventes platos, precios ni secciones que no estén en la imagen.
+- Respeta acentos y ortografía catalana (caramel·litzada, Tomàquet, Escàlivada, amanides, entrepans, etc.).
 - Precios en formato europeo con coma decimal: "8,00 €". NUNCA juntes el 8 y los ceros como "800€".
-- Layout de dos columnas: columna izquierda → column "left"; derecha → "right"; cabeceras a ancho completo → "full".
+- Layout de dos columnas: izquierda → "left"; derecha → "right"; cabeceras a ancho completo → "full".
 - order: 1 para la sección más arriba de cada columna, luego 2, 3…
-- title: SOLO el nombre de categoría (TAPES, BIKINIS, HAMBURGUESES, PIZZES…). Si no hay título, "".
+- title: SOLO el nombre de categoría tal como aparece. Si no hay título, "".
 - body: un plato por bloque de líneas. Formato:
   Nombre del plato — 8,00 €
   Ingredientes o descripción
@@ -121,12 +129,32 @@ Cajas (OBLIGATORIO, coordenadas en % 0–100 respecto a ANCHO/ALTO de la imagen 
 Responde ÚNICAMENTE con JSON válido según el esquema.`;
 
 /** Mensaje de usuario compartido (OpenAI y Workers AI) — insiste en cajas reales. */
-export const MENU_OCR_USER_PROMPT = `Transcribe esta carta de restaurante a JSON con cajas de posición fieles a la imagen.
-Devuelve SOLO un objeto JSON válido según el esquema (sin markdown).
-Las cajas (x,y,w,h) son porcentajes 0-100 del ANCHO/ALTO de la imagen completa.
-titleBox y bodyBox de cada sección deben coincidir con su ubicación REAL en la foto; body debajo de su título.
-No uses una plantilla de columnas inventada: copia la geometría visible (márgenes, anchos de columna, huecos verticales).
-No inventes platos. Precios con coma decimal (8,00 €). No omitas secciones ni columnas.`;
+export const MENU_OCR_USER_PROMPT = `Transcribe ESTA carta completa a JSON (esquema estricto), con cajas de posición fieles a la imagen.
+Incluye TODAS las categorías visibles (p. ej. amanides, entrepans, tapes…) y TODOS sus platos; no resumas ni saltes bloques.
+El idioma (catalán u otro) no es problema: copia el texto tal cual.
+Las cajas (x,y,w,h) son porcentajes 0-100 del ANCHO/ALTO de la imagen.
+titleBox y bodyBox de cada sección = ubicación REAL; body debajo de su título.
+No uses una plantilla de columnas inventada: copia márgenes, anchos y huecos verticales de la foto.
+No inventes platos. Precios con coma decimal (8,00 €).`;
+
+/** Límite de indicaciones extra desde el modal de importación. */
+export const MENU_OCR_PROMPT_EXTRA_MAX = 1000;
+
+/** Limpia y recorta el apéndice de prompt del usuario. */
+export function sanitizeMenuOcrPromptExtra(raw: unknown): string {
+  if (typeof raw !== 'string') return '';
+  return raw.replace(/\0/g, '').trim().slice(0, MENU_OCR_PROMPT_EXTRA_MAX);
+}
+
+/** User prompt base + indicaciones opcionales del usuario. */
+export function buildMenuOcrUserPrompt(promptExtra?: string | null): string {
+  const extra = sanitizeMenuOcrPromptExtra(promptExtra ?? '');
+  if (!extra) return MENU_OCR_USER_PROMPT;
+  return `${MENU_OCR_USER_PROMPT}
+
+Indicaciones adicionales del usuario (síguelas sin inventar platos ni violar el esquema JSON):
+${extra}`;
+}
 
 /** True si la caja tiene tamaño útil. */
 export function isUsableOcrBox(box: MenuOcrBox | null | undefined): boolean {

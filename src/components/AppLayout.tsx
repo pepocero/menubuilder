@@ -3,7 +3,7 @@ import { Link, useLocation } from 'react-router-dom';
 import { useAuth } from '@/lib/auth-context';
 
 export function AppLayout() {
-  const { user, logout } = useAuth();
+  const { user, logout, isSystemAdmin } = useAuth();
   const [menuOpen, setMenuOpen] = useState(false);
   const location = useLocation();
 
@@ -36,6 +36,11 @@ export function AppLayout() {
           <Link to="/qrs" onClick={() => setMenuOpen(false)}>
             Mis QR
           </Link>
+          {isSystemAdmin && (
+            <Link to="/admin/users" onClick={() => setMenuOpen(false)} className="app-nav-admin">
+              Administración
+            </Link>
+          )}
           {user && <span className="user-email">{user.email}</span>}
           <button type="button" onClick={() => logout()} className="btn-secondary">
             Salir

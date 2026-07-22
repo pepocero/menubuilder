@@ -11,6 +11,7 @@ import {
   isValidPassword,
 } from '../../lib/auth';
 import { createUser, findUserByEmail, storeRefreshToken } from '../../lib/db';
+import { toPublicAuthUser } from '../../lib/public-user';
 import { errorResponse, jsonResponse, parseJson } from '../../lib/types';
 
 interface RegisterBody {
@@ -72,11 +73,11 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
 
   return jsonResponse(
     {
-      user: {
+      user: toPublicAuthUser({
         id: userId,
         email: body.email.toLowerCase(),
         name: body.name?.trim() || null,
-      },
+      }),
     },
     201,
     headers,

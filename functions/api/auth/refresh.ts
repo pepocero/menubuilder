@@ -8,6 +8,7 @@ import {
   parseCookies,
 } from '../../lib/auth';
 import { findRefreshToken, findUserById, revokeRefreshToken, storeRefreshToken } from '../../lib/db';
+import { toPublicAuthUser } from '../../lib/public-user';
 import { errorResponse, jsonResponse } from '../../lib/types';
 
 export const onRequestPost: PagesFunction<Env> = async (context) => {
@@ -62,11 +63,11 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
 
   return jsonResponse(
     {
-      user: {
+      user: toPublicAuthUser({
         id: user.id,
         email: user.email,
         name: user.name,
-      },
+      }),
     },
     200,
     headers,

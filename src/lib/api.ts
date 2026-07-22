@@ -199,10 +199,24 @@ export interface User {
   id: string;
   email: string;
   name: string | null;
+  role: import('@shared/roles').UserRole;
 }
 
 export interface AuthResponse {
   user: User;
+}
+
+export interface AdminUserSummary {
+  id: string;
+  email: string;
+  name: string | null;
+  created_at: string;
+  role: import('@shared/roles').UserRole;
+  role_label: string;
+}
+
+export async function listAdminUsers(): Promise<{ users: AdminUserSummary[] }> {
+  return api.get('/api/admin/users');
 }
 
 export async function register(
@@ -361,11 +375,13 @@ export async function recognizeMenuWithVision(
   image: Blob,
   options?: {
     provider?: import('@shared/ocr-providers').MenuOcrProviderChoice;
+    promptExtra?: string;
     onProgress?: (percent: number) => void;
   },
 ): Promise<{ menu: import('@shared/menu-ocr').MenuOcrResult; provider?: string }> {
   const onProgress = options?.onProgress;
   const provider = options?.provider ?? 'workers-ai';
+  const promptExtra = options?.promptExtra?.trim() ?? '';
 
   const file =
     image instanceof File
@@ -383,6 +399,9 @@ export async function recognizeMenuWithVision(
     const formData = new FormData();
     formData.append('file', file);
     formData.append('provider', provider);
+    if (promptExtra) {
+      formData.append('prompt_extra', promptExtra);
+    }
 
     const result = await request<{
       menu: import('@shared/menu-ocr').MenuOcrResult;

@@ -15,10 +15,12 @@ import {
   register as apiRegister,
   type User,
 } from '@/lib/api';
+import { isSystemAdminEmail, isSystemAdminRole } from '@shared/roles';
 
 interface AuthContextValue {
   user: User | null;
   loading: boolean;
+  isSystemAdmin: boolean;
   login: (email: string, password: string) => Promise<void>;
   register: (email: string, password: string, name?: string) => Promise<void>;
   logout: () => Promise<void>;
@@ -63,7 +65,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const value = useMemo(
-    () => ({ user, loading, login, register, logout }),
+    () => ({
+      user,
+      loading,
+      // Preferir role del API; fallback por email por si la sesión es antigua.
+      isSystemAdmin:
+        isSystemAdminRole(user?.role) ||
+        (!!user?.email && isSystemAdminEmail(user.email)),
+      login,
+      register,
+      logout,
+    }),
     [user, loading, login, register, logout],
   );
 

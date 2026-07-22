@@ -934,6 +934,72 @@ textarea {
   font-size: 0.875rem;
 }
 
+.app-nav-admin {
+  font-weight: 600;
+  color: var(--color-primary);
+}
+
+/* Admin */
+.admin-subtitle {
+  margin: 0.25rem 0 0;
+  color: var(--color-muted);
+  font-size: 0.95rem;
+}
+
+.admin-table-wrap {
+  overflow-x: auto;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  background: var(--color-surface);
+}
+
+.admin-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.92rem;
+}
+
+.admin-table th,
+.admin-table td {
+  padding: 0.75rem 1rem;
+  text-align: left;
+  border-bottom: 1px solid var(--color-border);
+  vertical-align: top;
+}
+
+.admin-table th {
+  font-size: 0.78rem;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  color: var(--color-muted);
+  background: var(--color-bg);
+}
+
+.admin-table tbody tr:last-child td {
+  border-bottom: none;
+}
+
+.admin-role-badge {
+  display: inline-block;
+  padding: 0.15rem 0.5rem;
+  border-radius: 999px;
+  background: var(--color-bg);
+  border: 1px solid var(--color-border);
+  font-size: 0.8rem;
+}
+
+.admin-role-badge--system {
+  background: #eff6ff;
+  border-color: #bfdbfe;
+  color: var(--color-primary);
+}
+
+.admin-count {
+  margin: 0.75rem 0 0;
+  color: var(--color-muted);
+  font-size: 0.85rem;
+}
+
 /* Dashboard */
 .dashboard-main,
 .templates-main {
@@ -2102,6 +2168,71 @@ textarea {
   background: var(--color-bg);
   font: inherit;
   color: inherit;
+}
+
+.import-menu-field textarea {
+  width: 100%;
+  padding: 0.55rem 0.65rem;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  background: var(--color-bg);
+  font: inherit;
+  color: inherit;
+  resize: vertical;
+  min-height: 4.5rem;
+}
+
+.import-menu-optional {
+  font-weight: 400;
+  color: var(--color-muted);
+}
+
+.import-menu-prompt-details {
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  background: var(--color-bg);
+  padding: 0.55rem 0.75rem;
+}
+
+.import-menu-prompt-details summary {
+  cursor: pointer;
+  font-size: 0.88rem;
+  font-weight: 600;
+  color: var(--color-text);
+}
+
+.import-menu-prompt-details[open] summary {
+  margin-bottom: 0.5rem;
+}
+
+.import-menu-prompt-note {
+  margin: 0 0 0.65rem;
+  font-size: 0.8rem;
+  color: var(--color-muted);
+  line-height: 1.35;
+}
+
+.import-menu-prompt-details h3 {
+  margin: 0.5rem 0 0.3rem;
+  font-size: 0.78rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  color: var(--color-muted);
+}
+
+.import-menu-prompt-pre {
+  margin: 0 0 0.65rem;
+  max-height: 160px;
+  overflow: auto;
+  padding: 0.55rem 0.65rem;
+  border-radius: calc(var(--radius) - 2px);
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  font-size: 0.72rem;
+  line-height: 1.4;
+  white-space: pre-wrap;
+  word-break: break-word;
 }
 
 .import-menu-field small {

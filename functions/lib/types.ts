@@ -15,6 +15,7 @@ export interface Env {
 export interface AuthUser {
   userId: string;
   email: string;
+  role: import('../../shared/roles').UserRole;
 }
 
 export interface UserRow {

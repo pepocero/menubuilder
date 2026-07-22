@@ -1,6 +1,7 @@
 import { extractMenuWithVision } from '../../lib/vision-ocr';
 import { errorResponse, jsonResponse } from '../../lib/types';
 import { parseOcrProviderChoice } from '../../../shared/ocr-providers';
+import { isSystemAdminEmail } from '../../../shared/roles';
 
 const MAX_BYTES = 6 * 1024 * 1024;
 const ALLOWED = new Set(['image/jpeg', 'image/jpg', 'image/png', 'image/webp']);
@@ -21,6 +22,11 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
   }
 
   const provider = parseOcrProviderChoice(form.get('provider'));
+  const email = typeof context.data.email === 'string' ? context.data.email : '';
+  const promptExtraRaw = form.get('prompt_extra');
+  // Solo system_admin puede enviar indicaciones extra al prompt.
+  const promptExtra =
+    isSystemAdminEmail(email) && typeof promptExtraRaw === 'string' ? promptExtraRaw : '';
 
   const file = entry as Blob;
   const mime = ((file as File).type || 'image/jpeg').toLowerCase();
@@ -39,6 +45,7 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
       bytes,
       mime.startsWith('image/') ? mime : 'image/jpeg',
       provider,
+      promptExtra,
     );
 
     if (!menu.headerTitle && menu.sections.length === 0) {

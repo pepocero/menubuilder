@@ -11,6 +11,7 @@ import {
   verifyPassword,
 } from '../../lib/auth';
 import { findUserByEmail, storeRefreshToken } from '../../lib/db';
+import { toPublicAuthUser } from '../../lib/public-user';
 import { errorResponse, jsonResponse, parseJson } from '../../lib/types';
 
 interface LoginBody {
@@ -63,11 +64,11 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
 
   return jsonResponse(
     {
-      user: {
+      user: toPublicAuthUser({
         id: user.id,
         email: user.email,
         name: user.name,
-      },
+      }),
     },
     200,
     headers,

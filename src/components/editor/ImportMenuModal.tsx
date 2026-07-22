@@ -1,5 +1,11 @@
 import { useCallback, useEffect, useState } from 'react';
 import { ApiError, listAssets, type AssetSummary } from '@/lib/api';
+import { useAuth } from '@/lib/auth-context';
+import {
+  MENU_OCR_PROMPT_EXTRA_MAX,
+  MENU_OCR_SYSTEM_PROMPT,
+  MENU_OCR_USER_PROMPT,
+} from '@shared/menu-ocr';
 import {
   DEFAULT_OCR_PROVIDER,
   MENU_OCR_PROVIDER_OPTIONS,
@@ -13,6 +19,8 @@ export type ImportMenuSource =
 
 export interface ImportMenuOptions {
   provider: MenuOcrProviderChoice;
+  /** Apéndice opcional al prompt de OCR (mismo para todos los motores). */
+  promptExtra?: string;
 }
 
 interface ImportMenuModalProps {
@@ -73,10 +81,12 @@ export function ImportMenuModal({
   progress = null,
   pageIndex,
 }: ImportMenuModalProps) {
+  const { isSystemAdmin } = useAuth();
   const [tab, setTab] = useState<SourceTab>('upload');
   const [file, setFile] = useState<File | null>(null);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [provider, setProvider] = useState<MenuOcrProviderChoice>(DEFAULT_OCR_PROVIDER);
+  const [promptExtra, setPromptExtra] = useState('');
   const [assets, setAssets] = useState<AssetSummary[]>([]);
   const [assetsLoading, setAssetsLoading] = useState(false);
   const [assetsError, setAssetsError] = useState('');
@@ -115,6 +125,7 @@ export function ImportMenuModal({
       setTab('upload');
       setSelectedAssetId(null);
       setAssetsError('');
+      setPromptExtra('');
       return;
     }
     setProvider(readStoredOcrProvider());
@@ -149,7 +160,11 @@ export function ImportMenuModal({
     e.preventDefault();
     if (busy) return;
 
-    const options: ImportMenuOptions = { provider };
+    const trimmedExtra = promptExtra.trim().slice(0, MENU_OCR_PROMPT_EXTRA_MAX);
+    const options: ImportMenuOptions = {
+      provider,
+      ...(trimmedExtra ? { promptExtra: trimmedExtra } : {}),
+    };
 
     if (tab === 'upload' && file) {
       onImport({ type: 'file', file }, options);
@@ -234,6 +249,43 @@ export function ImportMenuModal({
             </select>
             <small id="import-ocr-provider-hint">{selectedProviderHint}</small>
           </label>
+
+          {isSystemAdmin && (
+            <>
+              <label className={`import-menu-field${busy ? ' is-disabled' : ''}`}>
+                <span className="import-menu-field-label">
+                  Indicaciones extra <span className="import-menu-optional">(opcional)</span>
+                </span>
+                <textarea
+                  value={promptExtra}
+                  onChange={(e) =>
+                    setPromptExtra(e.target.value.slice(0, MENU_OCR_PROMPT_EXTRA_MAX))
+                  }
+                  disabled={busy}
+                  rows={3}
+                  maxLength={MENU_OCR_PROMPT_EXTRA_MAX}
+                  placeholder="Ej.: Incluye AMANIDES y ENTREPANS; hay 2 columnas; no omitas la derecha…"
+                  aria-describedby="import-ocr-extra-hint"
+                />
+                <small id="import-ocr-extra-hint">
+                  Se añaden al prompt base (mismo para todos los motores). {promptExtra.length}/
+                  {MENU_OCR_PROMPT_EXTRA_MAX}
+                </small>
+              </label>
+
+              <details className="import-menu-prompt-details">
+                <summary>Ver instrucciones base de la IA</summary>
+                <p className="import-menu-prompt-note">
+                  System y user son comunes a Workers AI y OpenAI. Tus indicaciones extra se añaden
+                  al mensaje de usuario.
+                </p>
+                <h3>System</h3>
+                <pre className="import-menu-prompt-pre">{MENU_OCR_SYSTEM_PROMPT}</pre>
+                <h3>User</h3>
+                <pre className="import-menu-prompt-pre">{MENU_OCR_USER_PROMPT}</pre>
+              </details>
+            </>
+          )}
 
           <div className="import-menu-tabs" role="tablist" aria-label="Origen de la imagen">
             <button

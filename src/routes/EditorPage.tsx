@@ -603,6 +603,7 @@ export function EditorPage() {
       const visionInput = await prepareImageForVisionOcr(sourceBlob);
       const { menu } = await recognizeMenuWithVision(visionInput, {
         provider: options.provider,
+        promptExtra: options.promptExtra,
         onProgress: (p) => setImportPhase('ocr', p),
       });
 

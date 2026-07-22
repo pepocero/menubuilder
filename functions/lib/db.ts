@@ -27,6 +27,18 @@ export async function createUser(
     .run();
 }
 
+/** Listado global de usuarios (solo panel system_admin). Sin password_hash. */
+export async function listAllUsers(db: D1Database): Promise<
+  Array<{ id: string; email: string; name: string | null; created_at: string }>
+> {
+  const result = await db
+    .prepare(
+      'SELECT id, email, name, created_at FROM users ORDER BY created_at DESC',
+    )
+    .all<{ id: string; email: string; name: string | null; created_at: string }>();
+  return result.results ?? [];
+}
+
 export async function storeRefreshToken(
   db: D1Database,
   id: string,

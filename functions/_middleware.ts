@@ -21,6 +21,7 @@ export const onRequest: PagesFunction<Env> = async (context) => {
     ...context.data,
     userId: auth.user.userId,
     email: auth.user.email,
+    role: auth.user.role,
   };
 
   return next();

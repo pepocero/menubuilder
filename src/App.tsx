@@ -1,7 +1,12 @@
 import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom';
 import { AuthProvider } from '@/lib/auth-context';
 import { DocumentSeo } from '@/components/DocumentSeo';
-import { ProtectedRoute, PublicOnlyRoute } from '@/components/ProtectedRoute';
+import {
+  ProtectedRoute,
+  PublicOnlyRoute,
+  SystemAdminRoute,
+} from '@/components/ProtectedRoute';
+import { AdminUsersPage } from '@/routes/AdminUsersPage';
 import { DashboardPage } from '@/routes/DashboardPage';
 import { EditorPage } from '@/routes/EditorPage';
 import { LandingPage } from '@/routes/LandingPage';
@@ -29,6 +34,10 @@ export default function App() {
             <Route path="/templates" element={<TemplatesPage />} />
             <Route path="/qrs" element={<QrsPage />} />
             <Route path="/editor/:menuId" element={<EditorPage />} />
+          </Route>
+
+          <Route element={<SystemAdminRoute />}>
+            <Route path="/admin/users" element={<AdminUsersPage />} />
           </Route>
 
           <Route path="/p/:slug" element={<PublicMenuPage />} />

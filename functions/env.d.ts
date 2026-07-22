@@ -13,6 +13,7 @@ interface Env {
 interface AuthContext {
   userId: string;
   email: string;
+  role?: import('../shared/roles').UserRole;
 }
 
 type PagesFunctionEnv = Env;
