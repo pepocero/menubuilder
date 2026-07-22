@@ -1,79 +1,101 @@
 import { Link } from 'react-router-dom';
+import { useAuth } from '@/lib/auth-context';
 
 /** Imágenes de Pixabay descargadas en /public/landing (uso libre, atribución en pie). */
 const FEATURES = [
   {
     title: 'Editor visual de capas',
-    text: 'Diseña como en un estudio: texto, formas, líneas e imágenes con control total de posición, tamaño, color tipografía y opacidad. Selecciona, reordena capas, bloquea o duplica elementos en segundos.',
+    text: 'Control total como en un estudio profesional: tipografías, colores, opacidad, bloqueo y reordenación. Cada plato, precio e imagen es una capa que puedes afinar al milímetro. Tu marca, tu estilo, tu carta.',
     image: '/landing/editor-layers.jpg',
     alt: 'Espacio de trabajo digital para diseñar',
   },
   {
-    title: 'Importar carta con OCR',
-    text: '¿Ya tienes la carta en papel o en una foto? Súbela o elige un archivo de tu biblioteca: el OCR detecta títulos y platos, crea capas editables y te deja la base lista para retocar tipografías y precios.',
+    title: 'IA que lee tu carta',
+    text: '¿Foto de la carta, boceto a mano o captura? La IA reconoce texto, columnas y precios y los convierte en capas editables. Dejas de teclear plato a plato y ganas horas cada temporada.',
     image: '/landing/import-ocr.jpg',
     alt: 'Foto de platos lista para digitalizar',
   },
   {
     title: 'Varias páginas A4',
-    text: 'Cada menú puede tener tantas páginas como necesites, apiladas en orden. Al abrir el enlace del QR, el cliente hace scroll y ve la carta completa exactamente como la diseñaste.',
+    text: 'Tapas, cartas, postres, vinos: tantas páginas como necesites. El cliente abre el QR y hace scroll por la carta completa, exactamente como la diseñaste. Sin PDFs sueltos ni apps.',
     image: '/landing/menu-pages.jpg',
     alt: 'Carta de restaurante multipágina',
   },
   {
-    title: 'Plantillas listas',
-    text: 'Galería por tipo de negocio: italiana, mexicana, bar, cafetería, comida rápida y fine dining. Empieza con un diseño sólido, cambia textos y fotos, y deja tu marca en minutos.',
+    title: 'Plantillas que venden',
+    text: 'Italiana, mexicana, bar, cafetería, fast food o fine dining. Empieza con un diseño que ya transmite calidad, cambia textos y fotos, y deja tu marca lista en minutos — no en días.',
     image: '/landing/templates.jpg',
     alt: 'Pizarra de menú tipo plantilla',
   },
   {
-    title: 'Imágenes propias y stock',
-    text: 'Sube las fotos de tus platos (con compresión automática y progreso de subida) o busca en el banco integrado de Pixabay. Todo queda en tu espacio privado, multitenant.',
+    title: 'Fotos que dan hambre',
+    text: 'Sube tus platos (compresión automática) o elige stock gastronómico integrado. Imágenes nítidas que elevan el ticket medio y se quedan en tu espacio privado, multitenant.',
     image: '/landing/stock-food.jpg',
     alt: 'Fotografía gastronómica para la carta',
   },
   {
-    title: 'QR y enlace público',
-    text: 'Publica la carta con un clic y genera un QR para la mesa. El comensal abre el menú en el móvil sin apps. Actualizas el diseño y el mismo enlace muestra siempre la versión nueva.',
+    title: 'QR siempre actualizado',
+    text: 'Publica con un clic y pon el QR en mesa o escaparate. Cambias un precio a las 13:00 y a las 13:01 el comensal ya lo ve. Cero reimpresiones. Cero menús desfasados.',
     image: '/landing/qr-code.jpg',
     alt: 'Código QR para escanear en mesa',
   },
   {
-    title: 'Exportar PNG y PDF',
-    text: 'Descarga la página activa en PNG o el menú completo en PDF multipágina, listo para imprimir, enviar por WhatsApp o usar fuera de la app cuando lo necesites.',
+    title: 'Exporta y comparte',
+    text: 'PNG para redes, PDF multipágina para imprimir, JSON para respaldar o clonar diseños. Tu carta sale del editor lista para WhatsApp, Instagram o la impresora.',
     image: '/landing/export-print.jpg',
     alt: 'Documento listo para imprimir o exportar',
+  },
+] as const;
+
+const AI_BENEFITS = [
+  {
+    title: 'De papel a digital en minutos',
+    text: 'Fotografía la carta del local o sube un PDF escaneado. La IA lee platos, precios y secciones y te deja un borrador editable. Ideal para cambios de temporada o menús del día.',
+  },
+  {
+    title: 'Bocetos y dibujos a mano',
+    text: '¿Diseñaste la carta en una libreta? Sube el boceto. MenuBuilder interpreta el texto y lo coloca en capas para que pases del papel al QR sin reescribir nada.',
+  },
+  {
+    title: 'Columnas y precios limpios',
+    text: 'Detecta layouts a dos columnas, categorías en mayúsculas y precios europeos. Menos errores, menos capas mezcladas y más tiempo para cuidar tipografías y fotos.',
+  },
+  {
+    title: 'Tu estilo, no una plantilla rígida',
+    text: 'El resultado es un punto de partida editable: fuentes, colores, imágenes y orden. La IA ahorra el trabajo pesado; tú firmas el acabado profesional.',
   },
 ] as const;
 
 const STEPS = [
   {
     n: '01',
-    title: 'Elige plantilla, en blanco o importa tu carta',
-    text: 'Entra en la galería, filtra por estilo (bar, italiana, mexicana…) o parte de un lienzo vacío. Si ya tienes una foto de tu menú, impórtala con OCR y empieza con el texto detectado listo para editar.',
+    title: 'Empieza con ventaja',
+    text: 'Elige una plantilla que venda tu tipo de local, parte de un lienzo en blanco o importa foto, boceto o carta en papel con IA. En un clic ya tienes menú en marcha.',
     image: '/landing/step-blank.jpg',
     alt: 'Mesa de restaurante como punto de partida',
-    points: ['Plantillas por categoría', 'Importar carta desde imagen (OCR)', 'Un clic para crear tu menú'],
+    points: ['Plantillas por estilo de negocio', 'Importar con IA desde imagen o boceto', 'Crear menú en un clic'],
   },
   {
     n: '02',
-    title: 'Diseña tu carta en el editor',
-    text: 'Añade texto, formas e imágenes. Sube fotos de tus platos o importa stock. Organiza capas, ajusta el fondo de cada página A4 y guarda automáticamente mientras trabajas. También en móvil, con paneles Capas / Lienzo / Propiedades.',
+    title: 'Diseña como un profesional',
+    text: 'Edita capas, tipografías y fotos. Sube tus platos o usa stock. Varias páginas A4, autosave y paneles pensados también para móvil. Cada detalle refuerza tu marca en mesa.',
     image: '/landing/step-editor.jpg',
     alt: 'Composición de menú con platos',
-    points: ['Autosave continuo', 'Stock + subida propia', 'Editor adaptable a móvil'],
+    points: ['Autosave continuo', 'Stock + fotos propias', 'Editor listo para móvil'],
   },
   {
     n: '03',
-    title: 'Publica, QR y comparte',
-    text: 'Activa la publicación, copia el enlace o descarga el QR. Colócalo en mesa, escaparate o redes. Cuando cambies precios o platos, el cliente verá la carta actualizada al instante.',
+    title: 'Publica y cobra la atención',
+    text: 'Activa el enlace público, descarga el QR y colócalo donde el cliente decide. Actualizas precios o platos y el mismo QR muestra la carta nueva al instante. Exporta PNG o PDF cuando lo necesites.',
     image: '/landing/step-publish.jpg',
     alt: 'QR listo para publicar la carta',
-    points: ['QR listo para imprimir', 'Enlace público /p/…', 'Export PNG y PDF'],
+    points: ['QR listo para imprimir', 'Enlace público /p/…', 'Export PNG, PDF y JSON'],
   },
 ] as const;
 
 export function LandingPage() {
+  const { user, loading } = useAuth();
+
   return (
     <div className="landing">
       <header className="landing-top">
@@ -82,14 +104,22 @@ export function LandingPage() {
         </a>
         <nav className="landing-nav" aria-label="Principal">
           <a href="#funciones">Funciones</a>
-          <a href="#importar">Importar carta</a>
+          <a href="#importar">Funciones con IA</a>
           <a href="#como">Cómo funciona</a>
-          <Link to="/login" className="landing-nav-link">
-            Entrar
-          </Link>
-          <Link to="/register" className="btn-landing-primary">
-            Crear cuenta
-          </Link>
+          {!loading && user ? (
+            <Link to="/dashboard" className="btn-landing-primary">
+              Mis menús
+            </Link>
+          ) : (
+            <>
+              <Link to="/login" className="landing-nav-link">
+                Entrar
+              </Link>
+              <Link to="/register" className="btn-landing-primary">
+                Crear cuenta
+              </Link>
+            </>
+          )}
         </nav>
       </header>
 
@@ -100,17 +130,17 @@ export function LandingPage() {
         </div>
         <div className="landing-hero-content">
           <p className="landing-brand-hero">MenuBuilder</p>
-          <h1>Tu carta digital, lista para la mesa</h1>
+          <h1>La carta digital que vende en mesa</h1>
           <p className="landing-hero-lead">
-            Diseña menús multipágina, importa tu carta en papel con OCR, publícalos con QR y
-            actualízalos cuando quieras. Sin reimprimir cada cambio.
+            Diseña menús que enamoran, importa foto o boceto con IA, publícalos con QR y
+            actualízalos al instante. Menos reimpresiones. Más tickets. Más control.
           </p>
           <div className="landing-hero-actions">
             <Link to="/register" className="btn-landing-primary btn-landing-lg">
-              Empezar gratis
+              Empieza gratis ahora
             </Link>
-            <a href="#funciones" className="btn-landing-ghost btn-landing-lg">
-              Ver funciones
+            <a href="#importar" className="btn-landing-ghost btn-landing-lg">
+              Ver la IA en acción
             </a>
           </div>
         </div>
@@ -118,8 +148,11 @@ export function LandingPage() {
 
       <section className="landing-showcase" id="funciones">
         <header className="landing-section-head landing-section-head--center">
-          <h2>Todo lo que necesitas para tu carta</h2>
-          <p>Del papel o el borrador al QR en la mesa, en un solo flujo pensado para hostelería.</p>
+          <h2>Todo lo que tu local necesita para destacar</h2>
+          <p>
+            Del primer boceto al QR en la mesa: un flujo pensado para hostelería que quiere
+            verse profesional y moverse rápido.
+          </p>
         </header>
 
         <div className="landing-feature-grid">
@@ -140,13 +173,24 @@ export function LandingPage() {
       <section className="landing-ocr" id="importar">
         <div className="landing-ocr-inner">
           <header className="landing-section-head landing-section-head--center">
-            <p className="landing-ocr-eyebrow">Digitaliza tu menú</p>
-            <h2>Importar carta con reconocimiento OCR</h2>
-            <p>
-              Si ya tienes la carta en papel o en una foto, no hace falta reescribirla plato a plato.
-              MenuBuilder lee el texto y lo convierte en capas editables sobre tu diseño.
+            <p className="landing-ocr-eyebrow">Potencia con inteligencia artificial</p>
+            <h2>Funciones con IA</h2>
+            <p className="landing-ocr-lead">
+              Sube una carta impresa, una foto del menú del día o incluso un boceto a mano. La IA
+              de MenuBuilder lee el contenido, respeta columnas y precios, y te entrega capas
+              editables listas para publicar. Digitalizar deja de ser un proyecto: se convierte en
+              una ventaja competitiva.
             </p>
           </header>
+
+          <div className="landing-ocr-benefits">
+            {AI_BENEFITS.map((b) => (
+              <article key={b.title} className="landing-ocr-benefit">
+                <h3>{b.title}</h3>
+                <p>{b.text}</p>
+              </article>
+            ))}
+          </div>
 
           <div className="landing-ocr-layout">
             <div className="landing-ocr-media">
@@ -161,50 +205,56 @@ export function LandingPage() {
               <li>
                 <span className="landing-ocr-step-n">1</span>
                 <div>
-                  <h3>Elige la imagen</h3>
+                  <h3>Sube foto, captura o boceto</h3>
                   <p>
-                    Sube una foto o captura (PNG/JPG) o selecciona un archivo que ya tengas en tu
-                    biblioteca. Cuanto más nítida y con buen contraste, mejor el resultado.
+                    PNG, JPG o un archivo de tu biblioteca. Cuanto más nítida la imagen, más
+                    preciso el reconocimiento — pero incluso un boceto claro te ahorra horas de
+                    tecleo.
                   </p>
                 </div>
               </li>
               <li>
                 <span className="landing-ocr-step-n">2</span>
                 <div>
-                  <h3>OCR en español</h3>
+                  <h3>La IA estructura tu menú</h3>
                   <p>
-                    El reconocimiento óptico de caracteres analiza la imagen, detecta líneas y
-                    bloques de texto y los sitúa sobre el lienzo A4. Puedes agrupar por títulos
-                    (Tapas, Hamburguesas…) para crear menos capas y editar más rápido.
+                    Detecta títulos, platos, ingredientes y precios. Separa columnas y categorías
+                    (Tapas, Pizzas, Entrepans…) para que no mezcle secciones. Tú eliges el motor:
+                    Workers AI o OpenAI.
                   </p>
                 </div>
               </li>
               <li>
                 <span className="landing-ocr-step-n">3</span>
                 <div>
-                  <h3>Dos columnas y retocado</h3>
+                  <h3>Retoca, publica y vende</h3>
                   <p>
-                    Si la carta tiene columnas (con hueco o línea divisoria), el sistema las separa
-                    para no mezclar secciones. Luego ajustas tipografías, precios y posición en el
-                    editor visual antes de publicar o exportar.
+                    Ajusta tipografías, fotos y precios en el editor visual. Publica el QR o
+                    exporta PNG/PDF. Tu carta pasa del papel (o del dibujo) a la mesa digital en
+                    un solo flujo.
                   </p>
                 </div>
               </li>
             </ol>
           </div>
 
-          <p className="landing-ocr-note">
-            El resultado es un borrador editable: las fuentes decorativas o fondos muy recargados
-            pueden requerir un repaso manual. Ideal para ahorrar tiempo al pasar del papel a la
-            carta digital.
-          </p>
+          <div className="landing-ocr-cta-row">
+            <p className="landing-ocr-note">
+              Resultado editable, no una caja negra: fuentes decorativas o fondos muy recargados
+              pueden pedir un repaso, pero el 80% del trabajo ya está hecho. Ideal para ahorrar
+              tiempo cada vez que cambias la carta.
+            </p>
+            <Link to="/register" className="btn-landing-primary btn-landing-lg">
+              Probar importación con IA
+            </Link>
+          </div>
         </div>
       </section>
 
       <section className="landing-journey" id="como">
         <header className="landing-section-head landing-section-head--center">
           <h2>Cómo funciona MenuBuilder</h2>
-          <p>Tres pasos claros, con todas las herramientas que usa un restaurante de verdad.</p>
+          <p>Tres pasos. Cero fricción. El mismo flujo que usan locales que quieren verse premium.</p>
         </header>
 
         <div className="landing-journey-list">
@@ -233,10 +283,10 @@ export function LandingPage() {
 
       <section className="landing-cta">
         <div className="landing-cta-inner">
-          <h2>Empieza a diseñar tu menú hoy</h2>
+          <h2>Tu próxima carta puede estar online hoy</h2>
           <p>
-            Crea tu cuenta, importa tu carta o parte de una plantilla, y publica en minutos. OCR,
-            editor, QR y exportación incluidos.
+            Crea la cuenta, importa con IA o parte de una plantilla, y publica el QR antes de
+            abrir. Editor, IA, plantillas, stock y exportación incluidos.
           </p>
           <Link to="/register" className="btn-landing-primary btn-landing-lg">
             Crear cuenta gratis
@@ -249,25 +299,25 @@ export function LandingPage() {
           <div className="landing-footer-brand">
             <span className="landing-footer-logo">MenuBuilder</span>
             <p>
-              Cartas digitales para restaurantes, bares y cafeterías. Diseña, publica y actualiza sin
-              reimprimir.
+              Cartas digitales que venden para restaurantes, bares y cafeterías. Diseña, digitaliza
+              con IA, publica y actualiza sin reimprimir.
             </p>
           </div>
           <div className="landing-footer-col">
             <h4>Producto</h4>
             <a href="#funciones">Funciones</a>
-            <a href="#importar">Importar carta</a>
+            <a href="#importar">Funciones con IA</a>
             <a href="#como">Cómo funciona</a>
             <Link to="/register">Crear cuenta</Link>
             <Link to="/login">Iniciar sesión</Link>
           </div>
           <div className="landing-footer-col">
             <h4>Incluye</h4>
-            <span>Editor de capas</span>
-            <span>Importar carta (OCR)</span>
+            <span>Editor de capas profesional</span>
+            <span>IA: carta, foto o boceto</span>
             <span>Plantillas y stock</span>
-            <span>QR público</span>
-            <span>Export PNG / PDF</span>
+            <span>QR público siempre al día</span>
+            <span>Export PNG / PDF / JSON</span>
           </div>
         </div>
         <div className="landing-footer-bottom">

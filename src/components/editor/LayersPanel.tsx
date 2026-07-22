@@ -13,6 +13,7 @@ interface LayersPanelProps {
   onSelect: (obj: FabricObject) => void;
   onMoveUp: (obj: FabricObject) => void;
   onMoveDown: (obj: FabricObject) => void;
+  onSendToBack: (obj: FabricObject) => void;
   onToggleVisibility: (obj: FabricObject) => void;
   onToggleLock: (obj: FabricObject) => void;
   onRenameLayer: (obj: FabricObject, name: string) => void;
@@ -42,6 +43,7 @@ export function LayersPanel({
   onSelect,
   onMoveUp,
   onMoveDown,
+  onSendToBack,
   onToggleVisibility,
   onToggleLock,
   onRenameLayer,
@@ -125,6 +127,9 @@ export function LayersPanel({
                 </button>
                 <button type="button" title="Bajar" onClick={() => onMoveDown(obj)}>
                   ↓
+                </button>
+                <button type="button" title="Enviar al fondo" onClick={() => onSendToBack(obj)}>
+                  ⤓
                 </button>
                 <button type="button" title="Visibilidad" onClick={() => onToggleVisibility(obj)}>
                   {obj.visible === false ? 'Mostrar' : 'Ocultar'}

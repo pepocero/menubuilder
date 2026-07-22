@@ -1,15 +1,20 @@
-import { useState } from 'react';
-import { Link } from 'react-router-dom';
+import { useEffect, useState } from 'react';
+import { Link, useLocation } from 'react-router-dom';
 import { useAuth } from '@/lib/auth-context';
 
 export function AppLayout() {
   const { user, logout } = useAuth();
   const [menuOpen, setMenuOpen] = useState(false);
+  const location = useLocation();
+
+  useEffect(() => {
+    setMenuOpen(false);
+  }, [location.pathname]);
 
   return (
     <div className="app-layout">
       <header className="app-header">
-        <Link to="/dashboard" className="logo" onClick={() => setMenuOpen(false)}>
+        <Link to="/" className="logo" onClick={() => setMenuOpen(false)}>
           MenuBuilder
         </Link>
         <button

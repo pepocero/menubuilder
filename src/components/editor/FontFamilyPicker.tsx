@@ -15,8 +15,10 @@ export function FontFamilyPicker({ value, onChange, disabled = false }: FontFami
   const listId = useId();
 
   const selected =
-    EDITOR_FONTS.find((f) => f.value === value) ??
-    ({ label: value, value } as const);
+    !value.trim()
+      ? ({ label: 'Varias fuentes…', value: '' } as const)
+      : (EDITOR_FONTS.find((f) => f.value === value) ??
+        ({ label: value, value } as const));
 
   useEffect(() => {
     ensureEditorFontLoaded(value);

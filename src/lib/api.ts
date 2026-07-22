@@ -364,7 +364,7 @@ export async function recognizeMenuWithVision(
   },
 ): Promise<{ menu: import('@shared/menu-ocr').MenuOcrResult; provider?: string }> {
   const onProgress = options?.onProgress;
-  const provider = options?.provider ?? 'auto';
+  const provider = options?.provider ?? 'workers-ai';
 
   const file =
     image instanceof File

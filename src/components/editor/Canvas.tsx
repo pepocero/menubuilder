@@ -9,12 +9,14 @@ import {
   canvasToPageData,
   refreshTextboxLayout,
 } from '@/lib/canvas-serializer';
+import type { CanvasInteractionMode } from '@/components/editor/EditorZoomControls';
 
 export interface CanvasEditorHandle {
   getCanvas: () => Canvas | null;
   getPageData: () => MenuPage | null;
   exportPng: () => string | null;
   loadPage: (page: MenuPage) => Promise<void>;
+  discardSelectionSilent: () => void;
 }
 
 interface CanvasEditorProps {
@@ -22,10 +24,9 @@ interface CanvasEditorProps {
   initialPage: MenuPage;
   zoom?: number;
   active?: boolean;
-  onActivate?: () => void;
+  interactionMode?: CanvasInteractionMode;
   onSelectionChange?: (object: import('fabric').FabricObject | null) => void;
   onChange?: () => void;
-  /** Tras la carga inicial del lienzo (para sembrar historial sin disparar onChange). */
   onReady?: () => void;
 }
 
@@ -36,63 +37,86 @@ export const CanvasEditor = forwardRef<CanvasEditorHandle, CanvasEditorProps>(
       initialPage,
       zoom = 100,
       active = false,
-      onActivate,
+      interactionMode = 'move',
       onSelectionChange,
       onChange,
       onReady,
     },
     ref,
   ) {
-    const containerRef = useRef<HTMLDivElement>(null);
     const canvasRef = useRef<Canvas | null>(null);
     const canvasElRef = useRef<HTMLCanvasElement>(null);
     const pageIdRef = useRef(pageId);
     pageIdRef.current = pageId;
     const zoomRef = useRef(zoom);
     zoomRef.current = zoom;
-    const loadingRef = useRef(false);
+    const muteEventsRef = useRef(true);
     const onChangeRef = useRef(onChange);
     onChangeRef.current = onChange;
     const onReadyRef = useRef(onReady);
     onReadyRef.current = onReady;
+    const onSelectionChangeRef = useRef(onSelectionChange);
+    onSelectionChangeRef.current = onSelectionChange;
+    const interactionModeRef = useRef(interactionMode);
+    interactionModeRef.current = interactionMode;
+    const activeRef = useRef(active);
+    activeRef.current = active;
 
     function emitChange() {
-      if (loadingRef.current) return;
+      if (muteEventsRef.current) return;
+      // Solo la página activa propaga cambios (evita tormentas entre lienzos).
+      if (!activeRef.current) return;
       onChangeRef.current?.();
     }
 
-    useImperativeHandle(ref, () => ({
-      getCanvas: () => canvasRef.current,
-      getPageData: () => {
-        if (!canvasRef.current) return null;
-        return canvasToPageData(canvasRef.current, pageIdRef.current);
-      },
-      exportPng: () => {
-        const canvas = canvasRef.current;
-        if (!canvas) return null;
-        const z = canvas.getZoom() || 1;
-        return canvas.toDataURL({ format: 'png', multiplier: 2 / z });
-      },
-      loadPage: async (page: MenuPage) => {
-        const canvas = canvasRef.current;
-        if (!canvas) return;
-        loadingRef.current = true;
-        try {
-          await loadPageOntoCanvas(canvas, page, A4_WIDTH, A4_HEIGHT);
-          if (canvasRef.current === canvas) {
-            applyCanvasZoom(canvas, zoomRef.current);
+    useImperativeHandle(
+      ref,
+      () => ({
+        getCanvas: () => canvasRef.current,
+        getPageData: () => {
+          if (!canvasRef.current) return null;
+          return canvasToPageData(canvasRef.current, pageIdRef.current);
+        },
+        exportPng: () => {
+          const canvas = canvasRef.current;
+          if (!canvas) return null;
+          const z = canvas.getZoom() || 1;
+          return canvas.toDataURL({ format: 'png', multiplier: 2 / z });
+        },
+        loadPage: async (page: MenuPage) => {
+          const canvas = canvasRef.current;
+          if (!canvas) return;
+          muteEventsRef.current = true;
+          try {
+            await loadPageOntoCanvas(canvas, page, A4_WIDTH, A4_HEIGHT);
+            if (canvasRef.current === canvas) {
+              applyCanvasZoom(canvas, zoomRef.current);
+            }
+          } finally {
+            muteEventsRef.current = false;
           }
-        } finally {
-          loadingRef.current = false;
-        }
-      },
-    }));
+        },
+        discardSelectionSilent: () => {
+          const canvas = canvasRef.current;
+          if (!canvas) return;
+          const wasMuted = muteEventsRef.current;
+          muteEventsRef.current = true;
+          try {
+            canvas.discardActiveObject();
+            canvas.requestRenderAll();
+          } finally {
+            muteEventsRef.current = wasMuted;
+          }
+        },
+      }),
+      [],
+    );
 
     useEffect(() => {
       if (!canvasElRef.current) return;
 
       let cancelled = false;
-      loadingRef.current = true;
+      muteEventsRef.current = true;
 
       const canvas = new Canvas(canvasElRef.current, {
         width: A4_WIDTH,
@@ -101,6 +125,9 @@ export const CanvasEditor = forwardRef<CanvasEditorHandle, CanvasEditorProps>(
         enableRetinaScaling: true,
         backgroundColor:
           initialPage.background.type === 'color' ? initialPage.background.value : '#fff',
+        // Por defecto no interactivo hasta que la página sea activa + modo move.
+        selection: false,
+        skipTargetFind: true,
       });
 
       canvasRef.current = canvas;
@@ -109,36 +136,45 @@ export const CanvasEditor = forwardRef<CanvasEditorHandle, CanvasEditorProps>(
         .then(() => {
           if (cancelled || canvasRef.current !== canvas) return;
           applyCanvasZoom(canvas, zoomRef.current);
-          loadingRef.current = false;
+          // Aplicar modo real tras la carga.
+          const interactive =
+            activeRef.current && interactionModeRef.current === 'move';
+          canvas.selection = interactive;
+          canvas.skipTargetFind = !interactive;
+          muteEventsRef.current = false;
           onReadyRef.current?.();
         })
         .catch((err) => {
-          loadingRef.current = false;
-          if (!cancelled) console.error(err);
+          if (!cancelled) {
+            muteEventsRef.current = false;
+            console.error(err);
+          }
         });
 
-      canvas.on('selection:created', (e) => {
-        onActivate?.();
-        onSelectionChange?.(e.selected?.[0] ?? null);
+      canvas.on('selection:created', () => {
+        if (muteEventsRef.current) return;
+        if (!activeRef.current) return;
+        if (interactionModeRef.current === 'scroll') return;
+        onSelectionChangeRef.current?.(canvas.getActiveObject() ?? null);
       });
-      canvas.on('selection:updated', (e) => {
-        onActivate?.();
-        onSelectionChange?.(e.selected?.[0] ?? null);
+      canvas.on('selection:updated', () => {
+        if (muteEventsRef.current) return;
+        if (!activeRef.current) return;
+        if (interactionModeRef.current === 'scroll') return;
+        onSelectionChangeRef.current?.(canvas.getActiveObject() ?? null);
       });
       canvas.on('selection:cleared', () => {
-        onSelectionChange?.(null);
+        if (muteEventsRef.current) return;
+        if (!activeRef.current) return;
+        if (interactionModeRef.current === 'scroll') return;
+        onSelectionChangeRef.current?.(null);
       });
       canvas.on('object:modified', () => emitChange());
-      canvas.on('object:added', () => emitChange());
-      canvas.on('object:removed', () => emitChange());
-      canvas.on('mouse:down', () => onActivate?.());
 
       canvas.on('text:changed', (e) => {
         const target = e.target;
         if (!target || !isTextObject(target)) return;
         const text = target as import('fabric').Textbox;
-        // Conservar estilos por carácter (negrita parcial, etc.).
-        // Solo reparar layout si el ancho quedó inválido tras pegar.
         if ((text.width ?? 0) < 48) {
           refreshTextboxLayout(target);
         } else {
@@ -158,27 +194,47 @@ export const CanvasEditor = forwardRef<CanvasEditorHandle, CanvasEditorProps>(
 
       return () => {
         cancelled = true;
-        loadingRef.current = false;
+        muteEventsRef.current = true;
         canvas.dispose();
         if (canvasRef.current === canvas) {
           canvasRef.current = null;
         }
       };
-      // Solo montar una vez por pageId
       // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [pageId]);
 
     useEffect(() => {
       const canvas = canvasRef.current;
-      if (!canvas || loadingRef.current) return;
+      if (!canvas || muteEventsRef.current) return;
       applyCanvasZoom(canvas, zoom);
     }, [zoom]);
 
+    // Interactivo solo si esta página está activa y el modo es Mover.
+    useEffect(() => {
+      const canvas = canvasRef.current;
+      if (!canvas) return;
+
+      const interactive = active && interactionMode === 'move';
+      canvas.selection = interactive;
+      canvas.skipTargetFind = !interactive;
+
+      if (!active) {
+        const wasMuted = muteEventsRef.current;
+        muteEventsRef.current = true;
+        try {
+          canvas.discardActiveObject();
+          canvas.requestRenderAll();
+        } finally {
+          muteEventsRef.current = wasMuted;
+        }
+      }
+    }, [active, interactionMode]);
+
     return (
       <div
-        className={`editor-canvas-wrap page-canvas ${active ? 'page-canvas--active' : ''}`}
-        ref={containerRef}
-        onMouseDown={() => onActivate?.()}
+        className={`editor-canvas-wrap page-canvas ${active ? 'page-canvas--active' : ''}${
+          interactionMode === 'scroll' ? ' page-canvas--scroll' : ' page-canvas--move'
+        }`}
       >
         <canvas ref={canvasElRef} />
       </div>

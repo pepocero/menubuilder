@@ -220,3 +220,124 @@ export function parseMenuDocument(raw: unknown): MenuDocument | null {
   if (!pagesValid) return null;
   return d as unknown as MenuDocument;
 }
+
+function fromPercent(pct: number, total: number): number {
+  if (!Number.isFinite(pct) || total <= 0) return 0;
+  return (pct / 100) * total;
+}
+
+function elementToLayer(
+  el: MenuDocumentElement,
+  canvasW: number,
+  canvasH: number,
+): ConverterLayer | null {
+  const base = {
+    id: el.id,
+    x: fromPercent(el.x, canvasW),
+    y: fromPercent(el.y, canvasH),
+    width: Math.max(fromPercent(el.width, canvasW), 1),
+    height: Math.max(fromPercent(el.height, canvasH), 1),
+    rotation: el.rotation ?? 0,
+    zIndex: typeof el.zIndex === 'number' ? el.zIndex : 1,
+    opacity: el.opacity,
+  };
+
+  if (el.type === 'text') {
+    return {
+      ...base,
+      type: 'text',
+      content: el.text,
+      style: {
+        fontFamily: el.style.fontFamily || 'Arial',
+        fontSize: Math.max(fromPercent(el.style.fontSize, canvasW), 8),
+        color: el.style.color || '#1a1a1a',
+        align: el.style.textAlign || 'left',
+        fontWeight: el.style.fontWeight,
+      },
+    };
+  }
+
+  if (el.type === 'image') {
+    return {
+      ...base,
+      type: 'image',
+      src: el.src,
+    };
+  }
+
+  if (el.type === 'shape') {
+    return {
+      ...base,
+      type: 'shape',
+      shape: el.shape === 'circle' ? 'circle' : 'rect',
+      style: {
+        fill: el.fill,
+        stroke: el.stroke,
+        strokeWidth: el.strokeWidth
+          ? Math.max(fromPercent(el.strokeWidth, canvasW), 0)
+          : undefined,
+        opacity: el.opacity,
+      },
+    };
+  }
+
+  if (el.type === 'divider') {
+    const thickness = Math.max(fromPercent(el.thickness, canvasW), 1);
+    return {
+      ...base,
+      type: 'shape',
+      shape: 'line',
+      height: thickness,
+      style: {
+        stroke: el.color || '#000000',
+        strokeWidth: thickness,
+        opacity: el.opacity,
+      },
+    };
+  }
+
+  return null;
+}
+
+/** Convierte un MenuDocument exportado de vuelta a CanvasData del editor. */
+export function menuDocumentToCanvasData(doc: MenuDocument): ConverterCanvasData {
+  const first = doc.pages[0];
+  const width = first?.canvas?.width || DEFAULT_CANVAS_W;
+  const height = first?.canvas?.height || DEFAULT_CANVAS_H;
+
+  const pages = doc.pages.map((page, index) => {
+    const canvasW = page.canvas?.width || width;
+    const canvasH = page.canvas?.height || height;
+    const layers = page.elements
+      .map((el) => elementToLayer(el, canvasW, canvasH))
+      .filter((layer): layer is ConverterLayer => layer !== null)
+      .sort((a, b) => a.zIndex - b.zIndex);
+
+    const bgImage = page.canvas?.backgroundImage;
+    return {
+      id: page.id || `page_${index + 1}`,
+      background: bgImage
+        ? { type: 'image' as const, value: bgImage }
+        : {
+            type: 'color' as const,
+            value: page.canvas?.background || '#FAF6F0',
+          },
+      layers,
+    };
+  });
+
+  return { width, height, pages };
+}
+
+/**
+ * Acepta menu.json (MenuDocument v1) o CanvasData del editor.
+ * Devuelve null si el JSON no es reconocible.
+ */
+export function importJsonToCanvasData(raw: unknown): ConverterCanvasData | null {
+  const doc = parseMenuDocument(raw);
+  if (doc) return menuDocumentToCanvasData(doc);
+
+  const normalized = normalizeConverterCanvasData(raw);
+  if (normalized && normalized.pages.length > 0) return normalized;
+  return null;
+}

@@ -27,6 +27,11 @@ import {
   imageLayerToFabricObject,
   isImageObject,
 } from '@/lib/canvas-serializer';
+import {
+  canMergeSelectedTextLayers,
+  getSelectedTextObjects,
+  mergeSelectedTextLayers,
+} from '@/lib/merge-text-layers';
 import { compressImage, dataUrlToBlob, generateThumbnail } from '@/lib/image-compress';
 import {
   canRedoHistory,
@@ -41,11 +46,11 @@ import {
   applyVisionMenuImportToCanvas,
   prepareImageForVisionOcr,
 } from '@/lib/vision-menu-import';
-import { exportMenuDocumentJson, exportPagesToPdf } from '@/lib/export';
+import { exportMenuDocumentJson, exportPagesToPdf, parseMenuJsonFile } from '@/lib/export';
 import { preloadCommonEditorFonts } from '@/lib/google-fonts';
 import { isLayerLocked, setLayerObjectData } from '@/lib/layer-utils';
 import { CanvasEditor, type CanvasEditorHandle } from '@/components/editor/Canvas';
-import { EditorZoomControls } from '@/components/editor/EditorZoomControls';
+import { EditorZoomControls, type CanvasInteractionMode } from '@/components/editor/EditorZoomControls';
 import { LayersPanel } from '@/components/editor/LayersPanel';
 import { PropertiesPanel } from '@/components/editor/PropertiesPanel';
 import { PublishQrModal } from '@/components/editor/PublishQrModal';
@@ -79,6 +84,7 @@ export function EditorPage() {
   const uploadInFlightRef = useRef(false);
   const [mobilePanel, setMobilePanel] = useState<'canvas' | 'layers' | 'props'>('canvas');
   const [zoom, setZoom] = useState(100);
+  const [interactionMode, setInteractionMode] = useState<CanvasInteractionMode>('move');
   const [historyVersion, setHistoryVersion] = useState(0);
 
   const saveTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -138,7 +144,8 @@ export function EditorPage() {
       setSaveStatus('saving');
       try {
         const data = collectDocument();
-        setPages(data.pages);
+        // No hacer setPages aquí: si el lienzo está a medias (load/dispose),
+        // pisaba el estado con capas vacías y remountaba el editor en bucle.
 
         let thumbnailUrl: string | null = null;
         const firstPng = pageRefs.current[0]?.exportPng();
@@ -321,6 +328,16 @@ export function EditorPage() {
     return () => clearTimeout(timer);
   }, [activePageIndex, pages.length, refreshObjects]);
 
+  // Al pasar a Scroll: soltar selección solo en la transición (no en cada render).
+  const prevInteractionModeRef = useRef(interactionMode);
+  useEffect(() => {
+    const prev = prevInteractionModeRef.current;
+    prevInteractionModeRef.current = interactionMode;
+    if (interactionMode !== 'scroll' || prev === 'scroll') return;
+    pageRefs.current.forEach((handle) => handle?.discardSelectionSilent());
+    setActiveObject(null);
+  }, [interactionMode]);
+
   const handleChange = useCallback(() => {
     refreshObjects();
     if (historyRecordTimerRef.current) {
@@ -390,10 +407,8 @@ export function EditorPage() {
   }, [handleUndo, handleRedo, getActiveCanvas, handleChange]);
 
   function handleActivatePage(index: number) {
-    if (index === activePageIndex) return;
-    // Deseleccionar en la página anterior
-    pageRefs.current[activePageIndex]?.getCanvas()?.discardActiveObject();
-    pageRefs.current[activePageIndex]?.getCanvas()?.requestRenderAll();
+    if (index === activePageIndexRef.current) return;
+    activePageIndexRef.current = index;
     setActivePageIndex(index);
     setActiveObject(null);
   }
@@ -455,6 +470,16 @@ export function EditorPage() {
     if (!canvas) return;
     await addLayerToCanvas(canvas, createTextLayer());
     setActiveObject(canvas.getActiveObject() ?? null);
+    handleChange();
+  }
+
+  function handleMergeTexts() {
+    const canvas = getActiveCanvas();
+    if (!canvas) return;
+    const merged = mergeSelectedTextLayers(canvas);
+    if (!merged) return;
+    setInteractionMode('move');
+    setActiveObject(merged);
     handleChange();
   }
 
@@ -531,7 +556,8 @@ export function EditorPage() {
     if (!canvas || uploadInFlightRef.current) return;
     uploadInFlightRef.current = true;
     setEditorError('');
-    setImportOpen(false);
+    // Mantener el modal abierto y bloqueante mientras la IA trabaja.
+    setUploadProgress({ phase: 'ocr', percent: 1 });
 
     const setImportPhase = (
       phase: UploadProgressState['phase'],
@@ -627,6 +653,7 @@ export function EditorPage() {
       handleChange();
 
       setEditorError('');
+      setImportOpen(false);
       const providerHint = menu.provider ? ` (${menu.provider})` : '';
       alert(
         `Importación completada${providerHint}: ${textCount} capas de texto por secciones. Revisa y ajusta antes de guardar.`,
@@ -858,6 +885,38 @@ export function EditorPage() {
     exportMenuDocumentJson(data, title || 'menu', title || undefined);
   }
 
+  async function handleImportJson(file: File) {
+    setEditorError('');
+    try {
+      const imported = await parseMenuJsonFile(file);
+      const confirmed = confirm(
+        `¿Reemplazar el menú actual por «${file.name}»?\n\nSe sustituirán todas las páginas del editor.`,
+      );
+      if (!confirmed) return;
+
+      historyByPageIdRef.current.clear();
+      bumpHistoryUi();
+      pageRefs.current = [];
+      setPages(imported.pages);
+      setActivePageIndex(0);
+      setActiveObject(null);
+      const firstBg = imported.pages[0]?.background;
+      setBackgroundColor(firstBg?.type === 'color' ? firstBg.value : '#FAF6F0');
+
+      window.setTimeout(() => {
+        void (async () => {
+          for (let i = 0; i < imported.pages.length; i++) {
+            await pageRefs.current[i]?.loadPage(imported.pages[i]);
+          }
+          refreshObjects();
+          scheduleSave();
+        })();
+      }, 80);
+    } catch (err) {
+      setEditorError(err instanceof Error ? err.message : 'No se pudo importar el JSON');
+    }
+  }
+
   function handleSelectObject(obj: FabricObject) {
     const canvas = getActiveCanvas();
     if (!canvas) return;
@@ -879,6 +938,15 @@ export function EditorPage() {
     const canvas = getActiveCanvas();
     if (!canvas) return;
     canvas.sendObjectBackwards(obj);
+    canvas.requestRenderAll();
+    refreshObjects();
+    scheduleSave();
+  }
+
+  function handleSendToBack(obj: FabricObject) {
+    const canvas = getActiveCanvas();
+    if (!canvas) return;
+    canvas.sendObjectToBack(obj);
     canvas.requestRenderAll();
     refreshObjects();
     scheduleSave();
@@ -1013,10 +1081,18 @@ export function EditorPage() {
     return () => window.removeEventListener('keydown', onKeyDown);
   }, [getActiveCanvas]);
 
-  if (loading || pages.length === 0) {
+  if (loading) {
     return (
       <div className="loading-screen">
         <p>Cargando editor...</p>
+      </div>
+    );
+  }
+
+  if (pages.length === 0) {
+    return (
+      <div className="loading-screen">
+        <p>No hay páginas en este menú.</p>
       </div>
     );
   }
@@ -1047,6 +1123,8 @@ export function EditorPage() {
           onZoomOut={handleZoomOut}
           onZoomReset={handleZoomReset}
           onZoomFit={handleZoomFit}
+          interactionMode={interactionMode}
+          onInteractionModeChange={setInteractionMode}
         />
       </header>
 
@@ -1076,10 +1154,15 @@ export function EditorPage() {
         onOpenAssets={() => setAssetsOpen(true)}
         onFitImageToA4={handleFitImageToA4}
         canFitImage={!!activeObject && isImageObject(activeObject)}
+        onMergeTexts={handleMergeTexts}
+        canMergeTexts={canMergeSelectedTextLayers(getActiveCanvas())}
         onChangeBackground={handleChangeBackground}
         onExportPng={handleExportPng}
         onExportPdf={handleExportPdf}
         onExportJson={handleExportJson}
+        onImportJson={(file) => {
+          void handleImportJson(file);
+        }}
         onOpenQr={() => setQrOpen(true)}
         onAddPage={handleAddPage}
         onDeletePage={handleDeletePage}
@@ -1097,11 +1180,13 @@ export function EditorPage() {
             objectsTick={objectsTick}
             activeObject={activeObject}
             onSelect={(obj) => {
+              setInteractionMode('move');
               handleSelectObject(obj);
               setMobilePanel('canvas');
             }}
             onMoveUp={handleMoveUp}
             onMoveDown={handleMoveDown}
+            onSendToBack={handleSendToBack}
             onToggleVisibility={handleToggleVisibility}
             onToggleLock={handleToggleLock}
             onRenameLayer={handleRenameLayer}
@@ -1110,14 +1195,30 @@ export function EditorPage() {
           />
         </aside>
 
-        <main className="editor-canvas-area" ref={canvasAreaRef}>
+        <main
+          className={`editor-canvas-area editor-canvas-area--${interactionMode}`}
+          ref={canvasAreaRef}
+        >
           <div className="pages-stack">
             {pages.map((page, index) => (
-              <div key={page.id} className="page-block">
-                <div className="page-label">
+              <div
+                key={page.id}
+                className="page-block"
+                onPointerDown={() => {
+                  if (interactionMode === 'scroll') return;
+                  handleActivatePage(index);
+                }}
+              >
+                <button
+                  type="button"
+                  className="page-label"
+                  onClick={() => handleActivatePage(index)}
+                >
                   Página {index + 1}
-                  {index === activePageIndex && <span className="page-label-active"> · editando</span>}
-                </div>
+                  {index === activePageIndex && (
+                    <span className="page-label-active"> · editando</span>
+                  )}
+                </button>
                 <CanvasEditor
                   ref={(handle) => {
                     pageRefs.current[index] = handle;
@@ -1126,14 +1227,18 @@ export function EditorPage() {
                   initialPage={page}
                   zoom={zoom}
                   active={index === activePageIndex}
-                  onActivate={() => handleActivatePage(index)}
+                  interactionMode={interactionMode}
                   onSelectionChange={(obj) => {
-                    handleActivatePage(index);
+                    if (index !== activePageIndexRef.current) return;
                     setActiveObject(obj);
-                    if (obj) setMobilePanel('props');
                   }}
                   onChange={handleChange}
-                  onReady={() => seedHistoryForPage(index)}
+                  onReady={() => {
+                    seedHistoryForPage(index);
+                    if (index === activePageIndexRef.current) {
+                      refreshObjects();
+                    }
+                  }}
                 />
               </div>
             ))}
@@ -1141,7 +1246,15 @@ export function EditorPage() {
         </main>
 
         <aside className="editor-sidebar right">
-          <PropertiesPanel activeObject={activeObject} onUpdate={handleChange} />
+          <PropertiesPanel
+            activeObject={activeObject}
+            selectedTextCount={getSelectedTextObjects(getActiveCanvas()).length}
+            onUpdate={handleChange}
+            onMergeTexts={handleMergeTexts}
+            onSendToBack={
+              activeObject ? () => handleSendToBack(activeObject) : undefined
+            }
+          />
         </aside>
       </div>
 
@@ -1183,9 +1296,51 @@ export function EditorPage() {
         open={importOpen}
         onClose={() => !uploadProgress && setImportOpen(false)}
         onImport={handleImportFromImage}
-        busy={!!uploadProgress}
+        busy={!!uploadProgress && importOpen}
+        progress={importOpen ? uploadProgress : null}
         pageIndex={activePageIndex}
       />
+
+      {uploadProgress && !importOpen && (
+        <div
+          className="stock-modal-overlay stock-modal-overlay--blocking"
+          role="alertdialog"
+          aria-modal="true"
+          aria-busy="true"
+          aria-labelledby="editor-busy-title"
+        >
+          <div className="stock-modal editor-busy-modal" onClick={(e) => e.stopPropagation()}>
+            <header className="stock-modal-header">
+              <h2 id="editor-busy-title">Procesando…</h2>
+            </header>
+            <div className="import-menu-busy">
+              <p className="import-menu-busy-phase">
+                {uploadProgress.phase === 'compress'
+                  ? 'Comprimiendo imagen'
+                  : uploadProgress.phase === 'upload'
+                    ? 'Subiendo archivo'
+                    : uploadProgress.phase === 'ocr'
+                      ? 'Leyendo carta con IA'
+                      : uploadProgress.phase === 'import'
+                        ? 'Creando capas en el lienzo'
+                        : uploadProgress.phase === 'place'
+                          ? 'Colocando en el lienzo'
+                          : 'Procesando'}
+              </p>
+              <div className="upload-progress-track import-menu-busy-track">
+                <div
+                  className="upload-progress-bar"
+                  style={{ width: `${Math.max(0, Math.min(100, uploadProgress.percent))}%` }}
+                />
+              </div>
+              <p className="import-menu-busy-percent">{uploadProgress.percent}%</p>
+              <p className="import-menu-busy-hint">
+                Espera a que termine. No edites el menú hasta entonces.
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
 
       <StockImageSearch
         open={stockOpen}

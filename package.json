@@ -4,7 +4,7 @@
   "version": "0.1.0",
   "type": "module",
   "scripts": {
-    "dev": "concurrently -n vite,api -c cyan,magenta \"npm run dev:vite\" \"npm run dev:api\"",
+    "dev": "concurrently -n vite5173,api8788 -c cyan,magenta \"npm run dev:vite\" \"npm run dev:api\"",
     "dev:vite": "vite",
     "dev:frontend": "vite",
     "dev:api": "wrangler pages dev dist --compatibility-date=2026-01-01 --port 8788",

@@ -20,10 +20,13 @@ interface ToolbarProps {
   onOpenAssets: () => void;
   onFitImageToA4: () => void;
   canFitImage: boolean;
+  onMergeTexts: () => void;
+  canMergeTexts: boolean;
   onChangeBackground: (color: string) => void;
   onExportPng: () => void;
   onExportPdf: () => void;
   onExportJson: () => void;
+  onImportJson: (file: File) => void;
   onOpenQr: () => void;
   onAddPage: () => void;
   onDeletePage: () => void;
@@ -51,10 +54,13 @@ export function Toolbar({
   onOpenAssets,
   onFitImageToA4,
   canFitImage,
+  onMergeTexts,
+  canMergeTexts,
   onChangeBackground,
   onExportPng,
   onExportPdf,
   onExportJson,
+  onImportJson,
   onOpenQr,
   onAddPage,
   onDeletePage,
@@ -69,6 +75,12 @@ export function Toolbar({
   function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
     if (file && !uploading) onUploadImage(file);
+    e.target.value = '';
+  }
+
+  function handleJsonImportChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (file && !uploading) onImportJson(file);
     e.target.value = '';
   }
 
@@ -130,6 +142,14 @@ export function Toolbar({
         </button>
         <button type="button" onClick={onAddCircle} title="Círculo">
           ○
+        </button>
+        <button
+          type="button"
+          onClick={onMergeTexts}
+          disabled={!canMergeTexts}
+          title="Unir las capas de texto seleccionadas en una sola (orden de arriba a abajo)"
+        >
+          Unir textos
         </button>
       </div>
 
@@ -229,8 +249,18 @@ export function Toolbar({
           PNG
         </button>
         <button type="button" onClick={onExportJson} title="Exportar diseño a menu.json">
-          JSON
+          Exportar JSON
         </button>
+        <label className={`btn-file${uploading ? ' btn-file--disabled' : ''}`} title="Importar menu.json">
+          Importar JSON
+          <input
+            type="file"
+            accept="application/json,.json"
+            onChange={handleJsonImportChange}
+            hidden
+            disabled={uploading}
+          />
+        </label>
         <button type="button" onClick={onExportPdf} title="Exportar todas las páginas a PDF">
           PDF
         </button>

@@ -74,6 +74,21 @@ export function applyTextStyleProps(
   }
 
   text.set(props);
+
+  // Tras OCR/pegado, muchos caracteres traen fontSize propio y el del cuadro no se ve.
+  // Sincronizar las props aplicadas en todos los estilos por carácter.
+  const styles = text.styles as FabricCharStyles | undefined;
+  if (styles && typeof styles === 'object' && Object.keys(props).length > 0) {
+    for (const line of Object.values(styles)) {
+      if (!line || typeof line !== 'object') continue;
+      for (const charStyle of Object.values(line)) {
+        if (!charStyle || typeof charStyle !== 'object') continue;
+        Object.assign(charStyle, props);
+      }
+    }
+    text.set('styles', styles);
+  }
+
   text.set('dirty', true);
   text.initDimensions();
   text.setCoords();

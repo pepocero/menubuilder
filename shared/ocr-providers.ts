@@ -22,26 +22,26 @@ export interface MenuOcrProviderOption {
   hint: string;
 }
 
-export const DEFAULT_OCR_PROVIDER: MenuOcrProviderChoice = 'auto';
+/** Workers AI por defecto; OpenAI solo si el usuario lo elige. */
+export const DEFAULT_OCR_PROVIDER: MenuOcrProviderChoice = 'workers-ai';
 
 export const MENU_OCR_PROVIDER_OPTIONS: MenuOcrProviderOption[] = [
   {
-    id: 'auto',
-    label: 'Automático',
-    hint: 'Usa OpenAI si está disponible; si falla por créditos o cuota, prueba Workers AI.',
+    id: 'workers-ai',
+    label: 'Workers AI',
+    hint: 'Recomendado: Gemma 4 en Cloudflare (OCR). Sin créditos de OpenAI.',
   },
   {
     id: 'openai',
     label: 'OpenAI',
-    hint: 'Mejor calidad (gpt-4o-mini / gpt-4o). Requiere OPENAI_API_KEY.',
+    hint: 'Mayor precisión (gpt-4o-mini / gpt-4o). Requiere OPENAI_API_KEY y créditos.',
   },
   {
-    id: 'workers-ai',
-    label: 'Workers AI',
-    hint: 'Fallback en Cloudflare (sin gastar créditos de OpenAI). Calidad variable.',
+    id: 'auto',
+    label: 'Automático',
+    hint: 'Prueba Workers AI primero; si falla, intenta OpenAI (si hay clave).',
   },
 ];
-
 export function parseOcrProviderChoice(raw: unknown): MenuOcrProviderChoice {
   const value = typeof raw === 'string' ? raw.trim().toLowerCase() : '';
   if (value === 'auto' || value === 'openai' || value === 'workers-ai') {
@@ -52,7 +52,7 @@ export function parseOcrProviderChoice(raw: unknown): MenuOcrProviderChoice {
 
 /** Errores en los que tiene sentido probar el siguiente proveedor en modo auto. */
 export function isOcrProviderRetryableError(message: string): boolean {
-  return /quota|billing|insufficient|credit|rate.?limit|429|402|401|403|no configurad|api key|incorrect api|exceeded/i.test(
+  return /quota|billing|insufficient|credit|rate.?limit|429|402|401|403|5016|agree|license|european union|no configurad|api key|incorrect api|exceeded|workers ai falló|json de carta incompleto|no devolvió json|json inválido|no devolvió contenido/i.test(
     message,
   );
 }

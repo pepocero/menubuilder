@@ -20,7 +20,26 @@ interface ImportMenuModalProps {
   onClose: () => void;
   onImport: (source: ImportMenuSource, options: ImportMenuOptions) => void;
   busy?: boolean;
+  /** Progreso 0–100 mientras busy (OCR / subida / capas). */
+  progress?: { phase: string; percent: number } | null;
   pageIndex: number;
+}
+
+function importPhaseLabel(phase: string): string {
+  switch (phase) {
+    case 'compress':
+      return 'Comprimiendo imagen';
+    case 'upload':
+      return 'Subiendo archivo';
+    case 'ocr':
+      return 'Leyendo carta con IA';
+    case 'import':
+      return 'Creando capas en el lienzo';
+    case 'place':
+      return 'Colocando en el lienzo';
+    default:
+      return 'Procesando';
+  }
 }
 
 type SourceTab = 'upload' | 'library';
@@ -51,6 +70,7 @@ export function ImportMenuModal({
   onClose,
   onImport,
   busy = false,
+  progress = null,
   pageIndex,
 }: ImportMenuModalProps) {
   const [tab, setTab] = useState<SourceTab>('upload');
@@ -146,16 +166,49 @@ export function ImportMenuModal({
   if (!open) return null;
 
   return (
-    <div className="stock-modal-overlay" onClick={() => !busy && onClose()}>
+    <div
+      className={`stock-modal-overlay${busy ? ' stock-modal-overlay--blocking' : ''}`}
+      onClick={() => !busy && onClose()}
+      role={busy ? 'alertdialog' : undefined}
+      aria-modal={busy ? true : undefined}
+      aria-busy={busy || undefined}
+      aria-labelledby={busy ? 'import-menu-busy-title' : undefined}
+    >
       <div className="stock-modal import-menu-modal" onClick={(e) => e.stopPropagation()}>
         <header className="stock-modal-header">
-          <h2>Importar carta desde imagen</h2>
+          <h2 id={busy ? 'import-menu-busy-title' : undefined}>
+            {busy ? 'Importando carta…' : 'Importar carta desde imagen'}
+          </h2>
           <button type="button" className="close-btn" onClick={onClose} disabled={busy}>
             ✕
           </button>
         </header>
 
-        <form onSubmit={handleSubmit} className="import-menu-form">
+        {busy && (
+          <div className="import-menu-busy">
+            <p className="import-menu-busy-phase">
+              {importPhaseLabel(progress?.phase ?? 'ocr')}
+            </p>
+            <div className="upload-progress-track import-menu-busy-track">
+              <div
+                className="upload-progress-bar"
+                style={{
+                  width: `${Math.max(0, Math.min(100, progress?.percent ?? 0))}%`,
+                }}
+              />
+            </div>
+            <p className="import-menu-busy-percent">{progress?.percent ?? 0}%</p>
+            <p className="import-menu-busy-hint">
+              La IA está trabajando. No cierres esta ventana ni edites el menú hasta que termine.
+            </p>
+          </div>
+        )}
+
+        <form
+          onSubmit={handleSubmit}
+          className={`import-menu-form${busy ? ' import-menu-form--busy' : ''}`}
+          inert={busy}
+        >
           <p className="import-menu-hint">
             El reconocimiento usa visión por IA: lee columnas, secciones y precios. Elige el motor
             antes de analizar.

@@ -1,6 +1,11 @@
 import type { MenuDocument } from '@shared/menu-document/types';
-import { canvasDataToMenuDocument, serializeMenuDocument } from '@shared/menu-document/converter';
+import {
+  canvasDataToMenuDocument,
+  importJsonToCanvasData,
+  serializeMenuDocument,
+} from '@shared/menu-document/converter';
 import type { CanvasData } from '@/types/canvas';
+import { normalizeCanvasData } from '@/types/canvas';
 import { jsPDF } from 'jspdf';
 import { A4_HEIGHT, A4_WIDTH } from '@/types/canvas';
 
@@ -25,6 +30,26 @@ export function buildMenuDocumentFromCanvas(
   title?: string,
 ): MenuDocument | null {
   return canvasDataToMenuDocument(data, { title });
+}
+
+/** Lee un .json (MenuDocument o CanvasData) y lo convierte a CanvasData del editor. */
+export async function parseMenuJsonFile(file: File): Promise<CanvasData> {
+  const text = await file.text();
+  let raw: unknown;
+  try {
+    raw = JSON.parse(text);
+  } catch {
+    throw new Error('El archivo no es un JSON válido');
+  }
+
+  const imported = importJsonToCanvasData(raw);
+  if (!imported) {
+    throw new Error(
+      'JSON no reconocido. Usa un menu.json exportado desde MenuBuilder o un documento de lienzo válido.',
+    );
+  }
+
+  return normalizeCanvasData(imported);
 }
 
 /** Exporta una o varias páginas A4 a un PDF multipágina. */

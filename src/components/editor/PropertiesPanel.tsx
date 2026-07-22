@@ -1,8 +1,12 @@
 import { useEffect, useState } from 'react';
-import type { FabricImage, FabricObject, Textbox } from 'fabric';
+import type { Canvas, FabricImage, FabricObject, Textbox } from 'fabric';
 import { fitImageToA4, isImageObject, isShapeObject, isTextObject, refreshTextboxLayout, toHexColor } from '@/lib/canvas-serializer';
 import { ensureEditorFontLoaded } from '@/lib/google-fonts';
 import { getLayerDisplayName, getLayerObjectData, setLayerObjectData } from '@/lib/layer-utils';
+import {
+  applyStyleToSelectedTextLayers,
+  getSharedSelectedTextStyle,
+} from '@/lib/merge-text-layers';
 import {
   applyTextStyleProps,
   getTextFormatState,
@@ -12,7 +16,10 @@ import { FontFamilyPicker } from '@/components/editor/FontFamilyPicker';
 
 interface PropertiesPanelProps {
   activeObject: FabricObject | null;
+  selectedTextCount?: number;
   onUpdate: () => void;
+  onMergeTexts?: () => void;
+  onSendToBack?: () => void;
 }
 
 function asTextbox(obj: FabricObject): Textbox {
@@ -26,12 +33,27 @@ function hasCharacterStyles(obj: FabricObject): boolean {
   return Object.keys(styles).length > 0;
 }
 
-/** Evita que el botón robe el foco y se pierda la selección del texto. */
+/** Evita que botones roben el foco del texto en edición; no bloquea inputs. */
 function preserveTextSelection(e: React.MouseEvent) {
+  const el = e.target as HTMLElement;
+  if (
+    el.tagName === 'INPUT' ||
+    el.tagName === 'TEXTAREA' ||
+    el.tagName === 'SELECT' ||
+    el.isContentEditable
+  ) {
+    return;
+  }
   e.preventDefault();
 }
 
-export function PropertiesPanel({ activeObject, onUpdate }: PropertiesPanelProps) {
+export function PropertiesPanel({
+  activeObject,
+  selectedTextCount = 0,
+  onUpdate,
+  onMergeTexts,
+  onSendToBack,
+}: PropertiesPanelProps) {
   const [, setTick] = useState(0);
 
   useEffect(() => {
@@ -55,6 +77,67 @@ export function PropertiesPanel({ activeObject, onUpdate }: PropertiesPanelProps
       <div className="properties-panel">
         <h3>Propiedades</h3>
         <p className="panel-empty">Selecciona una capa para editar sus propiedades.</p>
+      </div>
+    );
+  }
+
+  if (selectedTextCount >= 2) {
+    const canvas = (activeObject.canvas as Canvas | null) ?? null;
+    const shared = getSharedSelectedTextStyle(canvas);
+
+    function applyToAll(props: Record<string, unknown>) {
+      applyStyleToSelectedTextLayers(canvas, props);
+      setTick((t) => t + 1);
+      onUpdate();
+    }
+
+    return (
+      <div className="properties-panel">
+        <h3>Propiedades</h3>
+        <p className="panel-empty">
+          {selectedTextCount} capas de texto seleccionadas. Los cambios de fuente y tamaño se
+          aplican a todas.
+        </p>
+
+        <label>
+          Fuente
+          <FontFamilyPicker
+            value={shared.fontFamily ?? ''}
+            onChange={(fontFamily) => {
+              ensureEditorFontLoaded(fontFamily);
+              applyToAll({ fontFamily });
+            }}
+          />
+        </label>
+        {!shared.fontFamily && (
+          <p className="panel-hint">Varias fuentes distintas — elige una para unificarlas.</p>
+        )}
+
+        <label>
+          Tamaño
+          <input
+            type="number"
+            min={8}
+            max={120}
+            step={1}
+            placeholder={shared.fontSize == null ? 'Varios' : undefined}
+            value={shared.fontSize ?? ''}
+            onChange={(e) => {
+              const next = Number(e.target.value);
+              if (!Number.isFinite(next)) return;
+              applyToAll({ fontSize: Math.max(8, Math.min(120, next)) });
+            }}
+          />
+        </label>
+        {shared.fontSize == null && (
+          <p className="panel-hint">Varios tamaños — escribe uno para unificarlos.</p>
+        )}
+
+        {onMergeTexts && (
+          <button type="button" className="btn-primary" onClick={onMergeTexts}>
+            Unir textos
+          </button>
+        )}
       </div>
     );
   }
@@ -166,6 +249,18 @@ export function PropertiesPanel({ activeObject, onUpdate }: PropertiesPanelProps
         />
       </label>
 
+      {onSendToBack && (
+        <button
+          type="button"
+          className="btn-secondary"
+          style={{ width: '100%', marginBottom: '0.75rem' }}
+          onClick={onSendToBack}
+          title="Coloca esta capa detrás de todas las demás"
+        >
+          Enviar al fondo
+        </button>
+      )}
+
       {textObj && (
         <>
           <label>
@@ -204,8 +299,13 @@ export function PropertiesPanel({ activeObject, onUpdate }: PropertiesPanelProps
               type="number"
               min={8}
               max={120}
-              value={textObj.fontSize ?? 16}
-              onChange={(e) => updateTextStyle({ fontSize: Number(e.target.value) })}
+              step={1}
+              value={Math.round(Number(textObj.fontSize) || 16)}
+              onChange={(e) => {
+                const next = Number(e.target.value);
+                if (!Number.isFinite(next)) return;
+                updateTextStyle({ fontSize: Math.max(8, Math.min(120, next)) });
+              }}
             />
           </label>
           <label onMouseDown={preserveTextSelection}>
