@@ -17,6 +17,31 @@ import type {
 } from '@/types/canvas';
 import { A4_HEIGHT, A4_WIDTH, normalizeCanvasData } from '@/types/canvas';
 
+type CanvasWithLogicalSize = Canvas & {
+  __logicalWidth?: number;
+  __logicalHeight?: number;
+};
+
+export function setCanvasLogicalSize(canvas: Canvas, width: number, height: number): void {
+  const c = canvas as CanvasWithLogicalSize;
+  c.__logicalWidth = width;
+  c.__logicalHeight = height;
+}
+
+export function getCanvasLogicalSize(canvas: Canvas): { width: number; height: number } {
+  const c = canvas as CanvasWithLogicalSize;
+  return {
+    width:
+      typeof c.__logicalWidth === 'number' && c.__logicalWidth > 0
+        ? c.__logicalWidth
+        : A4_WIDTH,
+    height:
+      typeof c.__logicalHeight === 'number' && c.__logicalHeight > 0
+        ? c.__logicalHeight
+        : A4_HEIGHT,
+  };
+}
+
 const ORIGIN = { originX: 'left' as const, originY: 'top' as const };
 
 function layerDataFromLayer(layer: CanvasLayer) {
@@ -235,6 +260,7 @@ export async function loadPageOntoCanvas(
   width = A4_WIDTH,
   height = A4_HEIGHT,
 ): Promise<void> {
+  setCanvasLogicalSize(canvas, width, height);
   canvas.clear();
   canvas.backgroundImage = undefined;
   canvas.setDimensions({ width, height });
@@ -404,19 +430,24 @@ export function canvasToPageData(canvas: Canvas, pageId: string): MenuPage {
       ? { type: 'color' as const, value: bg }
       : { type: 'color' as const, value: '#FFFFFF' };
 
+  const { width, height } = getCanvasLogicalSize(canvas);
+
   return {
     id: pageId,
     background,
     layers,
+    width,
+    height,
   };
 }
 
 /** Documento de una sola página (compat / utilidades) */
 export function canvasToCanvasData(canvas: Canvas, pageId = 'page_1'): CanvasData {
+  const page = canvasToPageData(canvas, pageId);
   return {
-    width: A4_WIDTH,
-    height: A4_HEIGHT,
-    pages: [canvasToPageData(canvas, pageId)],
+    width: page.width ?? A4_WIDTH,
+    height: page.height ?? A4_HEIGHT,
+    pages: [page],
   };
 }
 
@@ -479,17 +510,16 @@ export async function addLayerToCanvas(canvas: Canvas, layer: CanvasLayer): Prom
 }
 
 /**
- * Ajusta una imagen al lienzo A4.
- * - cover: llena todo el A4 (recorta si hace falta)
- * - contain: cabe entera dentro del A4 sin recortar
+ * Ajusta una imagen al tamaño lógico del lienzo.
+ * - cover: llena todo (recorta si hace falta)
+ * - contain: cabe entera sin recortar
  */
 export function fitImageToA4(
   img: FabricImage,
   canvas: Canvas,
   mode: 'cover' | 'contain' = 'cover',
 ): void {
-  const cw = A4_WIDTH;
-  const ch = A4_HEIGHT;
+  const { width: cw, height: ch } = getCanvasLogicalSize(canvas);
   const iw = img.width || 1;
   const ih = img.height || 1;
 
@@ -518,16 +548,35 @@ export function fitImageToA4(
  * Zoom de vista del editor: redimensiona el canvas de Fabric para que no se vea borroso
  * (a diferencia de un CSS transform: scale sobre el bitmap).
  */
-export function applyCanvasZoom(canvas: Canvas, zoomPercent: number): void {
-  // Tras dispose() Fabric deja `lower` en undefined; no tocar el canvas muerto.
-  const lower = (canvas as Canvas & { lower?: { el?: HTMLCanvasElement } }).lower;
-  if (!lower?.el) return;
+export function applyCanvasZoom(
+  canvas: Canvas,
+  zoomPercent: number,
+  pageWidth?: number,
+  pageHeight?: number,
+): void {
+  // Fabric 6: el DOM vive en canvas.elements.lower (no en canvas.lower).
+  const el =
+    typeof canvas.getElement === 'function'
+      ? canvas.getElement()
+      : (
+          canvas as Canvas & {
+            elements?: { lower?: { el?: HTMLCanvasElement } };
+            lower?: { el?: HTMLCanvasElement };
+          }
+        ).elements?.lower?.el ??
+        (canvas as Canvas & { lower?: { el?: HTMLCanvasElement } }).lower?.el;
+  if (!el) return;
+
+  const logical = getCanvasLogicalSize(canvas);
+  const width = pageWidth && pageWidth > 0 ? pageWidth : logical.width;
+  const height = pageHeight && pageHeight > 0 ? pageHeight : logical.height;
+  setCanvasLogicalSize(canvas, width, height);
 
   const zoom = Math.max(0.25, Math.min(2, zoomPercent / 100));
   canvas.setZoom(zoom);
   canvas.setDimensions({
-    width: A4_WIDTH * zoom,
-    height: A4_HEIGHT * zoom,
+    width: width * zoom,
+    height: height * zoom,
   });
   canvas.calcOffset();
   canvas.requestRenderAll();
@@ -535,5 +584,18 @@ export function applyCanvasZoom(canvas: Canvas, zoomPercent: number): void {
 
 export function ensureA4Canvas(canvas: Canvas): void {
   const zoomPercent = Math.round((canvas.getZoom() || 1) * 100);
-  applyCanvasZoom(canvas, zoomPercent);
+  const { width, height } = getCanvasLogicalSize(canvas);
+  applyCanvasZoom(canvas, zoomPercent, width, height);
+}
+
+/** Redimensiona el lienzo lógico y aplica el zoom actual. */
+export function resizeCanvasPage(
+  canvas: Canvas,
+  width: number,
+  height: number,
+  zoomPercent?: number,
+): void {
+  const zoom =
+    zoomPercent ?? Math.round((canvas.getZoom() || 1) * 100);
+  applyCanvasZoom(canvas, zoom, width, height);
 }

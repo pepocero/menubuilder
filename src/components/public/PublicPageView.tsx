@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import type { CanvasLayer, MenuPage, TextLayer } from '@/types/canvas';
-import { A4_HEIGHT, A4_WIDTH } from '@/types/canvas';
 import { ensureEditorFontLoaded } from '@/lib/google-fonts';
+import { getPageSize } from '@/lib/page-size';
 import { renderTextContentWithCharStyles } from '@/lib/text-char-styles';
 
 interface PublicPageViewProps {
@@ -110,20 +110,23 @@ function TextLayerView({ layer, scale }: { layer: TextLayer; scale: number }) {
 
 export function PublicPageView({
   page,
-  pageWidth = A4_WIDTH,
-  pageHeight = A4_HEIGHT,
+  pageWidth,
+  pageHeight,
 }: PublicPageViewProps) {
   const frameRef = useRef<HTMLDivElement>(null);
   const [scale, setScale] = useState(1);
+  const size = getPageSize(page);
+  const width = pageWidth && pageWidth > 0 ? pageWidth : size.width;
+  const height = pageHeight && pageHeight > 0 ? pageHeight : size.height;
 
   useEffect(() => {
     const el = frameRef.current;
     if (!el) return;
 
     const update = () => {
-      const width = el.clientWidth;
-      if (width > 0) {
-        setScale(width / pageWidth);
+      const frameWidth = el.clientWidth;
+      if (frameWidth > 0) {
+        setScale(frameWidth / width);
       }
     };
 
@@ -131,7 +134,7 @@ export function PublicPageView({
     const ro = new ResizeObserver(update);
     ro.observe(el);
     return () => ro.disconnect();
-  }, [pageWidth]);
+  }, [width]);
 
   const layers = [...page.layers]
     .filter((layer) => layer.visible !== false)
@@ -145,7 +148,7 @@ export function PublicPageView({
       ref={frameRef}
       className="public-page-frame editor-canvas-wrap public-canvas"
       style={{
-        aspectRatio: `${pageWidth} / ${pageHeight}`,
+        aspectRatio: `${width} / ${height}`,
         background: page.background.type === 'color' ? bgColor : '#FAF6F0',
       }}
     >

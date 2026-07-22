@@ -1,13 +1,14 @@
 import { useEffect, useRef, useImperativeHandle, forwardRef } from 'react';
 import { Canvas } from 'fabric';
 import type { MenuPage } from '@/types/canvas';
-import { A4_HEIGHT, A4_WIDTH } from '@/types/canvas';
+import { getPageSize } from '@/lib/page-size';
 import {
   applyCanvasZoom,
   isTextObject,
   loadPageOntoCanvas,
   canvasToPageData,
   refreshTextboxLayout,
+  resizeCanvasPage,
 } from '@/lib/canvas-serializer';
 import type { CanvasInteractionMode } from '@/components/editor/EditorZoomControls';
 
@@ -17,6 +18,7 @@ export interface CanvasEditorHandle {
   exportPng: () => string | null;
   loadPage: (page: MenuPage) => Promise<void>;
   discardSelectionSilent: () => void;
+  resizePage: (width: number, height: number) => void;
 }
 
 interface CanvasEditorProps {
@@ -62,6 +64,8 @@ export const CanvasEditor = forwardRef<CanvasEditorHandle, CanvasEditorProps>(
     const activeRef = useRef(active);
     activeRef.current = active;
 
+    const initialSize = getPageSize(initialPage);
+
     function emitChange() {
       if (muteEventsRef.current) return;
       // Solo la página activa propaga cambios (evita tormentas entre lienzos).
@@ -86,11 +90,12 @@ export const CanvasEditor = forwardRef<CanvasEditorHandle, CanvasEditorProps>(
         loadPage: async (page: MenuPage) => {
           const canvas = canvasRef.current;
           if (!canvas) return;
+          const size = getPageSize(page);
           muteEventsRef.current = true;
           try {
-            await loadPageOntoCanvas(canvas, page, A4_WIDTH, A4_HEIGHT);
+            await loadPageOntoCanvas(canvas, page, size.width, size.height);
             if (canvasRef.current === canvas) {
-              applyCanvasZoom(canvas, zoomRef.current);
+              applyCanvasZoom(canvas, zoomRef.current, size.width, size.height);
             }
           } finally {
             muteEventsRef.current = false;
@@ -108,6 +113,11 @@ export const CanvasEditor = forwardRef<CanvasEditorHandle, CanvasEditorProps>(
             muteEventsRef.current = wasMuted;
           }
         },
+        resizePage: (width: number, height: number) => {
+          const canvas = canvasRef.current;
+          if (!canvas) return;
+          resizeCanvasPage(canvas, width, height, zoomRef.current);
+        },
       }),
       [],
     );
@@ -117,10 +127,11 @@ export const CanvasEditor = forwardRef<CanvasEditorHandle, CanvasEditorProps>(
 
       let cancelled = false;
       muteEventsRef.current = true;
+      const size = getPageSize(initialPage);
 
       const canvas = new Canvas(canvasElRef.current, {
-        width: A4_WIDTH,
-        height: A4_HEIGHT,
+        width: size.width,
+        height: size.height,
         preserveObjectStacking: true,
         enableRetinaScaling: true,
         backgroundColor:
@@ -132,10 +143,10 @@ export const CanvasEditor = forwardRef<CanvasEditorHandle, CanvasEditorProps>(
 
       canvasRef.current = canvas;
 
-      loadPageOntoCanvas(canvas, initialPage, A4_WIDTH, A4_HEIGHT)
+      loadPageOntoCanvas(canvas, initialPage, size.width, size.height)
         .then(() => {
           if (cancelled || canvasRef.current !== canvas) return;
-          applyCanvasZoom(canvas, zoomRef.current);
+          applyCanvasZoom(canvas, zoomRef.current, size.width, size.height);
           // Aplicar modo real tras la carga.
           const interactive =
             activeRef.current && interactionModeRef.current === 'move';
@@ -206,8 +217,8 @@ export const CanvasEditor = forwardRef<CanvasEditorHandle, CanvasEditorProps>(
     useEffect(() => {
       const canvas = canvasRef.current;
       if (!canvas || muteEventsRef.current) return;
-      applyCanvasZoom(canvas, zoom);
-    }, [zoom]);
+      applyCanvasZoom(canvas, zoom, initialSize.width, initialSize.height);
+    }, [zoom, initialSize.width, initialSize.height]);
 
     // Interactivo solo si esta página está activa y el modo es Mover.
     useEffect(() => {
@@ -235,6 +246,10 @@ export const CanvasEditor = forwardRef<CanvasEditorHandle, CanvasEditorProps>(
         className={`editor-canvas-wrap page-canvas ${active ? 'page-canvas--active' : ''}${
           interactionMode === 'scroll' ? ' page-canvas--scroll' : ' page-canvas--move'
         }`}
+        style={{
+          width: initialSize.width * (zoom / 100),
+          height: initialSize.height * (zoom / 100),
+        }}
       >
         <canvas ref={canvasElRef} />
       </div>

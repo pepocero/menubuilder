@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import type { Canvas, FabricImage, FabricObject, Textbox } from 'fabric';
 import { fitImageToA4, isImageObject, isShapeObject, isTextObject, refreshTextboxLayout, toHexColor } from '@/lib/canvas-serializer';
 import { ensureEditorFontLoaded } from '@/lib/google-fonts';
@@ -9,6 +9,7 @@ import {
 } from '@/lib/merge-text-layers';
 import {
   applyTextStyleProps,
+  getActiveFontSizeInfo,
   getTextFormatState,
   textboxHasSelection,
 } from '@/lib/text-char-styles';
@@ -55,13 +56,29 @@ export function PropertiesPanel({
   onSendToBack,
 }: PropertiesPanelProps) {
   const [, setTick] = useState(0);
+  /** Rango de texto seleccionado en el lienzo (sobrevive al foco del input Tamaño). */
+  const textSelectionRef = useRef<{ start: number; end: number } | null>(null);
+
+  useEffect(() => {
+    textSelectionRef.current = null;
+  }, [activeObject]);
 
   useEffect(() => {
     if (!activeObject || !isTextObject(activeObject)) return;
     const canvas = activeObject.canvas;
     if (!canvas) return;
 
-    const bump = () => setTick((t) => t + 1);
+    const bump = () => {
+      const text = asTextbox(activeObject);
+      if (text.isEditing) {
+        // Guarda caret o selección para el panel (tamaño al cursor / rango).
+        textSelectionRef.current = {
+          start: text.selectionStart ?? 0,
+          end: text.selectionEnd ?? 0,
+        };
+      }
+      setTick((t) => t + 1);
+    };
     canvas.on('text:selection:changed', bump);
     canvas.on('text:editing:entered', bump);
     canvas.on('text:editing:exited', bump);
@@ -157,11 +174,44 @@ export function PropertiesPanel({
 
   /**
    * Aplica estilo a la selección (si editas con texto marcado) o al cuadro entero.
-   * No borra otros formatos parciales.
+   * Usa el rango guardado si el panel robó el foco (p. ej. input de tamaño).
    */
-  function updateTextStyle(props: Record<string, unknown>) {
+  function updateTextStyle(
+    props: Record<string, unknown>,
+    opts?: { keepPanelFocus?: boolean },
+  ) {
     if (!activeObject || !isTextObject(activeObject)) return;
-    applyTextStyleProps(asTextbox(activeObject), props);
+    const text = asTextbox(activeObject);
+    const stored = textSelectionRef.current;
+    const liveStart = text.selectionStart ?? 0;
+    const liveEnd = text.selectionEnd ?? 0;
+    const range =
+      textboxHasSelection(text)
+        ? { start: liveStart, end: liveEnd }
+        : stored && stored.end > stored.start
+          ? stored
+          : null;
+
+    applyTextStyleProps(text, props, range);
+
+    if (range && range.end > range.start) {
+      textSelectionRef.current = range;
+      if (!opts?.keepPanelFocus) {
+        if (!text.isEditing) {
+          text.enterEditing();
+        }
+        text.setSelectionStart(range.start);
+        text.setSelectionEnd(range.end);
+        text.canvas?.requestRenderAll();
+      }
+    } else if (text.isEditing || stored) {
+      // Conservar caret para seguir mostrando el tamaño en esa posición.
+      const caret = text.isEditing
+        ? { start: liveStart, end: liveEnd }
+        : stored;
+      if (caret) textSelectionRef.current = caret;
+    }
+
     refresh();
   }
 
@@ -194,7 +244,18 @@ export function PropertiesPanel({
     : { bold: false, italic: false };
   const isBold = formatState.bold;
   const isItalic = formatState.italic;
-  const hasPartialSelection = textObj ? textboxHasSelection(textObj) : false;
+  const storedSelection = textSelectionRef.current;
+  const hasPartialSelection = textObj
+    ? textboxHasSelection(textObj) ||
+      (!!storedSelection && storedSelection.end > storedSelection.start)
+    : false;
+  const fontSizeInfo = textObj
+    ? getActiveFontSizeInfo(textObj, storedSelection)
+    : null;
+  const fontSizeMixed = fontSizeInfo?.mixed ?? false;
+  const stepBase = Math.round(fontSizeInfo?.stepBase ?? Number(textObj?.fontSize) ?? 16);
+  const displayFontSize =
+    fontSizeInfo?.display != null ? Math.round(fontSizeInfo.display) : null;
 
   return (
     <div className="properties-panel">
@@ -295,25 +356,91 @@ export function PropertiesPanel({
           </label>
           <label onMouseDown={preserveTextSelection}>
             Tamaño
-            <input
-              type="number"
-              min={8}
-              max={120}
-              step={1}
-              value={Math.round(Number(textObj.fontSize) || 16)}
-              onChange={(e) => {
-                const next = Number(e.target.value);
-                if (!Number.isFinite(next)) return;
-                updateTextStyle({ fontSize: Math.max(8, Math.min(120, next)) });
-              }}
-            />
+            <div className="properties-font-size-row">
+              <button
+                type="button"
+                className="properties-font-size-step"
+                title={
+                  fontSizeMixed
+                    ? `Reducir desde el mínimo (${stepBase})`
+                    : hasPartialSelection
+                      ? 'Reducir tamaño de la selección'
+                      : 'Reducir tamaño'
+                }
+                onMouseDown={preserveTextSelection}
+                onClick={() =>
+                  updateTextStyle({
+                    fontSize: Math.max(8, Math.min(120, stepBase - 1)),
+                  })
+                }
+              >
+                −
+              </button>
+              <input
+                type={fontSizeMixed ? 'text' : 'number'}
+                min={8}
+                max={120}
+                step={1}
+                inputMode="numeric"
+                value={fontSizeMixed ? '–' : (displayFontSize ?? stepBase)}
+                placeholder="–"
+                title={
+                  fontSizeMixed
+                    ? 'Varios tamaños en la selección'
+                    : hasPartialSelection
+                      ? 'Tamaño de la selección'
+                      : 'Tamaño en la posición del cursor / de la capa'
+                }
+                onFocus={(e) => {
+                  if (fontSizeMixed) {
+                    e.currentTarget.select();
+                  }
+                }}
+                onChange={(e) => {
+                  const raw = e.target.value.replace(/[^\d.,]/g, '').replace(',', '.');
+                  if (raw === '' && fontSizeMixed) return;
+                  const next = Number(raw);
+                  if (!Number.isFinite(next)) return;
+                  updateTextStyle(
+                    { fontSize: Math.max(8, Math.min(120, next)) },
+                    { keepPanelFocus: true },
+                  );
+                }}
+              />
+              <button
+                type="button"
+                className="properties-font-size-step"
+                title={
+                  fontSizeMixed
+                    ? `Aumentar desde el mínimo (${stepBase})`
+                    : hasPartialSelection
+                      ? 'Aumentar tamaño de la selección'
+                      : 'Aumentar tamaño'
+                }
+                onMouseDown={preserveTextSelection}
+                onClick={() =>
+                  updateTextStyle({
+                    fontSize: Math.max(8, Math.min(120, stepBase + 1)),
+                  })
+                }
+              >
+                +
+              </button>
+            </div>
+            {fontSizeMixed && (
+              <p className="panel-hint">
+                Varios tamaños en la selección. −/+ parten de {stepBase} (el menor).
+              </p>
+            )}
           </label>
           <label onMouseDown={preserveTextSelection}>
             Color
             <input
               type="color"
               value={toHexColor(textObj.fill, '#000000')}
-              onChange={(e) => updateTextStyle({ fill: e.target.value })}
+              onChange={(e) =>
+                updateTextStyle({ fill: e.target.value }, { keepPanelFocus: true })
+              }
             />
           </label>
           <div className="properties-text-style-row">

@@ -19,6 +19,10 @@ export function textboxHasSelection(text: Textbox): boolean {
   return end > start;
 }
 
+export function textboxIsEditing(text: Textbox): boolean {
+  return !!text.isEditing;
+}
+
 function isBoldValue(value: unknown): boolean {
   return value === 'bold' || value === '700' || Number(value) >= 600;
 }
@@ -54,17 +58,131 @@ export function getTextFormatState(text: Textbox): { bold: boolean; italic: bool
   };
 }
 
+function baseFontSize(text: Textbox): number {
+  const base = Number(text.fontSize);
+  return Number.isFinite(base) && base > 0 ? base : 16;
+}
+
+function styleEntryFontSize(text: Textbox, style: Record<string, unknown> | undefined): number {
+  const fromChar = Number(style?.fontSize);
+  if (Number.isFinite(fromChar) && fromChar > 0) return fromChar;
+  return baseFontSize(text);
+}
+
+/** Tamaños de fuente en un rango [start, end) del Textbox. */
+export function getFontSizesInRange(
+  text: Textbox,
+  start: number,
+  end: number,
+): number[] {
+  if (end <= start) return [];
+  const styles = text.getSelectionStyles(start, end, true);
+  if (styles.length === 0) return [baseFontSize(text)];
+  return styles.map((s) => styleEntryFontSize(text, s as Record<string, unknown>));
+}
+
+/** Tamaño en la posición del cursor (caret colapsado). */
+export function getFontSizeAtCaret(text: Textbox, caretIndex?: number): number {
+  const content = text.text ?? '';
+  const len = content.length;
+  const caret = caretIndex ?? text.selectionStart ?? 0;
+  if (len === 0) return baseFontSize(text);
+
+  // Carácter bajo el cursor; si está al final, el anterior.
+  const charIndex = caret < len ? caret : Math.max(0, len - 1);
+  const sizes = getFontSizesInRange(text, charIndex, charIndex + 1);
+  return sizes[0] ?? baseFontSize(text);
+}
+
+export interface ActiveFontSizeInfo {
+  /** Valor a mostrar; null = varios tamaños (mostrar guion). */
+  display: number | null;
+  mixed: boolean;
+  /** Base para −/+: el mínimo del rango, o el del caret/objeto. */
+  stepBase: number;
+  /** Hay selección con al menos un carácter. */
+  hasSelection: boolean;
+}
+
+/**
+ * Tamaño activo para el panel:
+ * - caret: tamaño en esa posición
+ * - selección uniforme: ese tamaño
+ * - selección mixta: display null + stepBase = mínimo
+ * - sin edición: tamaño del cuadro
+ */
+export function getActiveFontSizeInfo(
+  text: Textbox,
+  storedRange?: { start: number; end: number } | null,
+): ActiveFontSizeInfo {
+  const liveEditing = textboxIsEditing(text);
+  const liveStart = text.selectionStart ?? 0;
+  const liveEnd = text.selectionEnd ?? 0;
+
+  let start = liveStart;
+  let end = liveEnd;
+  let editing = liveEditing;
+
+  if (!liveEditing && storedRange) {
+    start = storedRange.start;
+    end = storedRange.end;
+    editing = true;
+  } else if (liveEditing) {
+    start = liveStart;
+    end = liveEnd;
+  }
+
+  if (editing && end > start) {
+    const sizes = getFontSizesInRange(text, start, end);
+    if (sizes.length === 0) {
+      const base = baseFontSize(text);
+      return { display: base, mixed: false, stepBase: base, hasSelection: true };
+    }
+    const min = Math.min(...sizes);
+    const max = Math.max(...sizes);
+    if (min === max) {
+      return { display: min, mixed: false, stepBase: min, hasSelection: true };
+    }
+    return { display: null, mixed: true, stepBase: min, hasSelection: true };
+  }
+
+  if (editing) {
+    const atCaret = getFontSizeAtCaret(text, start);
+    return {
+      display: atCaret,
+      mixed: false,
+      stepBase: atCaret,
+      hasSelection: false,
+    };
+  }
+
+  const objectSize = baseFontSize(text);
+  return {
+    display: objectSize,
+    mixed: false,
+    stepBase: objectSize,
+    hasSelection: false,
+  };
+}
+
 /**
  * Aplica estilo a la selección en edición, o al cuadro completo si no hay selección.
+ * `range` permite aplicar a una porción aunque el input del panel haya robado el foco.
  * No borra otros estilos de carácter ajenos a las props indicadas.
  */
 export function applyTextStyleProps(
   text: Textbox,
   props: Record<string, unknown>,
+  range?: { start: number; end: number } | null,
 ): void {
-  if (textboxHasSelection(text)) {
-    const start = text.selectionStart ?? 0;
-    const end = text.selectionEnd ?? 0;
+  const liveStart = text.selectionStart ?? 0;
+  const liveEnd = text.selectionEnd ?? 0;
+  const start = range && range.end > range.start ? range.start : liveStart;
+  const end = range && range.end > range.start ? range.end : liveEnd;
+  const applyToRange =
+    end > start && (textboxHasSelection(text) || (!!range && range.end > range.start));
+
+  if (applyToRange) {
     text.setSelectionStyles(props, start, end);
     text.set('dirty', true);
     text.initDimensions();

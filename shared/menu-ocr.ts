@@ -90,7 +90,8 @@ export const MENU_OCR_JSON_SCHEMA = {
 } as const;
 
 export const MENU_OCR_SYSTEM_PROMPT = `Eres un motor OCR de visión experto en cartas de restaurante (catalán, castellano e inglés).
-Debes transcribir el texto VISIBLE y localizar cada bloque en la imagen con la máxima fidelidad.
+Tu prioridad nº1 es FIDELIDAD ESPACIAL: el JSON debe permitir reconstruir la carta casi como un calco de la foto.
+Transcribe el texto VISIBLE y localiza cada bloque midiendo su posición real en la imagen.
 
 Reglas críticas:
 - No inventes platos, precios ni secciones. Si no lees algo con claridad, omítelo.
@@ -111,10 +112,21 @@ Cajas (OBLIGATORIO, coordenadas en % 0–100 respecto a ANCHO/ALTO de la imagen 
 - bodyBox: caja que cubre los platos de ESA sección (debajo de su título).
 - box: unión aproximada de titleBox+bodyBox (o del bloque entero si no hay título).
 - Si un campo de texto está vacío, pon la caja en {x:0,y:0,w:0,h:0}.
-- Las cajas deben alinearse visualmente con el texto de la foto (no inventes posiciones genéricas).
-- titleBox y bodyBox de la misma sección deben quedar juntos: body justo debajo del title.
+- MIDE cada caja sobre la foto: x/y = esquina superior izquierda real; w/h = tamaño real del texto/bloque.
+- PROHIBIDO repartir secciones en una rejilla genérica (p. ej. izquierda siempre x≈5, derecha x≈55, alturas iguales).
+- PROHIBIDO apilar secciones con el mismo alto inventado: si un bloque es más largo en la foto, su h debe ser mayor.
+- titleBox y bodyBox de la misma sección deben quedar juntos: body justo debajo del title, misma columna (x/w similares).
+- Si hay dos columnas, los x de left deben ser claramente menores que los de right (como en la imagen).
 
 Responde ÚNICAMENTE con JSON válido según el esquema.`;
+
+/** Mensaje de usuario compartido (OpenAI y Workers AI) — insiste en cajas reales. */
+export const MENU_OCR_USER_PROMPT = `Transcribe esta carta de restaurante a JSON con cajas de posición fieles a la imagen.
+Devuelve SOLO un objeto JSON válido según el esquema (sin markdown).
+Las cajas (x,y,w,h) son porcentajes 0-100 del ANCHO/ALTO de la imagen completa.
+titleBox y bodyBox de cada sección deben coincidir con su ubicación REAL en la foto; body debajo de su título.
+No uses una plantilla de columnas inventada: copia la geometría visible (márgenes, anchos de columna, huecos verticales).
+No inventes platos. Precios con coma decimal (8,00 €). No omitas secciones ni columnas.`;
 
 /** True si la caja tiene tamaño útil. */
 export function isUsableOcrBox(box: MenuOcrBox | null | undefined): boolean {

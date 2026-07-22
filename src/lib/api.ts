@@ -270,6 +270,7 @@ export async function getMenu(id: string): Promise<{ menu: MenuDetail & { canvas
 export async function createMenu(data: {
   title?: string;
   template_id?: string;
+  canvas_data?: import('@/types/canvas').CanvasData;
 }): Promise<{ menu: { id: string; title: string; canvas_data: import('@/types/canvas').CanvasData } }> {
   return api.post('/api/menus', data);
 }

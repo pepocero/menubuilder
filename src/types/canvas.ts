@@ -61,11 +61,15 @@ export interface ImageLayer extends LayerBase {
 
 export type CanvasLayer = TextLayer | ShapeLayer | ImageLayer;
 
-/** Una página A4 del menú */
+/** Una página del menú (tamaño independiente; por defecto A4). */
 export interface MenuPage {
   id: string;
   background: CanvasBackground;
   layers: CanvasLayer[];
+  /** Ancho en puntos (~72 dpi). Si falta, A4_WIDTH. */
+  width?: number;
+  /** Alto en puntos (~72 dpi). Si falta, A4_HEIGHT. */
+  height?: number;
 }
 
 /**
@@ -86,11 +90,22 @@ export interface CanvasData {
 export const A4_WIDTH = 595;
 export const A4_HEIGHT = 842;
 
-export function createBlankPage(bg = '#FAF6F0'): MenuPage {
+function normalizePageSize(value: unknown, fallback: number): number {
+  return typeof value === 'number' && Number.isFinite(value) && value > 0
+    ? Math.round(value)
+    : fallback;
+}
+
+export function createBlankPage(
+  bg = '#FAF6F0',
+  size?: { width?: number; height?: number },
+): MenuPage {
   return {
     id: `page_${crypto.randomUUID().slice(0, 8)}`,
     background: { type: 'color', value: bg },
     layers: [],
+    width: normalizePageSize(size?.width, A4_WIDTH),
+    height: normalizePageSize(size?.height, A4_HEIGHT),
   };
 }
 
@@ -102,6 +117,8 @@ export const DEFAULT_CANVAS: CanvasData = {
       id: 'page_1',
       background: { type: 'color', value: '#FAF6F0' },
       layers: [],
+      width: A4_WIDTH,
+      height: A4_HEIGHT,
     },
   ],
 };
@@ -120,8 +137,8 @@ export function normalizeCanvasData(raw: unknown): CanvasData {
   if (!raw || typeof raw !== 'object') return fallback;
 
   const d = raw as Record<string, unknown>;
-  const width = typeof d.width === 'number' ? d.width : A4_WIDTH;
-  const height = typeof d.height === 'number' ? d.height : A4_HEIGHT;
+  const width = normalizePageSize(d.width, A4_WIDTH);
+  const height = normalizePageSize(d.height, A4_HEIGHT);
 
   if (Array.isArray(d.pages) && d.pages.length > 0) {
     const pages: MenuPage[] = d.pages.map((p, index) => {
@@ -134,6 +151,8 @@ export function normalizeCanvasData(raw: unknown): CanvasData {
         id: typeof page.id === 'string' ? page.id : `page_${index + 1}`,
         background,
         layers: Array.isArray(page.layers) ? (page.layers as CanvasLayer[]) : [],
+        width: normalizePageSize(page.width, width),
+        height: normalizePageSize(page.height, height),
       };
     });
     return { width, height, pages };
@@ -149,6 +168,8 @@ export function normalizeCanvasData(raw: unknown): CanvasData {
           id: 'page_1',
           background: d.background as CanvasBackground,
           layers: d.layers as CanvasLayer[],
+          width,
+          height,
         },
       ],
     };
@@ -182,12 +203,16 @@ export function validateCanvasData(data: unknown): data is CanvasData {
   );
 }
 
-/** Serializa para guardar siempre en formato pages[] */
+/** Serializa para guardar siempre en formato pages[] con tamaño por página. */
 export function serializeCanvasData(data: CanvasData): CanvasData {
   const normalized = normalizeCanvasData(data);
   return {
-    width: A4_WIDTH,
-    height: A4_HEIGHT,
-    pages: normalized.pages,
+    width: normalized.width || A4_WIDTH,
+    height: normalized.height || A4_HEIGHT,
+    pages: normalized.pages.map((page) => ({
+      ...page,
+      width: normalizePageSize(page.width, normalized.width || A4_WIDTH),
+      height: normalizePageSize(page.height, normalized.height || A4_HEIGHT),
+    })),
   };
 }

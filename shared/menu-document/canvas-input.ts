@@ -56,6 +56,8 @@ export interface ConverterPage {
   id: string;
   background: ConverterBackground;
   layers: ConverterLayer[];
+  width?: number;
+  height?: number;
 }
 
 export interface ConverterCanvasData {
@@ -86,6 +88,12 @@ export function normalizeConverterCanvasData(raw: unknown): ConverterCanvasData 
         id: typeof page.id === 'string' ? page.id : `page_${i + 1}`,
         background,
         layers: Array.isArray(page.layers) ? (page.layers as ConverterLayer[]) : [],
+        width:
+          typeof page.width === 'number' && page.width > 0 ? Math.round(page.width) : width,
+        height:
+          typeof page.height === 'number' && page.height > 0
+            ? Math.round(page.height)
+            : height,
       });
     }
     return { width, height, pages };

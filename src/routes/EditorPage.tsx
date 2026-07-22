@@ -33,6 +33,7 @@ import {
   mergeSelectedTextLayers,
 } from '@/lib/merge-text-layers';
 import { compressImage, dataUrlToBlob, generateThumbnail } from '@/lib/image-compress';
+import { getPageSize, ptToCm } from '@/lib/page-size';
 import {
   canRedoHistory,
   canUndoHistory,
@@ -53,6 +54,7 @@ import { CanvasEditor, type CanvasEditorHandle } from '@/components/editor/Canva
 import { EditorZoomControls, type CanvasInteractionMode } from '@/components/editor/EditorZoomControls';
 import { LayersPanel } from '@/components/editor/LayersPanel';
 import { PropertiesPanel } from '@/components/editor/PropertiesPanel';
+import { PageSizeControls } from '@/components/editor/PageSizeControls';
 import { PublishQrModal } from '@/components/editor/PublishQrModal';
 import { AssetManagerModal } from '@/components/editor/AssetManagerModal';
 import { ImportMenuModal, type ImportMenuOptions, type ImportMenuSource } from '@/components/editor/ImportMenuModal';
@@ -873,11 +875,30 @@ export function EditorPage() {
   }
 
   function handleExportPdf() {
-    const urls = pageRefs.current
-      .map((ref) => ref?.exportPng())
-      .filter((u): u is string => !!u);
-    if (urls.length === 0) return;
-    exportPagesToPdf(urls, title || 'carta-menu');
+    const pagesForPdf = pages
+      .map((page, index) => {
+        const dataUrl = pageRefs.current[index]?.exportPng();
+        if (!dataUrl) return null;
+        const size = getPageSize(page);
+        return { dataUrl, width: size.width, height: size.height };
+      })
+      .filter((p): p is { dataUrl: string; width: number; height: number } => !!p);
+    if (pagesForPdf.length === 0) return;
+    exportPagesToPdf(pagesForPdf, title || 'carta-menu');
+  }
+
+  function handlePageSizeChange(size: { width: number; height: number }) {
+    const index = activePageIndex;
+    setPages((prev) =>
+      prev.map((page, i) =>
+        i === index ? { ...page, width: size.width, height: size.height } : page,
+      ),
+    );
+    // Redimensionar tras el commit de React por si el ref se actualiza en el mismo ciclo.
+    window.requestAnimationFrame(() => {
+      pageRefs.current[index]?.resizePage(size.width, size.height);
+    });
+    scheduleSave();
   }
 
   function handleExportJson() {
@@ -1218,6 +1239,10 @@ export function EditorPage() {
                   {index === activePageIndex && (
                     <span className="page-label-active"> · editando</span>
                   )}
+                  <span className="page-label-size">
+                    {' '}
+                    · {ptToCm(getPageSize(page).width)}×{ptToCm(getPageSize(page).height)} cm
+                  </span>
                 </button>
                 <CanvasEditor
                   ref={(handle) => {
@@ -1246,6 +1271,13 @@ export function EditorPage() {
         </main>
 
         <aside className="editor-sidebar right">
+          {pages[activePageIndex] && (
+            <PageSizeControls
+              page={pages[activePageIndex]}
+              pageIndex={activePageIndex}
+              onChange={handlePageSizeChange}
+            />
+          )}
           <PropertiesPanel
             activeObject={activeObject}
             selectedTextCount={getSelectedTextObjects(getActiveCanvas()).length}

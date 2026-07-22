@@ -185,7 +185,13 @@ export function canvasDataToMenuDocument(
     meta: meta
       ? { ...meta, exportedAt: meta.exportedAt ?? new Date().toISOString() }
       : { exportedAt: new Date().toISOString() },
-    pages: data.pages.map((page) => convertPage(page, canvasW, canvasH)),
+    pages: data.pages.map((page) => {
+      const pageW =
+        typeof page.width === 'number' && page.width > 0 ? page.width : canvasW;
+      const pageH =
+        typeof page.height === 'number' && page.height > 0 ? page.height : canvasH;
+      return convertPage(page, pageW, pageH);
+    }),
   };
 }
 
@@ -323,6 +329,8 @@ export function menuDocumentToCanvasData(doc: MenuDocument): ConverterCanvasData
             value: page.canvas?.background || '#FAF6F0',
           },
       layers,
+      width: canvasW,
+      height: canvasH,
     };
   });
 

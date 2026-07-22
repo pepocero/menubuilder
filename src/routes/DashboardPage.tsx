@@ -1,18 +1,22 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import {
+  ApiError,
   createMenu,
   deleteMenu,
   duplicateMenu,
   listMenus,
   type MenuSummary,
 } from '@/lib/api';
+import { parseMenuImportFile } from '@/lib/export';
 import { AppLayout } from '@/components/AppLayout';
 
 export function DashboardPage() {
   const navigate = useNavigate();
+  const importInputRef = useRef<HTMLInputElement>(null);
   const [menus, setMenus] = useState<MenuSummary[]>([]);
   const [loading, setLoading] = useState(true);
+  const [importing, setImporting] = useState(false);
   const [error, setError] = useState('');
 
   const loadMenus = useCallback(async () => {
@@ -31,20 +35,69 @@ export function DashboardPage() {
   }, [loadMenus]);
 
   async function handleNewBlank() {
-    const { menu } = await createMenu({ title: 'Nuevo menú' });
-    navigate(`/editor/${menu.id}`);
+    setError('');
+    try {
+      const { menu } = await createMenu({ title: 'Nuevo menú' });
+      navigate(`/editor/${menu.id}`);
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : 'No se pudo crear el menú');
+    }
+  }
+
+  async function handleImportMenuFile(file: File) {
+    if (importing) return;
+    setImporting(true);
+    setError('');
+    try {
+      const { canvas, title: docTitle } = await parseMenuImportFile(file);
+      const fromName = file.name.replace(/\.json$/i, '').trim();
+      const title =
+        docTitle ||
+        (fromName && fromName !== 'menu' ? fromName : '') ||
+        'Menú importado';
+
+      const { menu } = await createMenu({ title, canvas_data: canvas });
+      navigate(`/editor/${menu.id}`);
+    } catch (err) {
+      setError(
+        err instanceof ApiError
+          ? err.message
+          : err instanceof Error
+            ? err.message
+            : 'No se pudo importar el menú desde el archivo',
+      );
+    } finally {
+      setImporting(false);
+    }
+  }
+
+  function handleImportInputChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    e.target.value = '';
+    if (!file) return;
+    void handleImportMenuFile(file);
   }
 
   async function handleDuplicate(id: string) {
-    const { menu } = await duplicateMenu(id);
-    await loadMenus();
-    navigate(`/editor/${menu.id}`);
+    setError('');
+    try {
+      const { menu } = await duplicateMenu(id);
+      await loadMenus();
+      navigate(`/editor/${menu.id}`);
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : 'No se pudo duplicar el menú');
+    }
   }
 
   async function handleDelete(id: string) {
     if (!confirm('¿Eliminar este menú?')) return;
-    await deleteMenu(id);
-    await loadMenus();
+    setError('');
+    try {
+      await deleteMenu(id);
+      await loadMenus();
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : 'No se pudo eliminar el menú');
+    }
   }
 
   return (
@@ -54,6 +107,22 @@ export function DashboardPage() {
         <div className="dashboard-header">
           <h1>Mis menús</h1>
           <div className="dashboard-actions">
+            <input
+              ref={importInputRef}
+              type="file"
+              accept="application/json,.json"
+              hidden
+              onChange={handleImportInputChange}
+            />
+            <button
+              type="button"
+              className="btn-secondary"
+              disabled={importing}
+              onClick={() => importInputRef.current?.click()}
+              title="Crear un menú nuevo a partir de un menu.json exportado"
+            >
+              {importing ? 'Importando…' : 'Importar menú'}
+            </button>
             <Link to="/templates" className="btn-secondary">
               Desde plantilla
             </Link>
@@ -68,7 +137,10 @@ export function DashboardPage() {
 
         {!loading && menus.length === 0 && (
           <div className="empty-state">
-            <p>Aún no tienes menús. Crea uno en blanco o elige una plantilla.</p>
+            <p>
+              Aún no tienes menús. Crea uno en blanco, elige una plantilla o importa un
+              menu.json.
+            </p>
           </div>
         )}
 

@@ -2,6 +2,7 @@ import type { MenuOcrResult, MenuOcrSection } from '../../shared/menu-ocr';
 import {
   MENU_OCR_JSON_SCHEMA,
   MENU_OCR_SYSTEM_PROMPT,
+  MENU_OCR_USER_PROMPT,
   parseMenuOcrBox,
 } from '../../shared/menu-ocr';
 import {
@@ -243,10 +244,7 @@ async function extractWithOpenAI(
         {
           role: 'user',
           content: [
-            {
-              type: 'text',
-              text: 'Transcribe esta carta de menú a JSON estructurado. No omitas secciones ni columnas.',
-            },
+            { type: 'text', text: MENU_OCR_USER_PROMPT },
             { type: 'image_url', image_url: { url: dataUrl, detail: 'high' } },
           ],
         },
@@ -293,18 +291,12 @@ async function extractWithWorkersAi(
 
   const b64 = arrayBufferToBase64(imageBytes);
   const dataUrl = `data:${mime || 'image/jpeg'};base64,${b64}`;
-  const userText = `Transcribe esta carta de restaurante a JSON con cajas de posición.
-Devuelve SOLO un objeto JSON válido (sin markdown) con esta forma:
-{"headerTitle":"","headerSubtitle":"","headerTitleBox":{"x":0,"y":0,"w":0,"h":0},"headerSubtitleBox":{"x":0,"y":0,"w":0,"h":0},"sections":[{"title":"","column":"left|right|full","order":1,"body":"","titleBox":{"x":0,"y":0,"w":0,"h":0},"bodyBox":{"x":0,"y":0,"w":0,"h":0},"box":{"x":0,"y":0,"w":0,"h":0}}]}
-Las cajas (x,y,w,h) son porcentajes 0-100 de la imagen. titleBox y bodyBox de cada sección deben coincidir con su ubicación real; body debajo de su título.
-No inventes platos. Precios con coma decimal (8,00 €).`;
-
   const messages = [
     { role: 'system', content: MENU_OCR_SYSTEM_PROMPT },
     {
       role: 'user',
       content: [
-        { type: 'text', text: userText },
+        { type: 'text', text: MENU_OCR_USER_PROMPT },
         { type: 'image_url', image_url: { url: dataUrl, detail: 'high' } },
       ],
     },
