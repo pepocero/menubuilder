@@ -137,10 +137,8 @@ export const CanvasEditor = forwardRef<CanvasEditorHandle, CanvasEditorProps>(
         const target = e.target;
         if (!target || !isTextObject(target)) return;
         const text = target as import('fabric').Textbox;
-        if (text.styles && Object.keys(text.styles).length > 0) {
-          text.styles = {};
-          text.set('styles', {});
-        }
+        // Conservar estilos por carácter (negrita parcial, etc.).
+        // Solo reparar layout si el ancho quedó inválido tras pegar.
         if ((text.width ?? 0) < 48) {
           refreshTextboxLayout(target);
         } else {

@@ -1,19 +1,39 @@
 import { useCallback, useEffect, useState } from 'react';
 import { ApiError, listAssets, type AssetSummary } from '@/lib/api';
+import {
+  DEFAULT_OCR_PROVIDER,
+  MENU_OCR_PROVIDER_OPTIONS,
+  parseOcrProviderChoice,
+  type MenuOcrProviderChoice,
+} from '@shared/ocr-providers';
 
 export type ImportMenuSource =
   | { type: 'file'; file: File }
   | { type: 'asset'; asset: AssetSummary };
 
+export interface ImportMenuOptions {
+  provider: MenuOcrProviderChoice;
+}
+
 interface ImportMenuModalProps {
   open: boolean;
   onClose: () => void;
-  onImport: (source: ImportMenuSource) => void;
+  onImport: (source: ImportMenuSource, options: ImportMenuOptions) => void;
   busy?: boolean;
   pageIndex: number;
 }
 
 type SourceTab = 'upload' | 'library';
+
+const OCR_PROVIDER_STORAGE_KEY = 'menubuilder.ocrProvider';
+
+function readStoredOcrProvider(): MenuOcrProviderChoice {
+  try {
+    return parseOcrProviderChoice(localStorage.getItem(OCR_PROVIDER_STORAGE_KEY));
+  } catch {
+    return DEFAULT_OCR_PROVIDER;
+  }
+}
 
 function assetDisplayName(asset: AssetSummary): string {
   const key = asset.r2_key ?? '';
@@ -36,12 +56,15 @@ export function ImportMenuModal({
   const [tab, setTab] = useState<SourceTab>('upload');
   const [file, setFile] = useState<File | null>(null);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+  const [provider, setProvider] = useState<MenuOcrProviderChoice>(DEFAULT_OCR_PROVIDER);
   const [assets, setAssets] = useState<AssetSummary[]>([]);
   const [assetsLoading, setAssetsLoading] = useState(false);
   const [assetsError, setAssetsError] = useState('');
   const [selectedAssetId, setSelectedAssetId] = useState<string | null>(null);
 
   const selectedAsset = assets.find((a) => a.id === selectedAssetId) ?? null;
+  const selectedProviderHint =
+    MENU_OCR_PROVIDER_OPTIONS.find((p) => p.id === provider)?.hint ?? '';
 
   const loadAssets = useCallback(async () => {
     setAssetsLoading(true);
@@ -72,7 +95,9 @@ export function ImportMenuModal({
       setTab('upload');
       setSelectedAssetId(null);
       setAssetsError('');
+      return;
     }
+    setProvider(readStoredOcrProvider());
   }, [open]);
 
   useEffect(() => {
@@ -80,6 +105,16 @@ export function ImportMenuModal({
       void loadAssets();
     }
   }, [open, tab, loadAssets]);
+
+  function handleProviderChange(value: string) {
+    const next = parseOcrProviderChoice(value);
+    setProvider(next);
+    try {
+      localStorage.setItem(OCR_PROVIDER_STORAGE_KEY, next);
+    } catch {
+      /* ignore */
+    }
+  }
 
   function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
     const selected = e.target.files?.[0];
@@ -94,13 +129,15 @@ export function ImportMenuModal({
     e.preventDefault();
     if (busy) return;
 
+    const options: ImportMenuOptions = { provider };
+
     if (tab === 'upload' && file) {
-      onImport({ type: 'file', file });
+      onImport({ type: 'file', file }, options);
       return;
     }
 
     if (tab === 'library' && selectedAsset?.url) {
-      onImport({ type: 'asset', asset: selectedAsset });
+      onImport({ type: 'asset', asset: selectedAsset }, options);
     }
   }
 
@@ -120,13 +157,30 @@ export function ImportMenuModal({
 
         <form onSubmit={handleSubmit} className="import-menu-form">
           <p className="import-menu-hint">
-            El reconocimiento usa visión por IA (calidad similar a ChatGPT): lee columnas,
-            secciones y precios sin mezclar el texto.
+            El reconocimiento usa visión por IA: lee columnas, secciones y precios. Elige el motor
+            antes de analizar.
           </p>
 
           <p className="import-menu-warning">
             Se reemplazará el contenido de la <strong>página {pageIndex + 1}</strong>.
           </p>
+
+          <label className={`import-menu-field${busy ? ' is-disabled' : ''}`}>
+            <span className="import-menu-field-label">Motor de reconocimiento</span>
+            <select
+              value={provider}
+              onChange={(e) => handleProviderChange(e.target.value)}
+              disabled={busy}
+              aria-describedby="import-ocr-provider-hint"
+            >
+              {MENU_OCR_PROVIDER_OPTIONS.map((option) => (
+                <option key={option.id} value={option.id}>
+                  {option.label}
+                </option>
+              ))}
+            </select>
+            <small id="import-ocr-provider-hint">{selectedProviderHint}</small>
+          </label>
 
           <div className="import-menu-tabs" role="tablist" aria-label="Origen de la imagen">
             <button

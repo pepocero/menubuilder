@@ -16,6 +16,7 @@ import {
   recognizeMenuWithVision,
   updateMenu,
   uploadAsset,
+  type AssetSummary,
 } from '@/lib/api';
 import {
   addLayerToCanvas,
@@ -49,7 +50,7 @@ import { LayersPanel } from '@/components/editor/LayersPanel';
 import { PropertiesPanel } from '@/components/editor/PropertiesPanel';
 import { PublishQrModal } from '@/components/editor/PublishQrModal';
 import { AssetManagerModal } from '@/components/editor/AssetManagerModal';
-import { ImportMenuModal, type ImportMenuSource } from '@/components/editor/ImportMenuModal';
+import { ImportMenuModal, type ImportMenuOptions, type ImportMenuSource } from '@/components/editor/ImportMenuModal';
 import { StockImageSearch } from '@/components/editor/StockImageSearch';
 import { Toolbar, type UploadProgressState } from '@/components/editor/Toolbar';
 
@@ -525,7 +526,7 @@ export function EditorPage() {
     }
   }
 
-  async function handleImportFromImage(source: ImportMenuSource) {
+  async function handleImportFromImage(source: ImportMenuSource, options: ImportMenuOptions) {
     const canvas = getActiveCanvas();
     if (!canvas || uploadInFlightRef.current) return;
     uploadInFlightRef.current = true;
@@ -572,9 +573,10 @@ export function EditorPage() {
 
       setImportPhase('ocr', 2);
       const visionInput = await prepareImageForVisionOcr(sourceBlob);
-      const { menu } = await recognizeMenuWithVision(visionInput, (p) =>
-        setImportPhase('ocr', p),
-      );
+      const { menu } = await recognizeMenuWithVision(visionInput, {
+        provider: options.provider,
+        onProgress: (p) => setImportPhase('ocr', p),
+      });
 
       if (!menu.headerTitle && menu.sections.length === 0) {
         throw new Error(
@@ -710,6 +712,62 @@ export function EditorPage() {
 
     refreshObjects();
     scheduleSave();
+  }
+
+  async function handleUseAssetOnPage(asset: AssetSummary) {
+    const canvas = getActiveCanvas();
+    if (!canvas) {
+      throw new Error('No hay página activa en el editor');
+    }
+    if (!asset.url) {
+      throw new Error('El archivo no tiene una URL válida');
+    }
+
+    setEditorError('');
+
+    const natural = await new Promise<{ width: number; height: number }>((resolve, reject) => {
+      const img = new Image();
+      img.onload = () =>
+        resolve({
+          width: img.naturalWidth || 220,
+          height: img.naturalHeight || 220,
+        });
+      img.onerror = () => reject(new Error('No se pudo cargar la imagen del archivo'));
+      img.crossOrigin = 'anonymous';
+      img.src = asset.url!;
+    });
+
+    const maxW = 280;
+    const ratio = natural.height / Math.max(natural.width, 1);
+    const layer = {
+      id: `layer_${crypto.randomUUID().slice(0, 8)}`,
+      type: 'image' as const,
+      name: 'Imagen',
+      src: asset.url,
+      assetId: asset.id,
+      x: 100,
+      y: 150,
+      width: maxW,
+      height: Math.round(maxW * ratio),
+      rotation: 0,
+      zIndex: canvas.getObjects().length + 1,
+    };
+
+    const img = await imageLayerToFabricObject(layer);
+    (img as FabricObject & { data?: Record<string, unknown> }).data = {
+      ...((img as FabricObject & { data?: Record<string, unknown> }).data ?? {}),
+      assetId: asset.id,
+      src: asset.url,
+      layerType: 'image',
+      layerId: layer.id,
+      layerName: layer.name,
+    };
+    canvas.add(img);
+    canvas.setActiveObject(img);
+    canvas.requestRenderAll();
+    setActiveObject(img);
+    setAssetsOpen(false);
+    handleChange();
   }
 
   async function handleStockSelect(image: StockImage) {
@@ -1115,6 +1173,7 @@ export function EditorPage() {
         open={assetsOpen}
         onClose={() => setAssetsOpen(false)}
         menuId={menuId}
+        onUseOnPage={handleUseAssetOnPage}
         onAssetDeleted={(asset) => {
           void handleAssetDeletedFromManager(asset);
         }}

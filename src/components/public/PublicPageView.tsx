@@ -1,6 +1,8 @@
 import { useEffect, useRef, useState } from 'react';
-import type { CanvasLayer, MenuPage } from '@/types/canvas';
+import type { CanvasLayer, MenuPage, TextLayer } from '@/types/canvas';
 import { A4_HEIGHT, A4_WIDTH } from '@/types/canvas';
+import { ensureEditorFontLoaded } from '@/lib/google-fonts';
+import { renderTextContentWithCharStyles } from '@/lib/text-char-styles';
 
 interface PublicPageViewProps {
   page: MenuPage;
@@ -31,6 +33,7 @@ function layerStyle(layer: CanvasLayer, scale: number): React.CSSProperties {
       fontFamily: layer.style.fontFamily,
       fontSize: Math.max(layer.style.fontSize * scale, 4),
       fontWeight: layer.style.fontWeight,
+      fontStyle: layer.style.fontStyle,
       textAlign: layer.style.align,
       whiteSpace: 'pre-wrap',
       lineHeight: 1.2,
@@ -72,6 +75,37 @@ function layerStyle(layer: CanvasLayer, scale: number): React.CSSProperties {
   }
 
   return base;
+}
+
+function TextLayerView({ layer, scale }: { layer: TextLayer; scale: number }) {
+  useEffect(() => {
+    ensureEditorFontLoaded(layer.style.fontFamily);
+    if (!layer.charStyles) return;
+    for (const line of Object.values(layer.charStyles)) {
+      for (const style of Object.values(line)) {
+        if (typeof style.fontFamily === 'string') {
+          ensureEditorFontLoaded(style.fontFamily);
+        }
+      }
+    }
+  }, [layer]);
+
+  return (
+    <div style={layerStyle(layer, scale)}>
+      {renderTextContentWithCharStyles(
+        layer.content,
+        layer.charStyles,
+        {
+          color: layer.style.color,
+          fontFamily: layer.style.fontFamily,
+          fontSize: layer.style.fontSize,
+          fontWeight: layer.style.fontWeight,
+          fontStyle: layer.style.fontStyle,
+        },
+        scale,
+      )}
+    </div>
+  );
 }
 
 export function PublicPageView({
@@ -127,11 +161,7 @@ export function PublicPageView({
 
       {layers.map((layer) => {
         if (layer.type === 'text') {
-          return (
-            <div key={layer.id} style={layerStyle(layer, scale)}>
-              {layer.content}
-            </div>
-          );
+          return <TextLayerView key={layer.id} layer={layer} scale={scale} />;
         }
 
         if (layer.type === 'image') {

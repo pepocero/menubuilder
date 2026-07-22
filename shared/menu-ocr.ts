@@ -19,7 +19,7 @@ export interface MenuOcrResult {
   headerTitle: string;
   headerSubtitle: string;
   sections: MenuOcrSection[];
-  /** Motor usado: openai | workers-ai */
+  /** Motor usado: openai | workers-ai | … */
   provider?: string;
 }
 

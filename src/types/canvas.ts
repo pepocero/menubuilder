@@ -9,6 +9,7 @@ export interface TextStyle {
   color: string;
   align: 'left' | 'center' | 'right';
   fontWeight?: string;
+  fontStyle?: string;
   opacity?: number;
 }
 
@@ -39,6 +40,11 @@ export interface TextLayer extends LayerBase {
   type: 'text';
   content: string;
   style: TextStyle;
+  /**
+   * Estilos por carácter (formato Fabric Textbox.styles).
+   * Permite negrita/cursiva/etc. en una porción del texto.
+   */
+  charStyles?: Record<string, Record<string, Record<string, unknown>>>;
 }
 
 export interface ShapeLayer extends LayerBase {

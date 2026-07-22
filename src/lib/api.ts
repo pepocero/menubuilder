@@ -355,11 +355,17 @@ export async function uploadAsset(
   return api.upload('/api/assets', file);
 }
 
-/** OCR de carta por visión (servidor: OpenAI o Workers AI). */
+/** OCR de carta por visión (servidor: OpenAI, Workers AI u otros). */
 export async function recognizeMenuWithVision(
   image: Blob,
-  onProgress?: (percent: number) => void,
-): Promise<{ menu: import('@shared/menu-ocr').MenuOcrResult }> {
+  options?: {
+    provider?: import('@shared/ocr-providers').MenuOcrProviderChoice;
+    onProgress?: (percent: number) => void;
+  },
+): Promise<{ menu: import('@shared/menu-ocr').MenuOcrResult; provider?: string }> {
+  const onProgress = options?.onProgress;
+  const provider = options?.provider ?? 'auto';
+
   const file =
     image instanceof File
       ? image
@@ -373,10 +379,17 @@ export async function recognizeMenuWithVision(
   }, 400);
 
   try {
-    const result = await api.upload<{ menu: import('@shared/menu-ocr').MenuOcrResult }>(
-      '/api/ocr/menu',
-      file,
-    );
+    const formData = new FormData();
+    formData.append('file', file);
+    formData.append('provider', provider);
+
+    const result = await request<{
+      menu: import('@shared/menu-ocr').MenuOcrResult;
+      provider?: string;
+    }>('/api/ocr/menu', {
+      method: 'POST',
+      body: formData,
+    });
     onProgress?.(100);
     return result;
   } finally {

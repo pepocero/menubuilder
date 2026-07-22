@@ -1,8 +1,14 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import type { FabricImage, FabricObject, Textbox } from 'fabric';
 import { fitImageToA4, isImageObject, isShapeObject, isTextObject, refreshTextboxLayout, toHexColor } from '@/lib/canvas-serializer';
-import { EDITOR_FONTS, ensureEditorFontLoaded } from '@/lib/google-fonts';
+import { ensureEditorFontLoaded } from '@/lib/google-fonts';
 import { getLayerDisplayName, getLayerObjectData, setLayerObjectData } from '@/lib/layer-utils';
+import {
+  applyTextStyleProps,
+  getTextFormatState,
+  textboxHasSelection,
+} from '@/lib/text-char-styles';
+import { FontFamilyPicker } from '@/components/editor/FontFamilyPicker';
 
 interface PropertiesPanelProps {
   activeObject: FabricObject | null;
@@ -13,15 +19,36 @@ function asTextbox(obj: FabricObject): Textbox {
   return obj as Textbox;
 }
 
-/** Estilos por carácter (p. ej. tras pegar) que anulan la fuente/tamaño del cuadro. */
+/** Estilos por carácter (negrita parcial, pegados, etc.). */
 function hasCharacterStyles(obj: FabricObject): boolean {
   const styles = asTextbox(obj).styles;
   if (!styles || typeof styles !== 'object') return false;
   return Object.keys(styles).length > 0;
 }
 
+/** Evita que el botón robe el foco y se pierda la selección del texto. */
+function preserveTextSelection(e: React.MouseEvent) {
+  e.preventDefault();
+}
+
 export function PropertiesPanel({ activeObject, onUpdate }: PropertiesPanelProps) {
   const [, setTick] = useState(0);
+
+  useEffect(() => {
+    if (!activeObject || !isTextObject(activeObject)) return;
+    const canvas = activeObject.canvas;
+    if (!canvas) return;
+
+    const bump = () => setTick((t) => t + 1);
+    canvas.on('text:selection:changed', bump);
+    canvas.on('text:editing:entered', bump);
+    canvas.on('text:editing:exited', bump);
+    return () => {
+      canvas.off('text:selection:changed', bump);
+      canvas.off('text:editing:entered', bump);
+      canvas.off('text:editing:exited', bump);
+    };
+  }, [activeObject]);
 
   if (!activeObject) {
     return (
@@ -45,11 +72,20 @@ export function PropertiesPanel({ activeObject, onUpdate }: PropertiesPanelProps
     refresh();
   }
 
-  /** Cambia estilo de texto y unifica: elimina overrides por carácter. */
+  /**
+   * Aplica estilo a la selección (si editas con texto marcado) o al cuadro entero.
+   * No borra otros formatos parciales.
+   */
   function updateTextStyle(props: Record<string, unknown>) {
     if (!activeObject || !isTextObject(activeObject)) return;
-    activeObject.set(props);
-    refreshTextboxLayout(activeObject);
+    applyTextStyleProps(asTextbox(activeObject), props);
+    refresh();
+  }
+
+  /** Alineación siempre a nivel de cuadro. */
+  function updateTextAlign(align: 'left' | 'center' | 'right') {
+    if (!activeObject || !isTextObject(activeObject)) return;
+    activeObject.set({ textAlign: align });
     activeObject.setCoords();
     activeObject.canvas?.requestRenderAll();
     refresh();
@@ -57,7 +93,7 @@ export function PropertiesPanel({ activeObject, onUpdate }: PropertiesPanelProps
 
   function handleUnifyFormat() {
     if (!activeObject || !isTextObject(activeObject)) return;
-    refreshTextboxLayout(activeObject);
+    refreshTextboxLayout(activeObject, { clearCharStyles: true });
     activeObject.canvas?.requestRenderAll();
     refresh();
   }
@@ -65,26 +101,17 @@ export function PropertiesPanel({ activeObject, onUpdate }: PropertiesPanelProps
   const layerData = getLayerObjectData(activeObject);
   const layerName = layerData.layerName ?? '';
 
-  const textObj = isTextObject(activeObject)
-    ? (activeObject as FabricObject & {
-        text?: string;
-        fontFamily?: string;
-        fontSize?: number;
-        fontWeight?: string | number;
-        fontStyle?: string;
-        fill?: string;
-        textAlign?: string;
-      })
-    : null;
+  const textObj = isTextObject(activeObject) ? asTextbox(activeObject) : null;
 
   const fillColor = toHexColor(activeObject.fill, '#cccccc');
   const strokeColor = toHexColor(activeObject.stroke, '#000000');
   const mixedStyles = textObj ? hasCharacterStyles(activeObject) : false;
-  const isBold =
-    textObj?.fontWeight === 'bold' ||
-    textObj?.fontWeight === '700' ||
-    Number(textObj?.fontWeight) >= 600;
-  const isItalic = textObj?.fontStyle === 'italic' || textObj?.fontStyle === 'oblique';
+  const formatState = textObj
+    ? getTextFormatState(textObj)
+    : { bold: false, italic: false };
+  const isBold = formatState.bold;
+  const isItalic = formatState.italic;
+  const hasPartialSelection = textObj ? textboxHasSelection(textObj) : false;
 
   return (
     <div className="properties-panel">
@@ -146,31 +173,32 @@ export function PropertiesPanel({ activeObject, onUpdate }: PropertiesPanelProps
             <textarea
               value={textObj.text ?? ''}
               onChange={(e) => {
-                textObj.set({ text: e.target.value });
-                refreshTextboxLayout(activeObject);
+                textObj.set({ text: e.target.value, dirty: true });
+                textObj.initDimensions();
+                textObj.setCoords();
+                textObj.canvas?.requestRenderAll();
                 refresh();
               }}
               rows={4}
             />
           </label>
-          <label>
+          {hasPartialSelection && (
+            <p className="panel-hint properties-selection-hint">
+              Hay texto seleccionado en el lienzo: negrita, cursiva, fuente, tamaño y color se
+              aplican solo a esa porción.
+            </p>
+          )}
+          <label onMouseDown={preserveTextSelection}>
             Fuente
-            <select
+            <FontFamilyPicker
               value={textObj.fontFamily ?? 'Arial'}
-              onChange={(e) => {
-                ensureEditorFontLoaded(e.target.value);
-                updateTextStyle({ fontFamily: e.target.value });
+              onChange={(fontFamily) => {
+                ensureEditorFontLoaded(fontFamily);
+                updateTextStyle({ fontFamily });
               }}
-            >
-              {EDITOR_FONTS.map((font) => (
-                <option key={font.value} value={font.value}>
-                  {font.label}
-                  {font.local ? ' (local)' : ''}
-                </option>
-              ))}
-            </select>
+            />
           </label>
-          <label>
+          <label onMouseDown={preserveTextSelection}>
             Tamaño
             <input
               type="number"
@@ -180,7 +208,7 @@ export function PropertiesPanel({ activeObject, onUpdate }: PropertiesPanelProps
               onChange={(e) => updateTextStyle({ fontSize: Number(e.target.value) })}
             />
           </label>
-          <label>
+          <label onMouseDown={preserveTextSelection}>
             Color
             <input
               type="color"
@@ -192,8 +220,13 @@ export function PropertiesPanel({ activeObject, onUpdate }: PropertiesPanelProps
             <button
               type="button"
               className={isBold ? 'is-active' : undefined}
-              title="Negrita"
+              title={
+                hasPartialSelection
+                  ? 'Negrita (solo selección)'
+                  : 'Negrita (todo el texto de la capa)'
+              }
               aria-pressed={isBold}
+              onMouseDown={preserveTextSelection}
               onClick={() =>
                 updateTextStyle({ fontWeight: isBold ? 'normal' : 'bold' })
               }
@@ -203,8 +236,13 @@ export function PropertiesPanel({ activeObject, onUpdate }: PropertiesPanelProps
             <button
               type="button"
               className={isItalic ? 'is-active' : undefined}
-              title="Cursiva"
+              title={
+                hasPartialSelection
+                  ? 'Cursiva (solo selección)'
+                  : 'Cursiva (todo el texto de la capa)'
+              }
               aria-pressed={isItalic}
+              onMouseDown={preserveTextSelection}
               onClick={() =>
                 updateTextStyle({ fontStyle: isItalic ? 'normal' : 'italic' })
               }
@@ -218,7 +256,7 @@ export function PropertiesPanel({ activeObject, onUpdate }: PropertiesPanelProps
               className={(textObj.textAlign ?? 'left') === 'left' ? 'is-active' : undefined}
               title="Alinear a la izquierda"
               aria-pressed={(textObj.textAlign ?? 'left') === 'left'}
-              onClick={() => updateTextStyle({ textAlign: 'left' })}
+              onClick={() => updateTextAlign('left')}
             >
               <svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true">
                 <rect x="1" y="2" width="14" height="1.5" fill="currentColor" />
@@ -232,7 +270,7 @@ export function PropertiesPanel({ activeObject, onUpdate }: PropertiesPanelProps
               className={textObj.textAlign === 'center' ? 'is-active' : undefined}
               title="Centrar"
               aria-pressed={textObj.textAlign === 'center'}
-              onClick={() => updateTextStyle({ textAlign: 'center' })}
+              onClick={() => updateTextAlign('center')}
             >
               <svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true">
                 <rect x="1" y="2" width="14" height="1.5" fill="currentColor" />
@@ -246,7 +284,7 @@ export function PropertiesPanel({ activeObject, onUpdate }: PropertiesPanelProps
               className={textObj.textAlign === 'right' ? 'is-active' : undefined}
               title="Alinear a la derecha"
               aria-pressed={textObj.textAlign === 'right'}
-              onClick={() => updateTextStyle({ textAlign: 'right' })}
+              onClick={() => updateTextAlign('right')}
             >
               <svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true">
                 <rect x="1" y="2" width="14" height="1.5" fill="currentColor" />
@@ -259,8 +297,8 @@ export function PropertiesPanel({ activeObject, onUpdate }: PropertiesPanelProps
 
           {mixedStyles && (
             <p className="panel-hint properties-mixed-hint">
-              Este cuadro tiene formatos mezclados (p. ej. tras pegar texto). Usa «Unificar formato»
-              o cambia fuente/tamaño para aplicar un solo estilo a todo.
+              Esta capa tiene formatos distintos en partes del texto. Usa «Unificar formato» si
+              quieres un solo estilo en todo el cuadro.
             </p>
           )}
           <button

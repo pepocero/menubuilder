@@ -11,6 +11,16 @@ export interface EditorFontOption {
 export const EDITOR_FONTS: EditorFontOption[] = [
   { label: 'Poppins', value: 'Poppins', google: 'Poppins:wght@300;400;500;600;700' },
   { label: 'Another Shabby', value: 'Another Shabby', local: true },
+  { label: 'Qwitcher Grypen', value: 'Qwitcher Grypen', google: 'Qwitcher+Grypen:wght@400;700' },
+  { label: 'Smooch', value: 'Smooch', google: 'Smooch' },
+  { label: 'Allura', value: 'Allura', google: 'Allura' },
+  { label: 'Satisfy', value: 'Satisfy', google: 'Satisfy' },
+  { label: 'Rubik Distressed', value: 'Rubik Distressed', google: 'Rubik+Distressed' },
+  { label: 'Rubik Dirt', value: 'Rubik Dirt', google: 'Rubik+Dirt' },
+  { label: 'Rock Salt', value: 'Rock Salt', google: 'Rock+Salt' },
+  { label: 'Homemade Apple', value: 'Homemade Apple', google: 'Homemade+Apple' },
+  { label: 'Walter Turncoat', value: 'Walter Turncoat', google: 'Walter+Turncoat' },
+  { label: 'Covered By Your Grace', value: 'Covered By Your Grace', google: 'Covered+By+Your+Grace' },
   { label: 'Playfair Display', value: 'Playfair Display', google: 'Playfair+Display:wght@400;700' },
   { label: 'Montserrat', value: 'Montserrat', google: 'Montserrat:wght@400;500;600;700' },
   { label: 'Roboto', value: 'Roboto', google: 'Roboto:wght@300;400;500;700' },
@@ -51,7 +61,16 @@ export function ensureEditorFontLoaded(fontFamily: string): void {
 
 /** Precarga las fuentes más usadas al abrir el editor. */
 export function preloadCommonEditorFonts(): void {
-  for (const font of ['Poppins', 'Playfair Display', 'Another Shabby', 'Caveat']) {
+  for (const font of [
+    'Poppins',
+    'Playfair Display',
+    'Another Shabby',
+    'Qwitcher Grypen',
+    'Smooch',
+    'Allura',
+    'Satisfy',
+    'Caveat',
+  ]) {
     ensureEditorFontLoaded(font);
   }
 }

@@ -1,6 +1,18 @@
 import type { MenuOcrResult } from '../../shared/menu-ocr';
 import { MENU_OCR_JSON_SCHEMA, MENU_OCR_SYSTEM_PROMPT } from '../../shared/menu-ocr';
+import {
+  isOcrProviderRetryableError,
+  parseOcrProviderChoice,
+  type MenuOcrProviderChoice,
+  type MenuOcrProviderId,
+} from '../../shared/ocr-providers';
 import type { Env } from './types';
+
+type OcrExtractor = (
+  env: Env,
+  imageBytes: ArrayBuffer,
+  mime: string,
+) => Promise<MenuOcrResult>;
 
 function arrayBufferToBase64(buffer: ArrayBuffer): string {
   const bytes = new Uint8Array(buffer);
@@ -86,12 +98,17 @@ async function extractWithOpenAI(
   });
 
   const payload = (await response.json()) as {
-    error?: { message?: string };
+    error?: { message?: string; code?: string; type?: string };
     choices?: Array<{ message?: { content?: string } }>;
   };
 
   if (!response.ok) {
-    throw new Error(payload.error?.message ?? `OpenAI OCR falló (${response.status})`);
+    const detail =
+      payload.error?.message ??
+      payload.error?.code ??
+      payload.error?.type ??
+      `OpenAI OCR falló (${response.status})`;
+    throw new Error(detail);
   }
 
   const content = payload.choices?.[0]?.message?.content;
@@ -132,19 +149,75 @@ Devuelve SOLO el JSON con esta forma:
   return result;
 }
 
-/** OCR de carta con visión: OpenAI (preferido) o Workers AI. */
-export async function extractMenuWithVision(
+/**
+ * Registro de extractores. Al añadir un proveedor nuevo, registra aquí la función.
+ */
+const OCR_EXTRACTORS: Record<MenuOcrProviderId, OcrExtractor> = {
+  openai: extractWithOpenAI,
+  'workers-ai': extractWithWorkersAi,
+};
+
+function providerAvailable(env: Env, id: MenuOcrProviderId): boolean {
+  if (id === 'openai') return !!env.OPENAI_API_KEY;
+  if (id === 'workers-ai') return !!env.AI;
+  return false;
+}
+
+/** Orden de intento en modo auto (prioridad → fallback). */
+function autoProviderChain(env: Env): MenuOcrProviderId[] {
+  const chain: MenuOcrProviderId[] = [];
+  if (providerAvailable(env, 'openai')) chain.push('openai');
+  if (providerAvailable(env, 'workers-ai')) chain.push('workers-ai');
+  return chain;
+}
+
+async function runExtractor(
+  id: MenuOcrProviderId,
   env: Env,
   imageBytes: ArrayBuffer,
   mime: string,
 ): Promise<MenuOcrResult> {
-  if (env.OPENAI_API_KEY) {
-    return extractWithOpenAI(env, imageBytes, mime);
+  if (!providerAvailable(env, id)) {
+    if (id === 'openai') throw new Error('OPENAI_API_KEY no configurada');
+    if (id === 'workers-ai') throw new Error('Workers AI no está configurado');
+    throw new Error(`Proveedor OCR no disponible: ${id}`);
   }
-  if (env.AI) {
-    return extractWithWorkersAi(env, imageBytes);
+  return OCR_EXTRACTORS[id](env, imageBytes, mime);
+}
+
+/** OCR de carta con visión según la preferencia del usuario. */
+export async function extractMenuWithVision(
+  env: Env,
+  imageBytes: ArrayBuffer,
+  mime: string,
+  providerChoice: MenuOcrProviderChoice | string = 'auto',
+): Promise<MenuOcrResult> {
+  const choice = parseOcrProviderChoice(providerChoice);
+
+  if (choice !== 'auto') {
+    return runExtractor(choice, env, imageBytes, mime);
   }
-  throw new Error(
-    'OCR por visión no configurado. Añade el secreto OPENAI_API_KEY o el binding AI de Workers AI.',
-  );
+
+  const chain = autoProviderChain(env);
+  if (chain.length === 0) {
+    throw new Error(
+      'OCR por visión no configurado. Añade OPENAI_API_KEY y/o el binding AI de Workers AI.',
+    );
+  }
+
+  let lastError: Error | null = null;
+  for (let i = 0; i < chain.length; i++) {
+    const id = chain[i];
+    try {
+      return await runExtractor(id, env, imageBytes, mime);
+    } catch (err) {
+      lastError = err instanceof Error ? err : new Error(String(err));
+      const hasNext = i < chain.length - 1;
+      if (!hasNext || !isOcrProviderRetryableError(lastError.message)) {
+        throw lastError;
+      }
+    }
+  }
+
+  throw lastError ?? new Error('OCR por visión falló');
 }

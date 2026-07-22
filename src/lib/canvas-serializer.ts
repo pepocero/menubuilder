@@ -41,20 +41,24 @@ export function isShapeObject(obj: FabricObject): boolean {
 }
 
 /**
- * Tras pegar texto largo, Fabric a menudo deja estilos por carácter y un ancho/alto
- * inválidos: el cuadro parece vacío aunque `text` tenga contenido.
+ * Tras pegar texto largo, Fabric a menudo deja un ancho/alto inválidos.
  * Normaliza el Textbox para que vuelva a verse y quepa en el A4.
+ * Por defecto NO borra estilos por carácter (negrita parcial, etc.).
  */
-export function refreshTextboxLayout(obj: FabricObject): void {
+export function refreshTextboxLayout(
+  obj: FabricObject,
+  options?: { clearCharStyles?: boolean },
+): void {
   if (!isTextObject(obj)) return;
 
   const text = obj as Textbox;
   const content = text.text ?? '';
   const fontSize = Math.max(8, Math.min(120, Number(text.fontSize) || 16));
 
-  // Pegados ricos (Word, web…) dejan styles que pueden ocultar o colapsar el texto
-  text.styles = {};
-  text.set('styles', {});
+  if (options?.clearCharStyles) {
+    text.styles = {};
+    text.set('styles', {});
+  }
 
   let width = Number(text.width) || 0;
   if (!Number.isFinite(width) || width < 48) {
@@ -95,7 +99,6 @@ export function refreshTextboxLayout(obj: FabricObject): void {
 
   const minHeight = fontSize * 1.25;
   if ((text.height ?? 0) < minHeight && content.trim().length > 0) {
-    // Forzar un segundo cálculo: a veces el primer initDimensions falla tras un paste
     text.set({ text: content, width, dirty: true });
     text.initDimensions();
   }
@@ -145,6 +148,11 @@ export function layerToFabricObject(layer: CanvasLayer): FabricObject | null {
       fill: textLayer.style.color,
       textAlign: textLayer.style.align,
       fontWeight: textLayer.style.fontWeight ?? 'normal',
+      fontStyle:
+        textLayer.style.fontStyle === 'italic' || textLayer.style.fontStyle === 'oblique'
+          ? textLayer.style.fontStyle
+          : 'normal',
+      styles: textLayer.charStyles ? structuredClone(textLayer.charStyles) : {},
     });
     (obj as FabricObject & { data?: unknown }).data = layerDataFromLayer(layer);
     return obj;
@@ -295,6 +303,17 @@ export function fabricObjectToLayer(obj: FabricObject, zIndex: number): CanvasLa
 
   if (isTextObject(obj)) {
     const textObj = obj as Textbox;
+    const charStyles = (() => {
+      const styles = textObj.styles;
+      if (!styles || typeof styles !== 'object' || Object.keys(styles).length === 0) {
+        return undefined;
+      }
+      try {
+        return JSON.parse(JSON.stringify(styles)) as TextLayer['charStyles'];
+      } catch {
+        return undefined;
+      }
+    })();
     return {
       ...base,
       type: 'text',
@@ -305,8 +324,10 @@ export function fabricObjectToLayer(obj: FabricObject, zIndex: number): CanvasLa
         color: toHexColor(textObj.fill, '#000000'),
         align: (textObj.textAlign as 'left' | 'center' | 'right') ?? 'left',
         fontWeight: textObj.fontWeight as string | undefined,
+        fontStyle: (textObj.fontStyle as string | undefined) || undefined,
         opacity: textObj.opacity,
       },
+      ...(charStyles ? { charStyles } : {}),
     } as TextLayer;
   }
 
