@@ -424,13 +424,28 @@ export function canvasToPageData(canvas: Canvas, pageId: string): MenuPage {
     .map((obj, index) => fabricObjectToLayer(obj, index + 1))
     .filter((l): l is CanvasLayer => l !== null);
 
-  const bg = canvas.backgroundColor;
-  const background =
-    typeof bg === 'string'
-      ? { type: 'color' as const, value: bg }
-      : { type: 'color' as const, value: '#FFFFFF' };
-
   const { width, height } = getCanvasLogicalSize(canvas);
+
+  let background: MenuPage['background'] = { type: 'color', value: '#FFFFFF' };
+  const bgImage = canvas.backgroundImage;
+  if (bgImage && typeof bgImage === 'object') {
+    const src =
+      (bgImage as FabricImage & { data?: { src?: string } }).data?.src ||
+      (typeof (bgImage as FabricImage).getSrc === 'function'
+        ? (bgImage as FabricImage).getSrc()
+        : '') ||
+      '';
+    if (src) {
+      background = { type: 'image', value: src };
+    }
+  }
+  if (background.type !== 'image') {
+    const bg = canvas.backgroundColor;
+    background =
+      typeof bg === 'string'
+        ? { type: 'color', value: bg }
+        : { type: 'color', value: '#FFFFFF' };
+  }
 
   return {
     id: pageId,

@@ -114,6 +114,7 @@ export const onRequestDelete: PagesFunction<Env> = async (context) => {
     );
 
     let refsEncoded = 0;
+    let refsQuery = 0;
     if (asset.r2_key) {
       const encodedPath = `/api/assets/file/${encodeURIComponent(asset.r2_key)}`;
       if (encodedPath !== urlToCheck) {
@@ -124,9 +125,18 @@ export const onRequestDelete: PagesFunction<Env> = async (context) => {
           body.exclude_menu_id,
         );
       }
+      const queryPath = `/api/assets/file?key=${encodeURIComponent(asset.r2_key)}`;
+      if (queryPath !== urlToCheck) {
+        refsQuery = await countMenusReferencingAssetUrl(
+          env.DB,
+          userId,
+          queryPath,
+          body.exclude_menu_id,
+        );
+      }
     }
 
-    if (refs + refsEncoded > 0) {
+    if (refs + refsEncoded + refsQuery > 0) {
       return jsonResponse({
         deleted: false,
         kept: true,

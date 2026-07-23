@@ -213,6 +213,21 @@ export function applyTextStyleProps(
   text.canvas?.requestRenderAll();
 }
 
+function normalizeFontWeight(value: unknown): string | number | undefined {
+  if (value === undefined || value === null) return undefined;
+  if (isBoldValue(value)) return 700;
+  if (value === 'normal' || value === '400' || Number(value) === 400) return 400;
+  if (typeof value === 'string' || typeof value === 'number') return value;
+  return undefined;
+}
+
+function normalizeFontStyle(value: unknown): string | undefined {
+  if (typeof value !== 'string') return undefined;
+  if (isItalicValue(value)) return 'italic';
+  if (value === 'normal') return 'normal';
+  return value;
+}
+
 function styleRecordToCss(
   base: {
     color?: string;
@@ -234,6 +249,15 @@ function styleRecordToCss(
         ? Math.max(base.fontSize * fontSizeScale, fontSizeUnit === 'cqw' ? 0.05 : 4)
         : undefined;
 
+  const fontWeight =
+    charStyle?.fontWeight !== undefined
+      ? normalizeFontWeight(charStyle.fontWeight)
+      : normalizeFontWeight(base.fontWeight);
+  const fontStyle =
+    charStyle?.fontStyle !== undefined
+      ? normalizeFontStyle(charStyle.fontStyle)
+      : normalizeFontStyle(base.fontStyle);
+
   return {
     color: typeof fill === 'string' ? fill : base.color,
     fontFamily:
@@ -244,12 +268,8 @@ function styleRecordToCss(
         : fontSizeUnit === 'cqw'
           ? `${resolvedSize}cqw`
           : resolvedSize,
-    fontWeight:
-      charStyle?.fontWeight !== undefined
-        ? (charStyle.fontWeight as string | number)
-        : base.fontWeight,
-    fontStyle:
-      typeof charStyle?.fontStyle === 'string' ? charStyle.fontStyle : base.fontStyle,
+    fontWeight,
+    fontStyle,
   };
 }
 

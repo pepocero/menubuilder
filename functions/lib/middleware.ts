@@ -51,7 +51,12 @@ export function isPublicApiPath(pathname: string, method: string): boolean {
   if (pathname.startsWith('/api/auth/')) return true;
   if (pathname === '/api/templates' && method === 'GET') return true;
   if (pathname.startsWith('/api/templates/') && method === 'GET') return true;
-  if (pathname.startsWith('/api/assets/file/') && method === 'GET') return true;
+  if (
+    method === 'GET' &&
+    (pathname === '/api/assets/file' || pathname.startsWith('/api/assets/file/'))
+  ) {
+    return true;
+  }
   if (pathname.startsWith('/api/public/') && method === 'GET') return true;
   return false;
 }

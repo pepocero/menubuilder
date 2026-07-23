@@ -44,15 +44,28 @@ export async function deleteFromR2(bucket: R2Bucket, key: string): Promise<void>
   await bucket.delete(key);
 }
 
-/** Extrae la r2_key de una URL pública `/api/assets/file/...` */
+/** Extrae la r2_key de una URL pública `/api/assets/file?...` o `/api/assets/file/...` */
 export function parseR2KeyFromAssetUrl(url: string): string | null {
   try {
-    const marker = '/api/assets/file/';
+    const marker = '/api/assets/file';
     const idx = url.indexOf(marker);
     if (idx === -1) return null;
-    const encoded = url.slice(idx + marker.length).split('?')[0];
-    if (!encoded) return null;
-    return decodeURIComponent(encoded);
+
+    const rest = url.slice(idx + marker.length);
+    if (rest.startsWith('?')) {
+      const params = new URLSearchParams(rest.slice(1).split('#')[0]);
+      const key = params.get('key');
+      if (!key) return null;
+      return decodeURIComponent(key);
+    }
+
+    if (rest.startsWith('/')) {
+      const encoded = rest.slice(1).split('?')[0].split('#')[0];
+      if (!encoded) return null;
+      return decodeURIComponent(encoded);
+    }
+
+    return null;
   } catch {
     return null;
   }
@@ -82,6 +95,6 @@ export async function fetchRemoteImage(
 }
 
 export function getAssetPublicUrl(_request: Request, r2Key: string): string {
-  // Relative URL so the browser stays same-origin (Vite proxy in dev / Pages in prod).
-  return `/api/assets/file/${encodeURIComponent(r2Key)}`;
+  // Query param: fiable aunque el path decodifique `/` (el [key] de un segmento fallaba).
+  return `/api/assets/file?key=${encodeURIComponent(r2Key)}`;
 }

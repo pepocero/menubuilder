@@ -1,4 +1,5 @@
 import type { MenuDocumentImageElement } from '@shared/menu-document/types';
+import { normalizeAssetUrl } from '@/lib/asset-url';
 import { PositionedElement } from '../positioned-element';
 
 interface ImageElementProps {
@@ -17,7 +18,7 @@ export function ImageElement({ element }: ImageElementProps) {
         }}
       >
         <img
-          src={element.src}
+          src={normalizeAssetUrl(element.src)}
           alt={element.alt ?? ''}
           draggable={false}
           decoding="async"

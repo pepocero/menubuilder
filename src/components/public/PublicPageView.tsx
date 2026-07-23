@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import type { CanvasLayer, MenuPage, TextLayer } from '@/types/canvas';
+import { normalizeAssetUrl } from '@/lib/asset-url';
 import { ensureEditorFontLoaded } from '@/lib/google-fonts';
 import { getPageSize } from '@/lib/page-size';
 import { renderTextContentWithCharStyles } from '@/lib/text-char-styles';
@@ -183,7 +184,7 @@ export function PublicPageView({
       {page.background.type === 'image' && page.background.value ? (
         <img
           className="public-page-bg"
-          src={page.background.value}
+          src={normalizeAssetUrl(page.background.value)}
           alt=""
           draggable={false}
           decoding="async"
@@ -200,7 +201,7 @@ export function PublicPageView({
             <div key={layer.id} style={layerStyle(layer, scale)}>
               <img
                 className="public-page-layer-image"
-                src={layer.src}
+                src={normalizeAssetUrl(layer.src)}
                 alt=""
                 draggable={false}
                 decoding="async"

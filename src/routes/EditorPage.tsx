@@ -1051,7 +1051,7 @@ export function EditorPage() {
     setActiveObject(null);
     handleChange();
 
-    if (src && src.includes('/api/assets/file/')) {
+    if (src && src.includes('/api/assets/file')) {
       const stillUsedOnCanvas = canvas.getObjects().some((o) => {
         if (!isImageObject(o)) return false;
         const od = (o as FabricObject & { data?: { src?: string } }).data;

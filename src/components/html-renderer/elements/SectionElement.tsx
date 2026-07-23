@@ -1,4 +1,5 @@
 import type { MenuDocumentElement, MenuDocumentPage } from '@shared/menu-document/types';
+import { normalizeAssetUrl } from '@/lib/asset-url';
 import { DividerElement } from './DividerElement';
 import { ImageElement } from './ImageElement';
 import { ShapeElement } from './ShapeElement';
@@ -45,7 +46,7 @@ export function SectionElement({ page, index, total }: SectionElementProps) {
       {canvas.backgroundImage ? (
         <img
           className="html-renderer-section-bg"
-          src={canvas.backgroundImage}
+          src={normalizeAssetUrl(canvas.backgroundImage)}
           alt=""
           draggable={false}
           decoding="async"
