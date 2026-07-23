@@ -89,6 +89,21 @@ function convertTextLayer(
   canvasH: number,
 ): MenuDocumentTextElement {
   const charStyles = convertCharStylesToDocument(layer.charStyles, canvasW);
+  const border = layer.style.border;
+  const borderDoc =
+    border &&
+    border.style !== 'none' &&
+    typeof border.width === 'number' &&
+    border.width > 0
+      ? {
+          style: border.style,
+          color: border.color || '#333333',
+          width: toPercent(border.width, canvasW),
+          radius: toPercent(border.radius ?? 0, canvasW),
+          margin: toPercent(border.margin ?? border.padding ?? 0, canvasW),
+        }
+      : undefined;
+
   return {
     id: layer.id,
     type: 'text',
@@ -112,6 +127,7 @@ function convertTextLayer(
       textAlign: layer.style.align,
       textTransform: 'none',
       color: layer.style.color,
+      ...(borderDoc ? { border: borderDoc } : {}),
     },
   };
 }
@@ -300,6 +316,24 @@ function elementToLayer(
 
   if (el.type === 'text') {
     const charStyles = convertCharStylesFromDocument(el.charStyles, canvasW);
+    const border =
+      el.style.border &&
+      el.style.border.style !== 'none' &&
+      el.style.border.width > 0
+        ? {
+            style: el.style.border.style,
+            color: el.style.border.color || '#333333',
+            width: Math.max(fromPercent(el.style.border.width, canvasW), 0.5),
+            radius: Math.max(fromPercent(el.style.border.radius ?? 0, canvasW), 0),
+            margin: Math.max(
+              fromPercent(
+                el.style.border.margin ?? el.style.border.padding ?? 0,
+                canvasW,
+              ),
+              0,
+            ),
+          }
+        : undefined;
     return {
       ...base,
       type: 'text',
@@ -312,6 +346,7 @@ function elementToLayer(
         align: el.style.textAlign || 'left',
         fontWeight: el.style.fontWeight,
         fontStyle: el.style.fontStyle,
+        ...(border ? { border } : {}),
       },
     };
   }

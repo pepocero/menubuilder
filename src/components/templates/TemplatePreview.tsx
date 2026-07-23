@@ -1,5 +1,6 @@
 import type { CanvasData, CanvasLayer } from '@/types/canvas';
 import { normalizeCanvasData } from '@/types/canvas';
+import { textBorderToCss } from '@/lib/text-border';
 
 interface TemplatePreviewProps {
   canvasData: CanvasData;
@@ -32,6 +33,7 @@ function layerPreviewStyle(layer: CanvasLayer, scale: number): React.CSSProperti
       textAlign: layer.style.align,
       whiteSpace: 'pre-wrap',
       lineHeight: 1.2,
+      ...textBorderToCss(layer.style.border, scale),
     };
   }
 

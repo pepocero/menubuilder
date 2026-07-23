@@ -7,6 +7,7 @@ export interface LayerObjectData {
   locked?: boolean;
   src?: string;
   shape?: string;
+  border?: unknown;
 }
 
 export function getLayerObjectData(obj: FabricObject): LayerObjectData {

@@ -34,6 +34,18 @@ export interface MenuDocumentTextStyle {
   textAlign: 'left' | 'center' | 'right';
   textTransform?: 'none' | 'uppercase' | 'lowercase' | 'capitalize';
   color: string;
+  border?: {
+    style: 'none' | 'solid' | 'dashed' | 'dotted';
+    color: string;
+    /** Grosor como % del ancho del lienzo. */
+    width: Percent;
+    /** Radio como % del ancho del lienzo. */
+    radius: Percent;
+    /** Espacio entre borde y texto, como % del ancho del lienzo. */
+    margin?: Percent;
+    /** @deprecated Usar margin. */
+    padding?: Percent;
+  };
 }
 
 /**

@@ -8,6 +8,21 @@ interface TextElementProps {
   element: MenuDocumentTextElement;
 }
 
+function borderCss(element: MenuDocumentTextElement): React.CSSProperties {
+  const b = element.style.border;
+  if (!b || b.style === 'none' || !(b.width > 0)) return {};
+  const style =
+    b.style === 'dashed' ? 'dashed' : b.style === 'dotted' ? 'dotted' : 'solid';
+  const gap = b.margin ?? b.padding ?? 0;
+  return {
+    boxSizing: 'border-box',
+    border: `${b.width}cqw ${style} ${b.color}`,
+    borderRadius: `${b.radius ?? 0}cqw`,
+    // En CSS, el espacio dentro del borde hasta el texto es padding.
+    ...(gap > 0 ? { padding: `${gap}cqw` } : {}),
+  };
+}
+
 export function TextElement({ element }: TextElementProps) {
   const Tag = textTagForSemantic(element.semantic);
 
@@ -48,6 +63,7 @@ export function TextElement({ element }: TextElementProps) {
           color: element.style.color,
           whiteSpace: 'pre-wrap',
           overflow: 'hidden',
+          ...borderCss(element),
         }}
       >
         {renderTextContentWithCharStyles(

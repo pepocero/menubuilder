@@ -12,6 +12,15 @@ export interface ConverterTextStyle {
   fontWeight?: string;
   fontStyle?: string;
   opacity?: number;
+  border?: {
+    style: 'none' | 'solid' | 'dashed' | 'dotted';
+    color: string;
+    width: number;
+    radius: number;
+    margin?: number;
+    /** @deprecated Usar margin. */
+    padding?: number;
+  };
 }
 
 export interface ConverterShapeStyle {

@@ -3,6 +3,7 @@ import type { CanvasLayer, MenuPage, TextLayer } from '@/types/canvas';
 import { normalizeAssetUrl } from '@/lib/asset-url';
 import { ensureEditorFontLoaded } from '@/lib/google-fonts';
 import { getPageSize } from '@/lib/page-size';
+import { textBorderToCss } from '@/lib/text-border';
 import { renderTextContentWithCharStyles } from '@/lib/text-char-styles';
 
 interface PublicPageViewProps {
@@ -41,6 +42,7 @@ function layerStyle(layer: CanvasLayer, scale: number): React.CSSProperties {
       // Fabric Textbox usa ~1.16 por defecto si no se guarda lineHeight.
       lineHeight: 1.16,
       overflow: 'hidden',
+      ...textBorderToCss(layer.style.border, scale),
     };
   }
 

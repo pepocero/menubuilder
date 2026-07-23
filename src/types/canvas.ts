@@ -11,6 +11,15 @@ export interface TextStyle {
   fontWeight?: string;
   fontStyle?: string;
   opacity?: number;
+  /** Borde decorativo de la caja (no del trazo de glifos). */
+  border?: {
+    style: 'none' | 'solid' | 'dashed' | 'dotted';
+    color: string;
+    width: number;
+    radius: number;
+    /** Espacio entre la línea de borde y el inicio del texto. */
+    margin?: number;
+  };
 }
 
 export interface ShapeStyle {

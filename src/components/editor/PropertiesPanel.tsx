@@ -13,6 +13,13 @@ import {
   getTextFormatState,
   textboxHasSelection,
 } from '@/lib/text-char-styles';
+import {
+  DEFAULT_TEXT_BORDER,
+  readTextboxBorder,
+  syncTextboxBorder,
+  type TextBorder,
+  type TextBorderLineStyle,
+} from '@/lib/text-border';
 import { FontFamilyPicker } from '@/components/editor/FontFamilyPicker';
 
 interface PropertiesPanelProps {
@@ -235,6 +242,7 @@ export function PropertiesPanel({
   const layerName = layerData.layerName ?? '';
 
   const textObj = isTextObject(activeObject) ? asTextbox(activeObject) : null;
+  const textBorder = textObj ? readTextboxBorder(textObj) : { ...DEFAULT_TEXT_BORDER };
 
   const fillColor = toHexColor(activeObject.fill, '#cccccc');
   const strokeColor = toHexColor(activeObject.stroke, '#000000');
@@ -537,6 +545,185 @@ export function PropertiesPanel({
           >
             Unificar formato
           </button>
+
+          <p className="panel-hint" style={{ marginTop: '0.25rem', marginBottom: '0.5rem' }}>
+            Borde de la caja
+          </p>
+          <div className="properties-field">
+            <span className="properties-field-label">Estilo</span>
+            <div className="properties-border-style-row" role="group" aria-label="Estilo de borde">
+              {(
+                [
+                  { style: 'none', title: 'Ninguno' },
+                  { style: 'solid', title: 'Continuo' },
+                  { style: 'dashed', title: 'Discontinuo' },
+                  { style: 'dotted', title: 'Punteado' },
+                ] as const
+              ).map(({ style, title }) => (
+                <button
+                  key={style}
+                  type="button"
+                  className={textBorder.style === style ? 'is-active' : undefined}
+                  title={title}
+                  aria-label={title}
+                  aria-pressed={textBorder.style === style}
+                  onMouseDown={preserveTextSelection}
+                  onClick={() => {
+                    if (!textObj) return;
+                    const next: TextBorder = {
+                      ...textBorder,
+                      style: style as TextBorderLineStyle,
+                      width:
+                        style === 'none'
+                          ? 0
+                          : textBorder.width > 0
+                            ? textBorder.width
+                            : 1,
+                    };
+                    syncTextboxBorder(textObj, next);
+                    refresh();
+                  }}
+                >
+                  {style === 'none' && (
+                    <svg viewBox="0 0 24 16" width="22" height="14" aria-hidden="true">
+                      <rect
+                        x="1.5"
+                        y="1.5"
+                        width="21"
+                        height="13"
+                        rx="1.5"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth="1.25"
+                        strokeDasharray="2 2"
+                        opacity="0.35"
+                      />
+                      <line
+                        x1="4"
+                        y1="13"
+                        x2="20"
+                        y2="3"
+                        stroke="currentColor"
+                        strokeWidth="1.5"
+                        strokeLinecap="round"
+                      />
+                    </svg>
+                  )}
+                  {style === 'solid' && (
+                    <svg viewBox="0 0 24 16" width="22" height="14" aria-hidden="true">
+                      <rect
+                        x="1.5"
+                        y="1.5"
+                        width="21"
+                        height="13"
+                        rx="1.5"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth="1.75"
+                      />
+                    </svg>
+                  )}
+                  {style === 'dashed' && (
+                    <svg viewBox="0 0 24 16" width="22" height="14" aria-hidden="true">
+                      <rect
+                        x="1.5"
+                        y="1.5"
+                        width="21"
+                        height="13"
+                        rx="1.5"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth="1.75"
+                        strokeDasharray="4 2.5"
+                      />
+                    </svg>
+                  )}
+                  {style === 'dotted' && (
+                    <svg viewBox="0 0 24 16" width="22" height="14" aria-hidden="true">
+                      <rect
+                        x="1.5"
+                        y="1.5"
+                        width="21"
+                        height="13"
+                        rx="1.5"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth="1.75"
+                        strokeDasharray="1.5 2"
+                        strokeLinecap="round"
+                      />
+                    </svg>
+                  )}
+                </button>
+              ))}
+            </div>
+          </div>
+          <label>
+            Color borde
+            <input
+              type="color"
+              value={toHexColor(textBorder.color, '#333333')}
+              onChange={(e) => {
+                if (!textObj) return;
+                syncTextboxBorder(textObj, { ...textBorder, color: e.target.value });
+                refresh();
+              }}
+            />
+          </label>
+          <label>
+            Grosor
+            <input
+              type="number"
+              min={1}
+              max={40}
+              value={Math.max(1, textBorder.width || 1)}
+              onChange={(e) => {
+                if (!textObj) return;
+                const width = Math.max(1, Number(e.target.value) || 1);
+                syncTextboxBorder(textObj, {
+                  ...textBorder,
+                  style: textBorder.style === 'none' ? 'solid' : textBorder.style,
+                  width,
+                });
+                refresh();
+              }}
+            />
+          </label>
+          <label>
+            Radio esquinas
+            <input
+              type="number"
+              min={0}
+              max={200}
+              value={textBorder.radius || 0}
+              onChange={(e) => {
+                if (!textObj) return;
+                syncTextboxBorder(textObj, {
+                  ...textBorder,
+                  radius: Math.max(0, Number(e.target.value) || 0),
+                });
+                refresh();
+              }}
+            />
+          </label>
+          <label>
+            Margen
+            <input
+              type="number"
+              min={0}
+              max={80}
+              value={textBorder.margin || 0}
+              title="Espacio entre el borde y el inicio del texto"
+              onChange={(e) => {
+                if (!textObj) return;
+                syncTextboxBorder(textObj, {
+                  ...textBorder,
+                  margin: Math.max(0, Number(e.target.value) || 0),
+                });
+                refresh();
+              }}
+            />
+          </label>
         </>
       )}
 

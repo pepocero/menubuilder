@@ -16,6 +16,11 @@ import type {
   TextLayer,
 } from '@/types/canvas';
 import { A4_HEIGHT, A4_WIDTH, normalizeCanvasData } from '@/types/canvas';
+import {
+  normalizeTextBorder,
+  syncTextboxBorder,
+  textBorderIsVisible,
+} from '@/lib/text-border';
 
 type CanvasWithLogicalSize = Canvas & {
   __logicalWidth?: number;
@@ -180,6 +185,10 @@ export function layerToFabricObject(layer: CanvasLayer): FabricObject | null {
       styles: textLayer.charStyles ? structuredClone(textLayer.charStyles) : {},
     });
     (obj as FabricObject & { data?: unknown }).data = layerDataFromLayer(layer);
+    const border = normalizeTextBorder(textLayer.style.border);
+    if (border && textBorderIsVisible(border)) {
+      syncTextboxBorder(obj, border);
+    }
     return obj;
   }
 
@@ -340,6 +349,9 @@ export function fabricObjectToLayer(obj: FabricObject, zIndex: number): CanvasLa
         return undefined;
       }
     })();
+    const border = normalizeTextBorder(
+      (textObj as Textbox & { data?: { border?: unknown } }).data?.border,
+    );
     return {
       ...base,
       type: 'text',
@@ -352,6 +364,7 @@ export function fabricObjectToLayer(obj: FabricObject, zIndex: number): CanvasLa
         fontWeight: textObj.fontWeight as string | undefined,
         fontStyle: (textObj.fontStyle as string | undefined) || undefined,
         opacity: textObj.opacity,
+        ...(border && textBorderIsVisible(border) ? { border } : {}),
       },
       ...(charStyles ? { charStyles } : {}),
     } as TextLayer;
