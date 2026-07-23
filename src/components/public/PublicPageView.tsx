@@ -23,13 +23,14 @@ function layerStyle(layer: CanvasLayer, scale: number): React.CSSProperties {
     opacity: layer.opacity ?? 1,
     overflow: 'hidden',
     pointerEvents: 'none',
+    zIndex: layer.zIndex,
   };
 
   if (layer.type === 'text') {
     return {
       ...base,
-      height: 'auto',
-      minHeight: layer.height * scale,
+      // Misma caja que el editor (Fabric). height:auto hacía crecer el texto y solaparse.
+      boxSizing: 'border-box',
       color: layer.style.color,
       fontFamily: layer.style.fontFamily,
       fontSize: Math.max(layer.style.fontSize * scale, 4),
@@ -37,7 +38,9 @@ function layerStyle(layer: CanvasLayer, scale: number): React.CSSProperties {
       fontStyle: layer.style.fontStyle,
       textAlign: layer.style.align,
       whiteSpace: 'pre-wrap',
-      lineHeight: 1.2,
+      // Fabric Textbox usa ~1.16 por defecto si no se guarda lineHeight.
+      lineHeight: 1.16,
+      overflow: 'hidden',
     };
   }
 
