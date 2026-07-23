@@ -679,19 +679,31 @@ export function EditorPage() {
     scheduleSave();
   }
 
-  function handleDeletePage() {
+  function handleDeletePage(pageIndex?: number) {
+    const index =
+      typeof pageIndex === 'number' && Number.isFinite(pageIndex)
+        ? pageIndex
+        : activePageIndexRef.current;
     if (pages.length <= 1) return;
-    if (!confirm(`¿Eliminar la página ${activePageIndex + 1}?`)) return;
+    if (index < 0 || index >= pages.length) return;
+    if (!confirm(`¿Eliminar la página ${index + 1}?`)) return;
 
-    const removedPageId = pages[activePageIndex]?.id;
-    const next = pages.filter((_, i) => i !== activePageIndex);
-    pageRefs.current = pageRefs.current.filter((_, i) => i !== activePageIndex);
+    const removedPageId = pages[index]?.id;
+    const next = pages.filter((_, i) => i !== index);
+    pageRefs.current = pageRefs.current.filter((_, i) => i !== index);
     if (removedPageId) {
       historyByPageIdRef.current.delete(removedPageId);
       bumpHistoryUi();
     }
     setPages(next);
-    setActivePageIndex(Math.min(activePageIndex, next.length - 1));
+    const currentActive = activePageIndexRef.current;
+    let nextActive = currentActive;
+    if (currentActive === index) {
+      nextActive = Math.min(index, next.length - 1);
+    } else if (currentActive > index) {
+      nextActive = currentActive - 1;
+    }
+    setActivePageIndex(nextActive);
     setActiveObject(null);
     scheduleSave();
   }
@@ -1557,7 +1569,7 @@ export function EditorPage() {
         }}
         onOpenQr={() => setQrOpen(true)}
         onAddPage={handleAddPage}
-        onDeletePage={handleDeletePage}
+        onDeletePage={() => handleDeletePage()}
         onMovePageUp={() => handleMovePageUp()}
         onMovePageDown={() => handleMovePageDown()}
         canDeletePage={pages.length > 1}
@@ -1659,6 +1671,19 @@ export function EditorPage() {
                         }}
                       >
                         ↓
+                      </button>
+                      <button
+                        type="button"
+                        className="page-order-actions__delete"
+                        title="Eliminar página"
+                        aria-label={`Eliminar página ${index + 1}`}
+                        onPointerDown={(e) => e.stopPropagation()}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleDeletePage(index);
+                        }}
+                      >
+                        ×
                       </button>
                     </div>
                   )}

@@ -2805,6 +2805,11 @@ textarea {
   cursor: not-allowed;
 }
 
+.page-order-actions__delete:hover:not(:disabled) {
+  border-color: #b91c1c;
+  color: #b91c1c;
+}
+
 .page-label-active {
   color: var(--color-primary);
 }
