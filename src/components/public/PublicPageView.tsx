@@ -11,11 +11,10 @@ interface PublicPageViewProps {
   pageWidth?: number;
   pageHeight?: number;
   /**
-   * `width`: escala al ancho del contenedor (vista vertical).
-   * `cover`: llena el ancho del viewport (scroll horizontal entre páginas);
-   *         si el alto diseñado supera la zona útil, scroll vertical dentro de la página.
+   * `width`: escala al ancho (vista pública vertical).
+   * `contain`: encaja la página entera en el viewport (scroll horizontal entre páginas).
    */
-  fit?: 'width' | 'cover';
+  fit?: 'width' | 'contain';
 }
 
 function layerStyle(layer: CanvasLayer, scale: number): React.CSSProperties {
@@ -36,7 +35,6 @@ function layerStyle(layer: CanvasLayer, scale: number): React.CSSProperties {
   if (layer.type === 'text') {
     return {
       ...base,
-      // Misma caja que el editor (Fabric). height:auto hacía crecer el texto y solaparse.
       boxSizing: 'border-box',
       color: layer.style.color,
       fontFamily: layer.style.fontFamily,
@@ -45,7 +43,6 @@ function layerStyle(layer: CanvasLayer, scale: number): React.CSSProperties {
       fontStyle: layer.style.fontStyle,
       textAlign: layer.style.align,
       whiteSpace: 'pre-wrap',
-      // Fabric Textbox usa ~1.16 por defecto si no se guarda lineHeight.
       lineHeight: 1.16,
       overflow: 'hidden',
       ...textBorderToCss(layer.style.border, scale),
@@ -82,8 +79,6 @@ function layerStyle(layer: CanvasLayer, scale: number): React.CSSProperties {
   if (layer.type === 'image') {
     return {
       ...base,
-      // Sin fondo opaco: los PNG con alpha deben dejar ver las capas de debajo
-      // (como en Fabric). Un gris de “placeholder” tapaba el pergamino.
       background: 'transparent',
     };
   }
@@ -136,15 +131,14 @@ export function PublicPageView({
   const size = getPageSize(page);
   const width = pageWidth && pageWidth > 0 ? pageWidth : size.width;
   const height = pageHeight && pageHeight > 0 ? pageHeight : size.height;
-  const fillViewport = fit === 'cover';
+  const containFit = fit === 'contain';
 
-  // Escala inicial segura (móvil): no depender de un clientWidth 0 en el primer paint.
   const [scale, setScale] = useState(() => {
     if (typeof window === 'undefined') return 1;
     const approxW = Math.max(window.innerWidth || 0, 1);
-    if (fillViewport) {
-      // Ancho completo; si el alto supera la pantalla, hay scroll vertical en la página.
-      return approxW / width;
+    if (containFit) {
+      const approxH = Math.max(window.innerHeight || 0, 1);
+      return Math.min(approxW / width, approxH / height);
     }
     const padded = Math.min(approxW - 24, 920);
     return padded > 0 ? padded / width : 1;
@@ -159,8 +153,16 @@ export function PublicPageView({
       const frameWidth = el.clientWidth || rect.width || window.innerWidth || 0;
       if (frameWidth <= 0) return;
 
-      // En horizontal: escalar solo por ancho (misma proporción que el editor).
-      // Si el alto supera la zona útil, el viewport permite scroll vertical.
+      if (containFit) {
+        const frameHeight =
+          el.clientHeight || rect.height || window.innerHeight || frameWidth;
+        const sw = frameWidth / width;
+        const sh = frameHeight > 0 ? frameHeight / height : sw;
+        // Encaja entero: sin barras internas que roben el gesto horizontal.
+        setScale(Math.min(sw, sh));
+        return;
+      }
+
       setScale(frameWidth / width);
     };
 
@@ -172,15 +174,13 @@ export function PublicPageView({
     window.addEventListener('orientationchange', update);
     const vv = window.visualViewport;
     vv?.addEventListener('resize', update);
-    vv?.addEventListener('scroll', update);
     return () => {
       ro?.disconnect();
       window.removeEventListener('resize', update);
       window.removeEventListener('orientationchange', update);
       vv?.removeEventListener('resize', update);
-      vv?.removeEventListener('scroll', update);
     };
-  }, [width, fillViewport]);
+  }, [width, height, containFit]);
 
   const layers = [...page.layers]
     .filter((layer) => layer.visible !== false)
@@ -195,8 +195,8 @@ export function PublicPageView({
     <div
       className="public-page-frame public-canvas"
       style={{
-        width: fillViewport ? renderedWidth : '100%',
-        maxWidth: fillViewport ? renderedWidth : 'min(920px, 100%)',
+        width: containFit ? renderedWidth : '100%',
+        maxWidth: containFit ? renderedWidth : 'min(920px, 100%)',
         height: renderedHeight,
         minHeight: renderedHeight,
         flexShrink: 0,
@@ -241,11 +241,11 @@ export function PublicPageView({
     </div>
   );
 
-  if (fillViewport) {
+  if (containFit) {
     return (
       <div
         ref={frameRef}
-        className="public-page-viewport public-page-viewport--cover"
+        className="public-page-viewport public-page-viewport--contain"
         style={{ background: bgColor }}
       >
         {canvas}

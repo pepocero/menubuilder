@@ -16,8 +16,7 @@ export function PublicScrollControls({
       <h3>Vista pública</h3>
       <p className="panel-hint">
         Solo afecta a la carta publicada (QR). En horizontal: desliza entre páginas;
-        si una página es más alta que la pantalla, puedes hacer scroll vertical
-        dentro de ella.
+        cada página se encaja entera en pantalla (sin barras internas).
       </p>
       <label>
         Scroll de páginas
