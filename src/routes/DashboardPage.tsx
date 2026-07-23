@@ -6,9 +6,14 @@ import {
   deleteMenu,
   duplicateMenu,
   listMenus,
+  updateMenu,
   type MenuSummary,
 } from '@/lib/api';
 import { parseMenuImportFile } from '@/lib/export';
+import {
+  renderCanvasDataThumbnail,
+  withImportedMenuTitle,
+} from '@/lib/menu-thumbnail';
 import { AppLayout } from '@/components/AppLayout';
 
 export function DashboardPage() {
@@ -51,12 +56,24 @@ export function DashboardPage() {
     try {
       const { canvas, title: docTitle } = await parseMenuImportFile(file);
       const fromName = file.name.replace(/\.json$/i, '').trim();
-      const title =
+      const baseTitle =
         docTitle ||
         (fromName && fromName !== 'menu' ? fromName : '') ||
-        'Menú importado';
+        'Menú';
+      const title = withImportedMenuTitle(baseTitle);
 
       const { menu } = await createMenu({ title, canvas_data: canvas });
+
+      // Miniatura para la tarjeta de Mis menús (create no genera preview).
+      try {
+        const thumbnail = await renderCanvasDataThumbnail(canvas);
+        if (thumbnail) {
+          await updateMenu(menu.id, { thumbnail_url: thumbnail });
+        }
+      } catch {
+        /* La importación ya OK; el preview puede generarse al guardar en el editor */
+      }
+
       navigate(`/editor/${menu.id}`);
     } catch (err) {
       setError(
