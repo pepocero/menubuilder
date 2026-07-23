@@ -18,24 +18,32 @@ import {
 
 /** Margen mínimo del lienzo (modo cajas): no sacar texto fuera del A4. */
 const EDGE_PAD = 4;
-const CANVAS_BOUNDS = {
+
+type CanvasBounds = {
+  left: number;
+  top: number;
+  right: number;
+  bottom: number;
+};
+
+const CANVAS_BOUNDS: CanvasBounds = {
   left: EDGE_PAD,
   top: EDGE_PAD,
   right: A4_WIDTH - EDGE_PAD,
   bottom: A4_HEIGHT - EDGE_PAD,
-} as const;
+};
 
 /** Área segura más holgada para el fallback sin cajas. */
 const SAFE_INSET_X = Math.round((4 / 100) * A4_WIDTH);
 const SAFE_INSET_Y = Math.round((3.5 / 100) * A4_HEIGHT);
-const SAFE = {
+const SAFE: CanvasBounds & { width: number; height: number } = {
   left: SAFE_INSET_X,
   top: SAFE_INSET_Y,
   right: A4_WIDTH - SAFE_INSET_X,
   bottom: A4_HEIGHT - SAFE_INSET_Y,
   width: A4_WIDTH - SAFE_INSET_X * 2,
   height: A4_HEIGHT - SAFE_INSET_Y * 2,
-} as const;
+};
 
 const MIN_LAYER_W = 48;
 const MIN_LAYER_H = 18;
@@ -65,7 +73,7 @@ function clampRectToBounds(
   y: number,
   width: number,
   height: number,
-  bounds = CANVAS_BOUNDS,
+  bounds: CanvasBounds = CANVAS_BOUNDS,
 ): { x: number; y: number; width: number; height: number } | null {
   if (y >= bounds.bottom - MIN_LAYER_H) return null;
   if (x >= bounds.right - MIN_LAYER_W) return null;
@@ -80,7 +88,7 @@ function clampRectToBounds(
 
 function clampTextLayer(
   layer: TextLayer,
-  bounds = CANVAS_BOUNDS,
+  bounds: CanvasBounds = CANVAS_BOUNDS,
 ): TextLayer | null {
   const rect = clampRectToBounds(layer.x, layer.y, layer.width, layer.height, bounds);
   if (!rect) return null;
@@ -160,13 +168,14 @@ function computeImportTypography(
   }
 
   for (const section of menu.sections) {
-    if (!section.title || !isUsableOcrBox(section.titleBox)) continue;
+    const titleBox = section.titleBox;
+    if (!section.title || !isUsableOcrBox(titleBox)) continue;
     const mapped = mapImageRectToA4Cover(
-      pctBoxToImageBBox(section.titleBox, imageWidth, imageHeight),
+      pctBoxToImageBBox(titleBox, imageWidth, imageHeight),
       imageWidth,
       imageHeight,
     );
-    if (mapped.height >= 10 && mapped.height <= 36 && section.titleBox!.h <= 12) {
+    if (mapped.height >= 10 && mapped.height <= 36 && titleBox.h <= 12) {
       lineHeights.push(mapped.height);
     }
   }

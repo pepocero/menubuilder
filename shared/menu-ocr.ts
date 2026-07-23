@@ -157,7 +157,7 @@ ${extra}`;
 }
 
 /** True si la caja tiene tamaño útil. */
-export function isUsableOcrBox(box: MenuOcrBox | null | undefined): boolean {
+export function isUsableOcrBox(box: MenuOcrBox | null | undefined): box is MenuOcrBox {
   if (!box) return false;
   return (
     Number.isFinite(box.x) &&
