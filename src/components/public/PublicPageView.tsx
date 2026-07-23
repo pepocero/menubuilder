@@ -12,7 +12,8 @@ interface PublicPageViewProps {
   pageHeight?: number;
   /**
    * `width`: escala al ancho del contenedor (vista vertical).
-   * `cover`: llena el viewport (scroll horizontal); recorta el exceso si el ratio no coincide.
+   * `cover`: llena el ancho del viewport (scroll horizontal), anclado arriba;
+   *         si el alto diseñado supera la zona útil, se recorta abajo (no el título).
    */
   fit?: 'width' | 'cover';
 }
@@ -142,8 +143,8 @@ export function PublicPageView({
     if (typeof window === 'undefined') return 1;
     const approxW = Math.max(window.innerWidth || 0, 1);
     if (fillViewport) {
-      const approxH = Math.max(window.innerHeight || 0, 1);
-      return Math.max(approxW / width, approxH / height);
+      // Ancho completo; el exceso de alto se recorta abajo (anclado arriba).
+      return approxW / width;
     }
     const padded = Math.min(approxW - 24, 920);
     return padded > 0 ? padded / width : 1;
@@ -158,16 +159,8 @@ export function PublicPageView({
       const frameWidth = el.clientWidth || rect.width || window.innerWidth || 0;
       if (frameWidth <= 0) return;
 
-      if (fillViewport) {
-        const frameHeight =
-          el.clientHeight || rect.height || window.innerHeight || frameWidth;
-        const sw = frameWidth / width;
-        const sh = frameHeight > 0 ? frameHeight / height : sw;
-        // Llena todo el viewport (evita franjas laterales por la barra del navegador).
-        setScale(Math.max(sw, sh));
-        return;
-      }
-
+      // En horizontal: escalar solo por ancho (misma proporción que el editor).
+      // La zona útil vertical la marca el contenedor (svh); el sobrante se corta abajo.
       setScale(frameWidth / width);
     };
 
@@ -177,12 +170,17 @@ export function PublicPageView({
     ro?.observe(el);
     window.addEventListener('resize', update);
     window.addEventListener('orientationchange', update);
+    const vv = window.visualViewport;
+    vv?.addEventListener('resize', update);
+    vv?.addEventListener('scroll', update);
     return () => {
       ro?.disconnect();
       window.removeEventListener('resize', update);
       window.removeEventListener('orientationchange', update);
+      vv?.removeEventListener('resize', update);
+      vv?.removeEventListener('scroll', update);
     };
-  }, [width, height, fillViewport]);
+  }, [width, fillViewport]);
 
   const layers = [...page.layers]
     .filter((layer) => layer.visible !== false)
@@ -247,7 +245,7 @@ export function PublicPageView({
     return (
       <div
         ref={frameRef}
-        className="public-page-viewport"
+        className="public-page-viewport public-page-viewport--cover"
         style={{ background: bgColor }}
       >
         {canvas}

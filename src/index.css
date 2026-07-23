@@ -2839,11 +2839,20 @@ textarea {
 }
 
 .public-menu-page--horizontal {
+  /* Fallback: dvh. Preferimos svh = zona útil con chrome del navegador. */
   height: 100dvh;
   max-height: 100dvh;
   min-height: 100dvh;
   overflow: hidden;
   background: #111;
+}
+
+@supports (height: 100svh) {
+  .public-menu-page--horizontal {
+    height: 100svh;
+    max-height: 100svh;
+    min-height: 100svh;
+  }
 }
 
 .public-menu-page--horizontal .public-menu-main {
@@ -2880,7 +2889,8 @@ textarea {
   scroll-snap-align: start;
   scroll-snap-stop: always;
   padding: 0;
-  justify-content: center;
+  justify-content: flex-start;
+  align-items: stretch;
   overflow: hidden;
 }
 
@@ -2892,6 +2902,12 @@ textarea {
   justify-content: center;
   overflow: hidden;
   box-sizing: border-box;
+}
+
+/* Anclado arriba: el margen superior del diseño se ve; el exceso se corta abajo. */
+.public-page-viewport--cover {
+  align-items: flex-start;
+  justify-content: center;
 }
 
 .public-pages-stack--horizontal .public-page-frame,
