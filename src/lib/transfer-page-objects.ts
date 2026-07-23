@@ -115,6 +115,15 @@ function clampLayerToPage(
   };
 }
 
+/** Mantiene una capa dentro de los límites lógicos de la página. */
+export function clampLayerIntoPage(
+  layer: CanvasLayer,
+  pageWidth: number,
+  pageHeight: number,
+): CanvasLayer {
+  return clampLayerToPage(layer, pageWidth, pageHeight);
+}
+
 /**
  * Mueve la selección activa de un lienzo a otro (una sola vez; con candado).
  */

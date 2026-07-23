@@ -12,9 +12,9 @@ interface PublicPageViewProps {
   pageHeight?: number;
   /**
    * `width`: escala al ancho del contenedor (vista vertical).
-   * `contain`: encaja ancho y alto sin desbordar (scroll horizontal a pantalla completa).
+   * `cover`: llena el viewport (scroll horizontal); recorta el exceso si el ratio no coincide.
    */
-  fit?: 'width' | 'contain';
+  fit?: 'width' | 'cover';
 }
 
 function layerStyle(layer: CanvasLayer, scale: number): React.CSSProperties {
@@ -135,18 +135,18 @@ export function PublicPageView({
   const size = getPageSize(page);
   const width = pageWidth && pageWidth > 0 ? pageWidth : size.width;
   const height = pageHeight && pageHeight > 0 ? pageHeight : size.height;
+  const fillViewport = fit === 'cover';
 
   // Escala inicial segura (móvil): no depender de un clientWidth 0 en el primer paint.
   const [scale, setScale] = useState(() => {
     if (typeof window === 'undefined') return 1;
-    const approxW = Math.min(window.innerWidth - 24, 920);
-    if (fit === 'contain') {
-      const approxH = window.innerHeight || approxW;
-      const sw = approxW > 0 ? approxW / width : 1;
-      const sh = approxH > 0 ? approxH / height : 1;
-      return Math.min(sw, sh);
+    const approxW = Math.max(window.innerWidth || 0, 1);
+    if (fillViewport) {
+      const approxH = Math.max(window.innerHeight || 0, 1);
+      return Math.max(approxW / width, approxH / height);
     }
-    return approxW > 0 ? approxW / width : 1;
+    const padded = Math.min(approxW - 24, 920);
+    return padded > 0 ? padded / width : 1;
   });
 
   useEffect(() => {
@@ -155,18 +155,16 @@ export function PublicPageView({
 
     const update = () => {
       const rect = el.getBoundingClientRect();
-      const frameWidth =
-        el.clientWidth ||
-        rect.width ||
-        Math.min(window.innerWidth - 24, 920);
+      const frameWidth = el.clientWidth || rect.width || window.innerWidth || 0;
       if (frameWidth <= 0) return;
 
-      if (fit === 'contain') {
+      if (fillViewport) {
         const frameHeight =
           el.clientHeight || rect.height || window.innerHeight || frameWidth;
         const sw = frameWidth / width;
         const sh = frameHeight > 0 ? frameHeight / height : sw;
-        setScale(Math.min(sw, sh));
+        // Llena todo el viewport (evita franjas laterales por la barra del navegador).
+        setScale(Math.max(sw, sh));
         return;
       }
 
@@ -184,7 +182,7 @@ export function PublicPageView({
       window.removeEventListener('resize', update);
       window.removeEventListener('orientationchange', update);
     };
-  }, [width, height, fit]);
+  }, [width, height, fillViewport]);
 
   const layers = [...page.layers]
     .filter((layer) => layer.visible !== false)
@@ -199,10 +197,11 @@ export function PublicPageView({
     <div
       className="public-page-frame public-canvas"
       style={{
-        width: fit === 'contain' ? renderedWidth : '100%',
-        maxWidth: fit === 'contain' ? renderedWidth : 'min(920px, 100%)',
+        width: fillViewport ? renderedWidth : '100%',
+        maxWidth: fillViewport ? renderedWidth : 'min(920px, 100%)',
         height: renderedHeight,
         minHeight: renderedHeight,
+        flexShrink: 0,
         aspectRatio: `${width} / ${height}`,
         background: page.background.type === 'color' ? bgColor : '#FAF6F0',
         position: 'relative',
@@ -244,9 +243,13 @@ export function PublicPageView({
     </div>
   );
 
-  if (fit === 'contain') {
+  if (fillViewport) {
     return (
-      <div ref={frameRef} className="public-page-viewport">
+      <div
+        ref={frameRef}
+        className="public-page-viewport"
+        style={{ background: bgColor }}
+      >
         {canvas}
       </div>
     );

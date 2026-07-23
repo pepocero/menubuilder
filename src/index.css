@@ -2843,6 +2843,7 @@ textarea {
   max-height: 100dvh;
   min-height: 100dvh;
   overflow: hidden;
+  background: #111;
 }
 
 .public-menu-page--horizontal .public-menu-main {

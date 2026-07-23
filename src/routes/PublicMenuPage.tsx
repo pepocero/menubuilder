@@ -139,7 +139,7 @@ export function PublicMenuPage() {
               <div key={page.id} className="public-page-block">
                 <PublicPageView
                   page={page}
-                  fit={pageScroll === 'horizontal' ? 'contain' : 'width'}
+                  fit={pageScroll === 'horizontal' ? 'cover' : 'width'}
                 />
               </div>
             ))}

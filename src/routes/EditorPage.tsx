@@ -19,17 +19,22 @@ import {
   type AssetSummary,
 } from '@/lib/api';
 import {
+  clampActiveObjectsIntoPage,
+  clampLayerIntoPage,
+  transferObjectsBetweenPages,
+  type PageSpillDirection,
+} from '@/lib/transfer-page-objects';
+import {
   addLayerToCanvas,
   createShapeLayer,
   createTextLayer,
   ensureA4Canvas,
   fabricObjectToLayer,
   fitImageToA4,
+  getCanvasLogicalSize,
   imageLayerToFabricObject,
   isImageObject,
 } from '@/lib/canvas-serializer';
-import { transferObjectsBetweenPages } from '@/lib/transfer-page-objects';
-import type { PageSpillDirection } from '@/lib/transfer-page-objects';
 import {
   canMergeSelectedTextLayers,
   getSelectedTextObjects,
@@ -563,13 +568,15 @@ export function EditorPage() {
     clip.pasteCount += 1;
     const offset = 20 * clip.pasteCount;
     const added: FabricObject[] = [];
+    const pageSize = getCanvasLogicalSize(canvas);
 
     for (const layer of clip.layers) {
       const copy = structuredClone(layer);
       copy.id = `layer_${crypto.randomUUID().replace(/-/g, '').slice(0, 8)}`;
       copy.x = (copy.x ?? 0) + offset;
       copy.y = (copy.y ?? 0) + offset;
-      await addLayerToCanvas(canvas, copy);
+      const clamped = clampLayerIntoPage(copy, pageSize.width, pageSize.height);
+      await addLayerToCanvas(canvas, clamped);
       const sel = canvas.getActiveObject();
       if (sel && !added.includes(sel)) added.push(sel);
     }
@@ -579,6 +586,7 @@ export function EditorPage() {
     } else if (added.length === 1) {
       canvas.setActiveObject(added[0]);
     }
+    clampActiveObjectsIntoPage(canvas);
     canvas.requestRenderAll();
     setActiveObject(canvas.getActiveObject() ?? null);
     handleChange();
@@ -618,6 +626,7 @@ export function EditorPage() {
           top: (obj.top ?? 0) + dy,
         });
         obj.setCoords();
+        clampActiveObjectsIntoPage(canvas);
         canvas.requestRenderAll();
         handleChange();
         return;
