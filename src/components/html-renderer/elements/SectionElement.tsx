@@ -28,13 +28,17 @@ function renderElement(element: MenuDocumentElement) {
 export function SectionElement({ page, index, total }: SectionElementProps) {
   const { canvas } = page;
   const isLast = index === total - 1;
+  const w = Math.max(canvas.width || 595, 1);
+  const h = Math.max(canvas.height || 842, 1);
 
   return (
     <section
       className="html-renderer-section"
       aria-label={`Página ${index + 1} de ${total}`}
       style={{
-        aspectRatio: `${canvas.width} / ${canvas.height}`,
+        // Reserva altura por ratio (fiable en móvil; el contenido es absolute).
+        height: 0,
+        paddingBottom: `${(h / w) * 100}%`,
         background: canvas.background,
       }}
     >

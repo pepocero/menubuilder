@@ -79,14 +79,18 @@ function layerStyle(layer: CanvasLayer, scale: number): React.CSSProperties {
 
 function TextLayerView({ layer, scale }: { layer: TextLayer; scale: number }) {
   useEffect(() => {
-    ensureEditorFontLoaded(layer.style.fontFamily);
-    if (!layer.charStyles) return;
-    for (const line of Object.values(layer.charStyles)) {
-      for (const style of Object.values(line)) {
-        if (typeof style.fontFamily === 'string') {
-          ensureEditorFontLoaded(style.fontFamily);
+    try {
+      ensureEditorFontLoaded(layer.style.fontFamily);
+      if (!layer.charStyles) return;
+      for (const line of Object.values(layer.charStyles)) {
+        for (const style of Object.values(line)) {
+          if (typeof style.fontFamily === 'string') {
+            ensureEditorFontLoaded(style.fontFamily);
+          }
         }
       }
+    } catch {
+      /* fuentes opcionales */
     }
   }, [layer]);
 
@@ -114,34 +118,40 @@ export function PublicPageView({
   pageHeight,
 }: PublicPageViewProps) {
   const frameRef = useRef<HTMLDivElement>(null);
-  const [scale, setScale] = useState(1);
   const size = getPageSize(page);
   const width = pageWidth && pageWidth > 0 ? pageWidth : size.width;
   const height = pageHeight && pageHeight > 0 ? pageHeight : size.height;
+
+  // Escala inicial segura (móvil): no depender de un clientWidth 0 en el primer paint.
+  const [scale, setScale] = useState(() => {
+    if (typeof window === 'undefined') return 1;
+    const approx = Math.min(window.innerWidth - 24, 920);
+    return approx > 0 ? approx / width : 1;
+  });
 
   useEffect(() => {
     const el = frameRef.current;
     if (!el) return;
 
     const update = () => {
-      const frameWidth = el.clientWidth || el.getBoundingClientRect().width;
+      const frameWidth =
+        el.clientWidth ||
+        el.getBoundingClientRect().width ||
+        Math.min(window.innerWidth - 24, 920);
       if (frameWidth > 0) {
         setScale(frameWidth / width);
-        return;
       }
-      // En algunos móviles el primer layout da 0; reintentar tras paint.
-      requestAnimationFrame(() => {
-        const w = el.clientWidth || el.getBoundingClientRect().width;
-        if (w > 0) setScale(w / width);
-      });
     };
 
     update();
-    const ro = new ResizeObserver(update);
-    ro.observe(el);
+    const ro =
+      typeof ResizeObserver !== 'undefined' ? new ResizeObserver(update) : null;
+    ro?.observe(el);
+    window.addEventListener('resize', update);
     window.addEventListener('orientationchange', update);
     return () => {
-      ro.disconnect();
+      ro?.disconnect();
+      window.removeEventListener('resize', update);
       window.removeEventListener('orientationchange', update);
     };
   }, [width]);
@@ -152,14 +162,22 @@ export function PublicPageView({
 
   const bgColor =
     page.background.type === 'color' ? page.background.value : '#FAF6F0';
+  const renderedHeight = Math.max(height * scale, 1);
 
   return (
     <div
       ref={frameRef}
-      className="public-page-frame editor-canvas-wrap public-canvas"
+      className="public-page-frame public-canvas"
       style={{
+        width: '100%',
+        maxWidth: 'min(920px, 100%)',
+        height: renderedHeight,
+        minHeight: renderedHeight,
         aspectRatio: `${width} / ${height}`,
         background: page.background.type === 'color' ? bgColor : '#FAF6F0',
+        position: 'relative',
+        overflow: 'hidden',
+        boxSizing: 'border-box',
       }}
     >
       {page.background.type === 'image' && page.background.value ? (
