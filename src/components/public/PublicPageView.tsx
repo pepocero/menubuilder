@@ -124,16 +124,26 @@ export function PublicPageView({
     if (!el) return;
 
     const update = () => {
-      const frameWidth = el.clientWidth;
+      const frameWidth = el.clientWidth || el.getBoundingClientRect().width;
       if (frameWidth > 0) {
         setScale(frameWidth / width);
+        return;
       }
+      // En algunos móviles el primer layout da 0; reintentar tras paint.
+      requestAnimationFrame(() => {
+        const w = el.clientWidth || el.getBoundingClientRect().width;
+        if (w > 0) setScale(w / width);
+      });
     };
 
     update();
     const ro = new ResizeObserver(update);
     ro.observe(el);
-    return () => ro.disconnect();
+    window.addEventListener('orientationchange', update);
+    return () => {
+      ro.disconnect();
+      window.removeEventListener('orientationchange', update);
+    };
   }, [width]);
 
   const layers = [...page.layers]

@@ -2607,10 +2607,11 @@ textarea {
   min-height: 100vh;
   min-height: 100dvh;
   background: #e8e8e8;
-  overflow: auto;
+  overflow-x: auto;
+  overflow-y: auto;
   -webkit-overflow-scrolling: touch;
-  /* Sin restringir gestos: tras pellizcar, el móvil debe poder panear en cualquier dirección. */
-  touch-action: auto;
+  /* Pan en ambos ejes + pellizco (comportamiento normal al hacer zoom). */
+  touch-action: pan-x pan-y pinch-zoom;
 }
 
 .public-menu-header {
@@ -2634,7 +2635,8 @@ textarea {
   align-items: center;
   padding: 1.5rem 1rem 3rem;
   width: 100%;
-  touch-action: auto;
+  box-sizing: border-box;
+  touch-action: pan-x pan-y pinch-zoom;
 }
 
 .pages-stack {
@@ -2738,8 +2740,11 @@ textarea {
   position: relative;
   width: 100%;
   max-width: min(920px, 100%);
+  /* Evita height:fit-content del editor en móvil (colapsaba a 0 con capas absolutas). */
+  height: auto;
   overflow: hidden;
   line-height: 0;
+  box-sizing: border-box;
 }
 
 .public-page-bg,
@@ -3004,11 +3009,14 @@ textarea {
 
   .public-pages-stack {
     gap: 0.75rem;
+    max-width: 100%;
   }
 
-  .public-canvas.editor-canvas-wrap {
-    width: 100%;
-    max-width: 100%;
+  .public-canvas.editor-canvas-wrap,
+  .public-page-frame.editor-canvas-wrap {
+    width: 100% !important;
+    max-width: 100% !important;
+    height: auto !important;
   }
 }
 
@@ -3026,7 +3034,7 @@ textarea {
 .html-renderer {
   width: 100%;
   max-width: 640px;
-  touch-action: auto;
+  touch-action: pan-x pan-y pinch-zoom;
 }
 
 .html-renderer-header {
