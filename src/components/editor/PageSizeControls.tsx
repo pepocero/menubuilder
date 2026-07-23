@@ -63,7 +63,8 @@ export function PageSizeControls({
     <div className="page-size-controls">
       <h3>Tamaño de página {pageIndex + 1}</h3>
       <p className="panel-hint">
-        Cada página puede tener un tamaño distinto (ideal para carta digital / QR).
+        Cada página puede tener un tamaño distinto. «Móvil pantalla completa» evita
+        el scroll vertical en la carta pública con scroll horizontal.
       </p>
 
       <label>

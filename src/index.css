@@ -2833,6 +2833,67 @@ textarea {
   max-width: 640px;
 }
 
+.public-menu-page--horizontal {
+  height: 100dvh;
+  max-height: 100dvh;
+  min-height: 100dvh;
+  overflow: hidden;
+}
+
+.public-menu-page--horizontal .public-menu-main {
+  align-items: stretch;
+  padding: 0;
+  height: 100%;
+  max-height: 100%;
+  overflow: hidden;
+}
+
+.public-pages-stack--horizontal {
+  flex-direction: row;
+  flex-wrap: nowrap;
+  align-items: stretch;
+  gap: 0;
+  max-width: none;
+  width: 100%;
+  height: 100%;
+  overflow-x: auto;
+  overflow-y: hidden;
+  scroll-snap-type: x mandatory;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior-x: contain;
+}
+
+.public-pages-stack--horizontal .public-page-block {
+  flex: 0 0 100%;
+  width: 100%;
+  min-width: 100%;
+  max-width: 100%;
+  height: 100%;
+  min-height: 100%;
+  box-sizing: border-box;
+  scroll-snap-align: start;
+  scroll-snap-stop: always;
+  padding: 0;
+  justify-content: center;
+  overflow: hidden;
+}
+
+.public-page-viewport {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  box-sizing: border-box;
+}
+
+.public-pages-stack--horizontal .public-page-frame,
+.public-pages-stack--horizontal .public-canvas {
+  max-width: none !important;
+  box-shadow: none;
+}
+
 .public-page-block {
   width: 100%;
   display: flex;

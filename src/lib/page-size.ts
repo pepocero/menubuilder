@@ -22,6 +22,13 @@ export const PAGE_SIZE_PRESETS: PageSizePreset[] = [
   { id: 'a5', label: 'A5 (14,8 × 21 cm)', widthCm: 14.8, heightCm: 21 },
   { id: 'letter', label: 'Letter (21,6 × 27,9 cm)', widthCm: 21.59, heightCm: 27.94 },
   { id: 'square', label: 'Cuadrado (20 × 20 cm)', widthCm: 20, heightCm: 20 },
+  // Ratio ~390×844 (viewport móvil típico) para carta pública a pantalla completa.
+  {
+    id: 'mobile-screen',
+    label: 'Móvil pantalla completa (9 × 19,5 cm)',
+    widthCm: 9,
+    heightCm: 19.5,
+  },
   { id: 'mobile', label: 'Móvil 9:16 (9 × 16 cm)', widthCm: 9, heightCm: 16 },
   { id: 'story', label: 'Historia / Story (10,8 × 19,2 cm)', widthCm: 10.8, heightCm: 19.2 },
   { id: 'tablet', label: 'Tablet horizontal (25 × 18 cm)', widthCm: 25, heightCm: 18 },

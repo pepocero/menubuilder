@@ -111,8 +111,20 @@ export function DashboardPage() {
     setError('');
     try {
       await deleteMenu(id);
+      setMenus((prev) => prev.filter((m) => m.id !== id));
       await loadMenus();
     } catch (err) {
+      // Si el menú ya se borró en BD pero falló la limpieza, no mostrar error falso.
+      try {
+        const { menus: data } = await listMenus();
+        setMenus(data);
+        if (!data.some((m) => m.id === id)) {
+          setError('');
+          return;
+        }
+      } catch {
+        /* mantener el error original */
+      }
       setError(err instanceof ApiError ? err.message : 'No se pudo eliminar el menú');
     }
   }

@@ -184,27 +184,42 @@ export const onRequestDelete: PagesFunction<Env> = async (context) => {
 
   const assetUrls = extractAssetUrls(menu.canvas_data);
 
+  // Borrar el menú primero: es la operación que el usuario espera.
+  // La limpieza de R2/assets es secundaria y no debe hacer fallar la petición
+  // (antes un fallo en R2 devolvía 500 aunque el menú ya estuviera eliminado).
   const deleted = await deleteMenu(env.DB, menuId, userId);
   if (!deleted) {
     return errorResponse('Menú no encontrado', 404);
   }
 
-  for (const url of assetUrls) {
-    const refs = await countMenusReferencingAssetUrl(env.DB, userId, url);
-    if (refs > 0) continue;
+  try {
+    for (const url of assetUrls) {
+      try {
+        const refs = await countMenusReferencingAssetUrl(env.DB, userId, url);
+        if (refs > 0) continue;
 
-    let asset = await findAssetByUrl(env.DB, userId, url);
-    if (!asset) {
-      const key = parseR2KeyFromAssetUrl(url);
-      if (key) asset = await findAssetByR2Key(env.DB, userId, key);
+        let asset = await findAssetByUrl(env.DB, userId, url);
+        if (!asset) {
+          const key = parseR2KeyFromAssetUrl(url);
+          if (key) asset = await findAssetByR2Key(env.DB, userId, key);
+        }
+        if (!asset) continue;
+
+        if (env.MEDIA) {
+          await deleteFromR2(env.MEDIA, asset.r2_key);
+        }
+        await deleteAssetRow(env.DB, asset.id, userId);
+      } catch (err) {
+        console.error('No se pudo limpiar asset tras borrar menú', menuId, url, err);
+      }
     }
-    if (!asset) continue;
 
-    await deleteFromR2(env.MEDIA, asset.r2_key);
-    await deleteAssetRow(env.DB, asset.id, userId);
+    if (env.MEDIA) {
+      await deleteMenuExportPng(env.MEDIA, userId, menuId);
+    }
+  } catch (err) {
+    console.error('Limpieza post-borrado de menú falló (menú ya eliminado)', menuId, err);
   }
-
-  await deleteMenuExportPng(env.MEDIA, userId, menuId);
 
   return jsonResponse({ ok: true });
 };

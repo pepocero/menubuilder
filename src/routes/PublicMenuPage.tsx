@@ -4,7 +4,7 @@ import { HtmlRenderer } from '@/components/html-renderer';
 import { PublicPageView } from '@/components/public/PublicPageView';
 import { ApiError } from '@/lib/api';
 import { SITE_NAME, applyPageSeo } from '@/lib/seo';
-import type { MenuPage } from '@/types/canvas';
+import type { MenuPage, PageScrollDirection } from '@/types/canvas';
 import { normalizeCanvasData, validateCanvasData } from '@/types/canvas';
 import { parseMenuDocument, type MenuDocument } from '@shared/menu-document';
 
@@ -49,6 +49,7 @@ export function PublicMenuPage() {
   const { slug } = useParams<{ slug: string }>();
   const [menuDocument, setMenuDocument] = useState<MenuDocument | null>(null);
   const [pages, setPages] = useState<MenuPage[]>([]);
+  const [pageScroll, setPageScroll] = useState<PageScrollDirection>('vertical');
   const [exportPngUrl, setExportPngUrl] = useState<string | null>(null);
   const [title, setTitle] = useState('');
   const [error, setError] = useState('');
@@ -78,6 +79,7 @@ export function PublicMenuPage() {
         if (validateCanvasData(menu.canvas_data)) {
           const canvasDoc = normalizeCanvasData(menu.canvas_data);
           setPages(canvasDoc.pages);
+          setPageScroll(canvasDoc.pageScroll ?? 'vertical');
           setMenuDocument(null);
           setLoading(false);
           return;
@@ -87,12 +89,14 @@ export function PublicMenuPage() {
         if (storedDoc) {
           setMenuDocument(storedDoc);
           setPages([]);
+          setPageScroll('vertical');
           setLoading(false);
           return;
         }
 
         setMenuDocument(null);
         setPages([]);
+        setPageScroll('vertical');
         setLoading(false);
       } catch {
         if (!disposed) {
@@ -112,16 +116,31 @@ export function PublicMenuPage() {
   const showPng = !showPages && !showDocument && !!exportPngUrl;
 
   return (
-    <div className="public-menu-page">
+    <div
+      className={
+        pageScroll === 'horizontal'
+          ? 'public-menu-page public-menu-page--horizontal'
+          : 'public-menu-page'
+      }
+    >
       <main className="public-menu-main">
         {loading && <p className="public-menu-status">Cargando carta…</p>}
         {error && <div className="error-banner">{error}</div>}
 
         {!loading && !error && showPages && (
-          <div className="public-pages-stack">
+          <div
+            className={
+              pageScroll === 'horizontal'
+                ? 'public-pages-stack public-pages-stack--horizontal'
+                : 'public-pages-stack'
+            }
+          >
             {pages.map((page) => (
               <div key={page.id} className="public-page-block">
-                <PublicPageView page={page} />
+                <PublicPageView
+                  page={page}
+                  fit={pageScroll === 'horizontal' ? 'contain' : 'width'}
+                />
               </div>
             ))}
           </div>

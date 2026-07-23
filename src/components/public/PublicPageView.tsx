@@ -10,6 +10,11 @@ interface PublicPageViewProps {
   page: MenuPage;
   pageWidth?: number;
   pageHeight?: number;
+  /**
+   * `width`: escala al ancho del contenedor (vista vertical).
+   * `contain`: encaja ancho y alto sin desbordar (scroll horizontal a pantalla completa).
+   */
+  fit?: 'width' | 'contain';
 }
 
 function layerStyle(layer: CanvasLayer, scale: number): React.CSSProperties {
@@ -124,6 +129,7 @@ export function PublicPageView({
   page,
   pageWidth,
   pageHeight,
+  fit = 'width',
 }: PublicPageViewProps) {
   const frameRef = useRef<HTMLDivElement>(null);
   const size = getPageSize(page);
@@ -133,8 +139,14 @@ export function PublicPageView({
   // Escala inicial segura (móvil): no depender de un clientWidth 0 en el primer paint.
   const [scale, setScale] = useState(() => {
     if (typeof window === 'undefined') return 1;
-    const approx = Math.min(window.innerWidth - 24, 920);
-    return approx > 0 ? approx / width : 1;
+    const approxW = Math.min(window.innerWidth - 24, 920);
+    if (fit === 'contain') {
+      const approxH = window.innerHeight || approxW;
+      const sw = approxW > 0 ? approxW / width : 1;
+      const sh = approxH > 0 ? approxH / height : 1;
+      return Math.min(sw, sh);
+    }
+    return approxW > 0 ? approxW / width : 1;
   });
 
   useEffect(() => {
@@ -142,13 +154,23 @@ export function PublicPageView({
     if (!el) return;
 
     const update = () => {
+      const rect = el.getBoundingClientRect();
       const frameWidth =
         el.clientWidth ||
-        el.getBoundingClientRect().width ||
+        rect.width ||
         Math.min(window.innerWidth - 24, 920);
-      if (frameWidth > 0) {
-        setScale(frameWidth / width);
+      if (frameWidth <= 0) return;
+
+      if (fit === 'contain') {
+        const frameHeight =
+          el.clientHeight || rect.height || window.innerHeight || frameWidth;
+        const sw = frameWidth / width;
+        const sh = frameHeight > 0 ? frameHeight / height : sw;
+        setScale(Math.min(sw, sh));
+        return;
       }
+
+      setScale(frameWidth / width);
     };
 
     update();
@@ -162,7 +184,7 @@ export function PublicPageView({
       window.removeEventListener('resize', update);
       window.removeEventListener('orientationchange', update);
     };
-  }, [width]);
+  }, [width, height, fit]);
 
   const layers = [...page.layers]
     .filter((layer) => layer.visible !== false)
@@ -170,15 +192,15 @@ export function PublicPageView({
 
   const bgColor =
     page.background.type === 'color' ? page.background.value : '#FAF6F0';
+  const renderedWidth = Math.max(width * scale, 1);
   const renderedHeight = Math.max(height * scale, 1);
 
-  return (
+  const canvas = (
     <div
-      ref={frameRef}
       className="public-page-frame public-canvas"
       style={{
-        width: '100%',
-        maxWidth: 'min(920px, 100%)',
+        width: fit === 'contain' ? renderedWidth : '100%',
+        maxWidth: fit === 'contain' ? renderedWidth : 'min(920px, 100%)',
         height: renderedHeight,
         minHeight: renderedHeight,
         aspectRatio: `${width} / ${height}`,
@@ -219,6 +241,20 @@ export function PublicPageView({
 
         return <div key={layer.id} style={layerStyle(layer, scale)} />;
       })}
+    </div>
+  );
+
+  if (fit === 'contain') {
+    return (
+      <div ref={frameRef} className="public-page-viewport">
+        {canvas}
+      </div>
+    );
+  }
+
+  return (
+    <div ref={frameRef} style={{ width: '100%', maxWidth: 'min(920px, 100%)' }}>
+      {canvas}
     </div>
   );
 }

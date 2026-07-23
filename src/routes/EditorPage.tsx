@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { ActiveSelection, type FabricObject, type FabricImage } from 'fabric';
 import type { StockImage } from '@shared/stock';
-import type { CanvasData, CanvasLayer, MenuPage } from '@/types/canvas';
+import type { CanvasData, CanvasLayer, MenuPage, PageScrollDirection } from '@/types/canvas';
 import {
   createBlankPage,
   normalizeCanvasData,
@@ -58,6 +58,7 @@ import { EditorZoomControls, type CanvasInteractionMode } from '@/components/edi
 import { LayersPanel } from '@/components/editor/LayersPanel';
 import { PropertiesPanel } from '@/components/editor/PropertiesPanel';
 import { PageSizeControls } from '@/components/editor/PageSizeControls';
+import { PublicScrollControls } from '@/components/editor/PublicScrollControls';
 import { PublishQrModal } from '@/components/editor/PublishQrModal';
 import { AssetManagerModal } from '@/components/editor/AssetManagerModal';
 import { ImportMenuModal, type ImportMenuOptions, type ImportMenuSource } from '@/components/editor/ImportMenuModal';
@@ -71,6 +72,7 @@ export function EditorPage() {
 
   const [title, setTitle] = useState('');
   const [pages, setPages] = useState<MenuPage[]>([]);
+  const [pageScroll, setPageScroll] = useState<PageScrollDirection>('vertical');
   const [activePageIndex, setActivePageIndex] = useState(0);
   const [loading, setLoading] = useState(true);
   const [saveStatus, setSaveStatus] = useState<'saved' | 'saving' | 'unsaved'>('saved');
@@ -133,6 +135,9 @@ export function EditorPage() {
     [getActiveHandle],
   );
 
+  const pageScrollRef = useRef<PageScrollDirection>('vertical');
+  pageScrollRef.current = pageScroll;
+
   const collectDocument = useCallback((): CanvasData => {
     const collected: MenuPage[] = pagesMetaRef.current.map((page, index) => {
       const fromCanvas = pageRefs.current[index]?.getPageData();
@@ -141,6 +146,7 @@ export function EditorPage() {
     return serializeCanvasData({
       width: 595,
       height: 842,
+      pageScroll: pageScrollRef.current,
       pages: collected.length > 0 ? collected : [createBlankPage()],
     });
   }, []);
@@ -457,6 +463,7 @@ export function EditorPage() {
         setTitle(menu.title);
         const doc = normalizeCanvasData(menu.canvas_data);
         setPages(doc.pages);
+        setPageScroll(doc.pageScroll ?? 'vertical');
         setActivePageIndex(0);
         setIsPublic(menu.is_public);
         setPublicSlug(menu.public_slug);
@@ -1280,6 +1287,7 @@ export function EditorPage() {
       bumpHistoryUi();
       pageRefs.current = [];
       setPages(imported.pages);
+      setPageScroll(imported.pageScroll ?? 'vertical');
       setActivePageIndex(0);
       setActiveObject(null);
       const firstBg = imported.pages[0]?.background;
@@ -1695,6 +1703,13 @@ export function EditorPage() {
         </main>
 
         <aside className="editor-sidebar right">
+          <PublicScrollControls
+            value={pageScroll}
+            onChange={(next) => {
+              setPageScroll(next);
+              scheduleSave();
+            }}
+          />
           {pages[activePageIndex] && (
             <PageSizeControls
               page={pages[activePageIndex]}

@@ -81,6 +81,9 @@ export interface MenuPage {
   height?: number;
 }
 
+/** Dirección del scroll entre páginas en la carta pública (QR). El editor no cambia. */
+export type PageScrollDirection = 'vertical' | 'horizontal';
+
 /**
  * Documento del menú.
  * Formato nuevo: `pages[]`.
@@ -90,6 +93,11 @@ export interface CanvasData {
   width: number;
   height: number;
   pages: MenuPage[];
+  /**
+   * Scroll entre páginas solo en la vista pública.
+   * Por defecto: vertical. El editor siempre apila en vertical.
+   */
+  pageScroll?: PageScrollDirection;
   /** @deprecated compat */
   background?: CanvasBackground;
   /** @deprecated compat */
@@ -103,6 +111,10 @@ function normalizePageSize(value: unknown, fallback: number): number {
   return typeof value === 'number' && Number.isFinite(value) && value > 0
     ? Math.round(value)
     : fallback;
+}
+
+export function normalizePageScroll(value: unknown): PageScrollDirection {
+  return value === 'horizontal' ? 'horizontal' : 'vertical';
 }
 
 export function createBlankPage(
@@ -121,6 +133,7 @@ export function createBlankPage(
 export const DEFAULT_CANVAS: CanvasData = {
   width: A4_WIDTH,
   height: A4_HEIGHT,
+  pageScroll: 'vertical',
   pages: [
     {
       id: 'page_1',
@@ -136,6 +149,7 @@ export function createBlankCanvas(): CanvasData {
   return {
     width: A4_WIDTH,
     height: A4_HEIGHT,
+    pageScroll: 'vertical',
     pages: [createBlankPage()],
   };
 }
@@ -148,6 +162,7 @@ export function normalizeCanvasData(raw: unknown): CanvasData {
   const d = raw as Record<string, unknown>;
   const width = normalizePageSize(d.width, A4_WIDTH);
   const height = normalizePageSize(d.height, A4_HEIGHT);
+  const pageScroll = normalizePageScroll(d.pageScroll);
 
   if (Array.isArray(d.pages) && d.pages.length > 0) {
     const pages: MenuPage[] = d.pages.map((p, index) => {
@@ -164,7 +179,7 @@ export function normalizeCanvasData(raw: unknown): CanvasData {
         height: normalizePageSize(page.height, height),
       };
     });
-    return { width, height, pages };
+    return { width, height, pageScroll, pages };
   }
 
   // Legado: una sola página con background + layers
@@ -172,6 +187,7 @@ export function normalizeCanvasData(raw: unknown): CanvasData {
     return {
       width,
       height,
+      pageScroll,
       pages: [
         {
           id: 'page_1',
@@ -218,6 +234,7 @@ export function serializeCanvasData(data: CanvasData): CanvasData {
   return {
     width: normalized.width || A4_WIDTH,
     height: normalized.height || A4_HEIGHT,
+    pageScroll: normalizePageScroll(normalized.pageScroll ?? data.pageScroll),
     pages: normalized.pages.map((page) => ({
       ...page,
       width: normalizePageSize(page.width, normalized.width || A4_WIDTH),
