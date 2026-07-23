@@ -1324,6 +1324,24 @@ textarea {
   cursor: not-allowed;
 }
 
+.toolbar button.is-active {
+  border-color: var(--color-primary);
+  color: var(--color-primary);
+  background: #eff6ff;
+}
+
+.editor-canvas-area--eyedropper,
+.editor-canvas-area--eyedropper .editor-canvas-wrap,
+.editor-canvas-area--eyedropper canvas {
+  cursor: crosshair !important;
+}
+
+.public-menu-status {
+  margin: 2rem 1rem;
+  text-align: center;
+  color: #444;
+}
+
 .toolbar-right {
   margin-left: auto;
 }
@@ -2700,35 +2718,122 @@ textarea {
   -webkit-overflow-scrolling: touch;
 }
 
-.public-menu-header {
-  display: flex;
-  align-items: center;
-  gap: 1.5rem;
-  padding: 0.75rem 1.5rem;
-  background: var(--color-surface);
-  border-bottom: 1px solid var(--color-border);
-}
-
-.public-menu-header h1 {
-  margin: 0;
-  font-size: 1.1rem;
-  font-weight: 600;
-}
-
 .public-menu-main {
   display: flex;
   flex-direction: column;
   align-items: center;
-  padding: 1.5rem 1rem 3rem;
+  padding: 0 0 2rem;
   width: 100%;
   max-width: 100%;
   box-sizing: border-box;
 }
 
-.public-menu-status {
-  margin: 2rem 1rem;
-  text-align: center;
-  color: #444;
+.public-pages-stack {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 0;
+  width: 100%;
+  max-width: 100%;
+}
+
+.public-menu-page--horizontal {
+  /* Fallback: dvh. Preferimos svh = zona útil con chrome del navegador. */
+  height: 100dvh;
+  max-height: 100dvh;
+  min-height: 100dvh;
+  overflow: hidden;
+  background: transparent;
+}
+
+@supports (height: 100svh) {
+  .public-menu-page--horizontal {
+    height: 100svh;
+    max-height: 100svh;
+    min-height: 100svh;
+  }
+}
+
+.public-menu-page--horizontal .public-menu-main {
+  align-items: stretch;
+  padding: 0;
+  height: 100%;
+  max-height: 100%;
+  overflow: hidden;
+}
+
+.public-pages-stack--horizontal {
+  flex-direction: row;
+  flex-wrap: nowrap;
+  align-items: stretch;
+  gap: 0;
+  max-width: none;
+  width: 100%;
+  height: 100%;
+  overflow-x: auto;
+  overflow-y: hidden;
+  scroll-snap-type: x mandatory;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior-x: contain;
+  touch-action: pan-x;
+}
+
+.public-pages-stack--horizontal .public-page-block {
+  /* % del contenedor (no 100vw): evita franja por scrollbar / gutter. */
+  flex: 0 0 100%;
+  width: 100%;
+  min-width: 100%;
+  max-width: 100%;
+  height: 100%;
+  min-height: 100%;
+  box-sizing: border-box;
+  scroll-snap-align: start;
+  scroll-snap-stop: always;
+  padding: 0;
+  justify-content: flex-start;
+  align-items: stretch;
+  overflow: hidden;
+  touch-action: pan-x;
+}
+
+.public-page-viewport {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  box-sizing: border-box;
+}
+
+.public-page-viewport--contain {
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  touch-action: pan-x;
+}
+
+.public-page-viewport-vertical {
+  width: 100%;
+  display: flex;
+  justify-content: center;
+  box-sizing: border-box;
+}
+
+.public-pages-stack--horizontal .public-page-frame,
+.public-pages-stack--horizontal .public-canvas {
+  max-width: none !important;
+  box-shadow: none;
+  max-height: 100%;
+  pointer-events: none;
+}
+
+.public-page-block {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 0;
 }
 
 .pages-stack {
@@ -2828,110 +2933,6 @@ textarea {
 .page-canvas--active {
   outline: 2px solid var(--color-primary);
   outline-offset: 4px;
-}
-
-.public-pages-stack {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 1.25rem;
-  width: 100%;
-  max-width: 640px;
-}
-
-.public-menu-page--horizontal {
-  /* Fallback: dvh. Preferimos svh = zona útil con chrome del navegador. */
-  height: 100dvh;
-  max-height: 100dvh;
-  min-height: 100dvh;
-  overflow: hidden;
-  background: #111;
-}
-
-@supports (height: 100svh) {
-  .public-menu-page--horizontal {
-    height: 100svh;
-    max-height: 100svh;
-    min-height: 100svh;
-  }
-}
-
-.public-menu-page--horizontal .public-menu-main {
-  align-items: stretch;
-  padding: 0;
-  height: 100%;
-  max-height: 100%;
-  overflow: hidden;
-}
-
-.public-pages-stack--horizontal {
-  flex-direction: row;
-  flex-wrap: nowrap;
-  align-items: stretch;
-  gap: 0;
-  max-width: none;
-  width: 100%;
-  height: 100%;
-  overflow-x: auto;
-  overflow-y: hidden;
-  scroll-snap-type: x mandatory;
-  -webkit-overflow-scrolling: touch;
-  overscroll-behavior-x: contain;
-  /* El gesto horizontal debe llegar a este contenedor, no a hijos. */
-  touch-action: pan-x;
-}
-
-.public-pages-stack--horizontal .public-page-block {
-  /* 100vw: evita que el % del flex no genere overflow horizontal real. */
-  flex: 0 0 100vw;
-  width: 100vw;
-  min-width: 100vw;
-  max-width: 100vw;
-  height: 100%;
-  min-height: 100%;
-  box-sizing: border-box;
-  scroll-snap-align: start;
-  scroll-snap-stop: always;
-  padding: 0;
-  justify-content: flex-start;
-  align-items: stretch;
-  overflow: hidden;
-  touch-action: pan-x;
-}
-
-.public-page-viewport {
-  width: 100%;
-  height: 100%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  overflow: hidden;
-  box-sizing: border-box;
-}
-
-/* Página entera visible; franjas del color de fondo. Sin scroll interno. */
-.public-page-viewport--contain {
-  align-items: center;
-  justify-content: center;
-  overflow: hidden;
-  touch-action: pan-x;
-}
-
-.public-pages-stack--horizontal .public-page-frame,
-.public-pages-stack--horizontal .public-canvas {
-  max-width: none !important;
-  box-shadow: none;
-  /* Evita que un 1px de redondeo active scroll fantasma. */
-  max-height: 100%;
-  pointer-events: none;
-}
-
-.public-page-block {
-  width: 100%;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 0.5rem;
 }
 
 .public-page-label {
@@ -3232,11 +3233,11 @@ textarea {
   }
 
   .public-menu-main {
-    padding: 0.75rem 0.5rem 1.5rem;
+    padding: 0 0 1.5rem;
   }
 
   .public-pages-stack {
-    gap: 0.75rem;
+    gap: 0;
     max-width: 100%;
   }
 

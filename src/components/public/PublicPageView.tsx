@@ -4,7 +4,7 @@ import { normalizeAssetUrl } from '@/lib/asset-url';
 import { ensureEditorFontLoaded } from '@/lib/google-fonts';
 import { getPageSize } from '@/lib/page-size';
 import { textBorderToCss } from '@/lib/text-border';
-import { renderTextContentWithCharStyles } from '@/lib/text-char-styles';
+import { paintPublicTextLayer } from '@/lib/public-text-canvas';
 
 interface PublicPageViewProps {
   page: MenuPage;
@@ -36,15 +36,6 @@ function layerStyle(layer: CanvasLayer, scale: number): React.CSSProperties {
     return {
       ...base,
       boxSizing: 'border-box',
-      color: layer.style.color,
-      fontFamily: layer.style.fontFamily,
-      fontSize: Math.max(layer.style.fontSize * scale, 4),
-      fontWeight: layer.style.fontWeight,
-      fontStyle: layer.style.fontStyle,
-      textAlign: layer.style.align,
-      whiteSpace: 'pre-wrap',
-      lineHeight: 1.16,
-      overflow: 'hidden',
       ...textBorderToCss(layer.style.border, scale),
     };
   }
@@ -87,36 +78,43 @@ function layerStyle(layer: CanvasLayer, scale: number): React.CSSProperties {
 }
 
 function TextLayerView({ layer, scale }: { layer: TextLayer; scale: number }) {
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const [ready, setReady] = useState(false);
+
   useEffect(() => {
+    let cancelled = false;
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+
+    setReady(false);
     try {
       ensureEditorFontLoaded(layer.style.fontFamily);
-      if (!layer.charStyles) return;
-      for (const line of Object.values(layer.charStyles)) {
-        for (const style of Object.values(line)) {
-          if (typeof style.fontFamily === 'string') {
-            ensureEditorFontLoaded(style.fontFamily);
-          }
-        }
-      }
     } catch {
-      /* fuentes opcionales */
+      /* opcional */
     }
-  }, [layer]);
+
+    void paintPublicTextLayer(canvas, layer, scale).then(() => {
+      if (!cancelled) setReady(true);
+    });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [layer, scale]);
 
   return (
     <div style={layerStyle(layer, scale)}>
-      {renderTextContentWithCharStyles(
-        layer.content,
-        layer.charStyles,
-        {
-          color: layer.style.color,
-          fontFamily: layer.style.fontFamily,
-          fontSize: layer.style.fontSize,
-          fontWeight: layer.style.fontWeight,
-          fontStyle: layer.style.fontStyle,
-        },
-        scale,
-      )}
+      <canvas
+        ref={canvasRef}
+        className="public-page-text-canvas"
+        style={{
+          display: 'block',
+          width: '100%',
+          height: '100%',
+          opacity: ready ? 1 : 0,
+        }}
+        aria-hidden
+      />
     </div>
   );
 }
@@ -188,6 +186,10 @@ export function PublicPageView({
 
   const bgColor =
     page.background.type === 'color' ? page.background.value : '#FAF6F0';
+  const bgImageUrl =
+    page.background.type === 'image' && page.background.value
+      ? normalizeAssetUrl(page.background.value)
+      : null;
   const renderedWidth = Math.max(width * scale, 1);
   const renderedHeight = Math.max(height * scale, 1);
 
@@ -201,16 +203,16 @@ export function PublicPageView({
         minHeight: renderedHeight,
         flexShrink: 0,
         aspectRatio: `${width} / ${height}`,
-        background: page.background.type === 'color' ? bgColor : '#FAF6F0',
+        background: bgImageUrl ? 'transparent' : bgColor,
         position: 'relative',
         overflow: 'hidden',
         boxSizing: 'border-box',
       }}
     >
-      {page.background.type === 'image' && page.background.value ? (
+      {bgImageUrl ? (
         <img
           className="public-page-bg"
-          src={normalizeAssetUrl(page.background.value)}
+          src={bgImageUrl}
           alt=""
           draggable={false}
           decoding="async"
@@ -241,12 +243,21 @@ export function PublicPageView({
     </div>
   );
 
+  const letterboxStyle: React.CSSProperties = bgImageUrl
+    ? {
+        backgroundColor: bgColor,
+        backgroundImage: `url(${bgImageUrl})`,
+        backgroundSize: 'cover',
+        backgroundPosition: 'center',
+      }
+    : { background: bgColor };
+
   if (containFit) {
     return (
       <div
         ref={frameRef}
         className="public-page-viewport public-page-viewport--contain"
-        style={{ background: bgColor }}
+        style={letterboxStyle}
       >
         {canvas}
       </div>
@@ -254,7 +265,15 @@ export function PublicPageView({
   }
 
   return (
-    <div ref={frameRef} style={{ width: '100%', maxWidth: 'min(920px, 100%)' }}>
+    <div
+      ref={frameRef}
+      className="public-page-viewport-vertical"
+      style={{
+        width: '100%',
+        maxWidth: '100%',
+        ...letterboxStyle,
+      }}
+    >
       {canvas}
     </div>
   );

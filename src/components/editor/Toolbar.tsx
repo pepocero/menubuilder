@@ -23,6 +23,8 @@ interface ToolbarProps {
   onMergeTexts: () => void;
   canMergeTexts: boolean;
   onChangeBackground: (color: string) => void;
+  onPickBackgroundColor: () => void;
+  backgroundPickActive?: boolean;
   onExportPng: () => void;
   onExportPdf: () => void;
   onExportJson: () => void;
@@ -61,6 +63,8 @@ export function Toolbar({
   onMergeTexts,
   canMergeTexts,
   onChangeBackground,
+  onPickBackgroundColor,
+  backgroundPickActive = false,
   onExportPng,
   onExportPdf,
   onExportJson,
@@ -229,6 +233,18 @@ export function Toolbar({
           onChange={(e) => onChangeBackground(e.target.value)}
           title="Color de fondo de la página activa"
         />
+        <button
+          type="button"
+          className={backgroundPickActive ? 'is-active' : undefined}
+          onClick={onPickBackgroundColor}
+          title={
+            backgroundPickActive
+              ? 'Clic en el lienzo para clonar un color (Esc cancela)'
+              : 'Clonar color (cuentagotas): elige un píxel de la imagen o de la pantalla'
+          }
+        >
+          Cuentagotas
+        </button>
       </div>
 
       <div className="toolbar-group">
