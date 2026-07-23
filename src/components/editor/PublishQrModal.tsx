@@ -169,16 +169,14 @@ export function PublishQrModal({
                 >
                   Descargar SVG
                 </button>
-                <button type="button" className="btn-secondary" disabled={busy} onClick={handlePublish}>
-                  Regenerar
-                </button>
                 <button type="button" className="danger-btn" disabled={busy} onClick={handleUnpublish}>
                   Despublicar
                 </button>
               </div>
               <p className="panel-hint">
-                Para imprimir usa el PNG de alta calidad (1024×1024). El preview de pantalla es más
-                pequeño a propósito. Solo tú gestionas este QR.
+                Para imprimir usa <strong>Descargar PNG (alta calidad)</strong> (1024×1024). La
+                miniatura del modal es solo vista previa. El enlace del QR no cambia mientras la
+                carta siga publicada.
               </p>
             </>
           )}

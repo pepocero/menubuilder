@@ -2607,9 +2607,10 @@ textarea {
   min-height: 100vh;
   min-height: 100dvh;
   background: #e8e8e8;
-  overflow-y: auto;
+  overflow: auto;
   -webkit-overflow-scrolling: touch;
-  touch-action: pan-y pinch-zoom;
+  /* Sin restringir gestos: tras pellizcar, el móvil debe poder panear en cualquier dirección. */
+  touch-action: auto;
 }
 
 .public-menu-header {
@@ -2633,7 +2634,7 @@ textarea {
   align-items: center;
   padding: 1.5rem 1rem 3rem;
   width: 100%;
-  touch-action: pan-y pinch-zoom;
+  touch-action: auto;
 }
 
 .pages-stack {
@@ -3025,7 +3026,7 @@ textarea {
 .html-renderer {
   width: 100%;
   max-width: 640px;
-  touch-action: pan-y pinch-zoom;
+  touch-action: auto;
 }
 
 .html-renderer-header {

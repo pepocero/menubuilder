@@ -23,84 +23,121 @@ function triggerDownload(href: string, filename: string) {
 
 /** Descarga PNG de alta resolución (recomendado para imprimir). */
 export async function downloadQrPng(value: string, filenameBase: string): Promise<void> {
-  const host = document.createElement('div');
-  host.style.cssText =
-    'position:fixed;left:-9999px;top:0;width:0;height:0;overflow:hidden;pointer-events:none';
-  document.body.appendChild(host);
-
-  const root = createRoot(host);
+  const canvas = await renderOffscreenQrCanvas(value);
   try {
-    await new Promise<void>((resolve, reject) => {
-      root.render(
-        createElement(QRCodeCanvas, {
-          value,
-          size: QR_DOWNLOAD_SIZE,
-          level: QR_ERROR_LEVEL,
-          includeMargin: true,
-          id: 'menubuilder-qr-download-canvas',
-        }),
-      );
-      // Esperar un frame a que el canvas pinte.
-      requestAnimationFrame(() => {
-        requestAnimationFrame(() => {
-          const canvas = document.getElementById(
-            'menubuilder-qr-download-canvas',
-          ) as HTMLCanvasElement | null;
-          if (!canvas) {
-            reject(new Error('No se pudo generar el QR'));
-            return;
-          }
-          try {
-            const url = canvas.toDataURL('image/png');
-            triggerDownload(url, `${filenameBase}.png`);
-            resolve();
-          } catch (err) {
-            reject(err instanceof Error ? err : new Error(String(err)));
-          }
-        });
-      });
-    });
+    const url = canvas.toDataURL('image/png');
+    triggerDownload(url, `${filenameBase}.png`);
   } finally {
-    root.unmount();
-    host.remove();
+    canvas.remove();
   }
 }
 
-/** Descarga SVG vectorial grande (escala bien; algunos programas usan el size intrínseco). */
+/** Descarga SVG vectorial grande (1024×1024 intrínsecos). */
 export async function downloadQrSvg(value: string, filenameBase: string): Promise<void> {
+  const svg = await renderOffscreenQrSvg(value);
+  try {
+    // Asegura tamaño intrínseco alto (algunos visores usan solo width/height del root).
+    svg.setAttribute('width', String(QR_DOWNLOAD_SIZE));
+    svg.setAttribute('height', String(QR_DOWNLOAD_SIZE));
+    if (!svg.getAttribute('viewBox')) {
+      svg.setAttribute('viewBox', `0 0 ${QR_DOWNLOAD_SIZE} ${QR_DOWNLOAD_SIZE}`);
+    }
+    const source = new XMLSerializer().serializeToString(svg);
+    const blob = new Blob([source], { type: 'image/svg+xml;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    triggerDownload(url, `${filenameBase}.svg`);
+    URL.revokeObjectURL(url);
+  } finally {
+    svg.remove();
+  }
+}
+
+function waitFrames(n: number): Promise<void> {
+  return new Promise((resolve) => {
+    const step = (left: number) => {
+      if (left <= 0) {
+        resolve();
+        return;
+      }
+      requestAnimationFrame(() => step(left - 1));
+    };
+    step(n);
+  });
+}
+
+async function renderOffscreenQrCanvas(value: string): Promise<HTMLCanvasElement> {
   const host = document.createElement('div');
+  host.setAttribute('aria-hidden', 'true');
   host.style.cssText =
-    'position:fixed;left:-9999px;top:0;width:0;height:0;overflow:hidden;pointer-events:none';
+    'position:fixed;left:-10000px;top:0;width:1024px;height:1024px;overflow:hidden;pointer-events:none;opacity:0;';
   document.body.appendChild(host);
 
   const root = createRoot(host);
-  try {
-    await new Promise<void>((resolve, reject) => {
-      root.render(
-        createElement(QRCodeSVG, {
-          value,
-          size: QR_DOWNLOAD_SIZE,
-          level: QR_ERROR_LEVEL,
-          includeMargin: true,
-          id: 'menubuilder-qr-download-svg',
-        }),
-      );
-      requestAnimationFrame(() => {
-        const svg = document.getElementById('menubuilder-qr-download-svg');
-        if (!svg) {
-          reject(new Error('No se pudo generar el QR'));
-          return;
-        }
-        const source = new XMLSerializer().serializeToString(svg);
-        const blob = new Blob([source], { type: 'image/svg+xml;charset=utf-8' });
-        const url = URL.createObjectURL(blob);
-        triggerDownload(url, `${filenameBase}.svg`);
-        URL.revokeObjectURL(url);
-        resolve();
-      });
-    });
-  } finally {
+  const canvasId = `menubuilder-qr-png-${crypto.randomUUID()}`;
+  root.render(
+    createElement(QRCodeCanvas, {
+      value,
+      size: QR_DOWNLOAD_SIZE,
+      level: QR_ERROR_LEVEL,
+      includeMargin: true,
+      id: canvasId,
+    }),
+  );
+
+  await waitFrames(3);
+  const canvas = document.getElementById(canvasId) as HTMLCanvasElement | null;
+  if (!canvas || canvas.width < QR_DOWNLOAD_SIZE * 0.5) {
     root.unmount();
     host.remove();
+    throw new Error('No se pudo generar el QR PNG');
   }
+
+  const out = document.createElement('canvas');
+  out.width = canvas.width;
+  out.height = canvas.height;
+  const ctx = out.getContext('2d');
+  if (!ctx) {
+    root.unmount();
+    host.remove();
+    throw new Error('No se pudo generar el QR PNG');
+  }
+  ctx.drawImage(canvas, 0, 0);
+
+  root.unmount();
+  host.remove();
+  return out;
+}
+
+async function renderOffscreenQrSvg(value: string): Promise<SVGSVGElement> {
+  const host = document.createElement('div');
+  host.setAttribute('aria-hidden', 'true');
+  host.style.cssText =
+    'position:fixed;left:-10000px;top:0;width:1024px;height:1024px;overflow:hidden;pointer-events:none;opacity:0;';
+  document.body.appendChild(host);
+
+  const root = createRoot(host);
+  const svgId = `menubuilder-qr-svg-${crypto.randomUUID()}`;
+  root.render(
+    createElement(QRCodeSVG, {
+      value,
+      size: QR_DOWNLOAD_SIZE,
+      level: QR_ERROR_LEVEL,
+      includeMargin: true,
+      id: svgId,
+    }),
+  );
+
+  await waitFrames(3);
+  const svg = document.getElementById(svgId);
+  if (!(svg instanceof SVGSVGElement)) {
+    root.unmount();
+    host.remove();
+    throw new Error('No se pudo generar el QR SVG');
+  }
+
+  // Clonar antes de desmontar React (el nodo original se destruye al unmount).
+  const clone = svg.cloneNode(true) as SVGSVGElement;
+  root.unmount();
+  host.remove();
+  return clone;
 }
