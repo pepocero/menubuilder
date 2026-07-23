@@ -1,6 +1,12 @@
 import { useEffect, useState } from 'react';
 import { QRCodeSVG } from 'qrcode.react';
 import { ApiError, publishMenu, unpublishMenu } from '@/lib/api';
+import {
+  downloadQrPng,
+  downloadQrSvg,
+  QR_ERROR_LEVEL,
+  QR_PREVIEW_SIZE,
+} from '@/lib/qr-download';
 
 interface PublishQrModalProps {
   open: boolean;
@@ -24,6 +30,7 @@ export function PublishQrModal({
   const [slug, setSlug] = useState(initialSlug);
   const [isPublic, setIsPublic] = useState(initialPublic);
   const [busy, setBusy] = useState(false);
+  const [downloading, setDownloading] = useState(false);
   const [error, setError] = useState('');
 
   useEffect(() => {
@@ -38,6 +45,7 @@ export function PublishQrModal({
 
   const publicPath = slug ? `/p/${slug}` : null;
   const publicUrl = publicPath ? `${window.location.origin}${publicPath}` : null;
+  const filenameBase = `qr-${slug || menuId}`;
 
   async function handlePublish() {
     setBusy(true);
@@ -69,18 +77,30 @@ export function PublishQrModal({
     }
   }
 
-  function downloadQr() {
-    const svg = document.getElementById('menu-qr-svg');
-    if (!svg) return;
-    const serializer = new XMLSerializer();
-    const source = serializer.serializeToString(svg);
-    const blob = new Blob([source], { type: 'image/svg+xml;charset=utf-8' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `qr-${slug || menuId}.svg`;
-    a.click();
-    URL.revokeObjectURL(url);
+  async function handleDownloadPng() {
+    if (!publicUrl) return;
+    setDownloading(true);
+    setError('');
+    try {
+      await downloadQrPng(publicUrl, filenameBase);
+    } catch {
+      setError('No se pudo descargar el QR en PNG');
+    } finally {
+      setDownloading(false);
+    }
+  }
+
+  async function handleDownloadSvg() {
+    if (!publicUrl) return;
+    setDownloading(true);
+    setError('');
+    try {
+      await downloadQrSvg(publicUrl, filenameBase);
+    } catch {
+      setError('No se pudo descargar el QR en SVG');
+    } finally {
+      setDownloading(false);
+    }
   }
 
   async function copyLink() {
@@ -114,7 +134,13 @@ export function PublishQrModal({
           ) : (
             <>
               <div className="qr-preview">
-                <QRCodeSVG id="menu-qr-svg" value={publicUrl} size={220} level="M" includeMargin />
+                <QRCodeSVG
+                  id="menu-qr-svg"
+                  value={publicUrl}
+                  size={QR_PREVIEW_SIZE}
+                  level={QR_ERROR_LEVEL}
+                  includeMargin
+                />
               </div>
               <p className="qr-link">
                 <a href={publicPath!} target="_blank" rel="noreferrer">
@@ -125,10 +151,25 @@ export function PublishQrModal({
                 <button type="button" className="btn-secondary" onClick={copyLink}>
                   Copiar enlace
                 </button>
-                <button type="button" className="btn-secondary" onClick={downloadQr}>
-                  Descargar QR
+                <button
+                  type="button"
+                  className="btn-primary"
+                  disabled={downloading}
+                  onClick={() => void handleDownloadPng()}
+                  title="PNG 1024×1024 — ideal para imprimir"
+                >
+                  {downloading ? 'Descargando…' : 'Descargar PNG (alta calidad)'}
                 </button>
-                <button type="button" className="btn-primary" disabled={busy} onClick={handlePublish}>
+                <button
+                  type="button"
+                  className="btn-secondary"
+                  disabled={downloading}
+                  onClick={() => void handleDownloadSvg()}
+                  title="SVG vectorial 1024×1024"
+                >
+                  Descargar SVG
+                </button>
+                <button type="button" className="btn-secondary" disabled={busy} onClick={handlePublish}>
                   Regenerar
                 </button>
                 <button type="button" className="danger-btn" disabled={busy} onClick={handleUnpublish}>
@@ -136,8 +177,8 @@ export function PublishQrModal({
                 </button>
               </div>
               <p className="panel-hint">
-                Solo tú puedes gestionar este QR. Otros usuarios no ven ni controlan tus cartas
-                publicadas.
+                Para imprimir usa el PNG de alta calidad (1024×1024). El preview de pantalla es más
+                pequeño a propósito. Solo tú gestionas este QR.
               </p>
             </>
           )}

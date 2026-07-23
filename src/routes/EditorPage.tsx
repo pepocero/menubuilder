@@ -1220,6 +1220,18 @@ export function EditorPage() {
         <main
           className={`editor-canvas-area editor-canvas-area--${interactionMode}`}
           ref={canvasAreaRef}
+          onPointerDown={(e) => {
+            if (interactionMode === 'scroll') return;
+            const target = e.target as HTMLElement | null;
+            // Clic dentro del lienzo (o su contenedor Fabric): no deseleccionar.
+            if (target?.closest('.page-canvas')) return;
+
+            const canvas = getActiveCanvas();
+            if (!canvas?.getActiveObject()) return;
+            canvas.discardActiveObject();
+            canvas.requestRenderAll();
+            setActiveObject(null);
+          }}
         >
           <div className="pages-stack">
             {pages.map((page, index) => (

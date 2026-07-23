@@ -3,11 +3,17 @@ import { Link } from 'react-router-dom';
 import { QRCodeSVG } from 'qrcode.react';
 import { ApiError, listMyQrs, unpublishMenu, type PublishedQr } from '@/lib/api';
 import { AppLayout } from '@/components/AppLayout';
+import {
+  downloadQrPng,
+  QR_ERROR_LEVEL,
+  QR_PREVIEW_SIZE,
+} from '@/lib/qr-download';
 
 export function QrsPage() {
   const [menus, setMenus] = useState<PublishedQr[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [downloadingId, setDownloadingId] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -36,13 +42,27 @@ export function QrsPage() {
     return `${window.location.origin}${path}`;
   }
 
+  async function handleDownloadPng(menu: PublishedQr) {
+    const url = absoluteUrl(menu.public_url);
+    setDownloadingId(menu.id);
+    setError('');
+    try {
+      await downloadQrPng(url, `qr-${menu.public_slug || menu.id}`);
+    } catch {
+      setError('No se pudo descargar el QR en PNG');
+    } finally {
+      setDownloadingId(null);
+    }
+  }
+
   return (
     <div className="qrs-page">
       <AppLayout />
       <main className="templates-main">
         <h1>Mis códigos QR</h1>
         <p>
-          Solo ves las cartas que tú has publicado. Nadie más puede gestionar tus QR.
+          Solo ves las cartas que tú has publicado. Nadie más puede gestionar tus QR. Para imprimir,
+          descarga el PNG de alta calidad.
         </p>
 
         {loading && <p>Cargando...</p>}
@@ -66,13 +86,26 @@ export function QrsPage() {
             return (
               <article key={menu.id} className="qr-card">
                 <div className="qr-card-code">
-                  <QRCodeSVG value={url} size={160} level="M" includeMargin />
+                  <QRCodeSVG
+                    value={url}
+                    size={Math.min(QR_PREVIEW_SIZE, 180)}
+                    level={QR_ERROR_LEVEL}
+                    includeMargin
+                  />
                 </div>
                 <h3>{menu.title}</h3>
                 <a href={menu.public_url} target="_blank" rel="noreferrer" className="qr-card-link">
                   {url}
                 </a>
                 <div className="qr-card-actions">
+                  <button
+                    type="button"
+                    className="btn-primary"
+                    disabled={downloadingId === menu.id}
+                    onClick={() => void handleDownloadPng(menu)}
+                  >
+                    {downloadingId === menu.id ? 'Descargando…' : 'Descargar PNG'}
+                  </button>
                   <Link to={`/editor/${menu.id}`} className="btn-secondary">
                     Editar
                   </Link>

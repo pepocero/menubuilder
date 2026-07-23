@@ -73,6 +73,118 @@ function assetDisplayName(asset: AssetSummary): string {
   }
 }
 
+/** Icono tipo reproductor: entrar a pantalla completa. */
+function IconExpandFullscreen() {
+  return (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+      <path
+        d="M8 3H4v4M16 3h4v4M8 21H4v-4M16 21h4v-4"
+        stroke="currentColor"
+        strokeWidth="2"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
+  );
+}
+
+/** Icono tipo reproductor: salir de pantalla completa. */
+function IconCollapseFullscreen() {
+  return (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+      <path
+        d="M9 3v4H5M15 3v4h4M9 21v-4H5M15 21v-4h4"
+        stroke="currentColor"
+        strokeWidth="2"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
+  );
+}
+
+function ImportImagePreview({
+  src,
+  alt,
+  disabled = false,
+}: {
+  src: string;
+  alt: string;
+  disabled?: boolean;
+}) {
+  const [expanded, setExpanded] = useState(false);
+
+  useEffect(() => {
+    if (!expanded) return;
+    function onKeyDown(e: KeyboardEvent) {
+      if (e.key === 'Escape') setExpanded(false);
+    }
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [expanded]);
+
+  useEffect(() => {
+    if (disabled) setExpanded(false);
+  }, [disabled]);
+
+  useEffect(() => {
+    setExpanded(false);
+  }, [src]);
+
+  return (
+    <>
+      <div className="import-menu-preview">
+        <button
+          type="button"
+          className="import-menu-preview-hit"
+          disabled={disabled}
+          onClick={() => setExpanded(true)}
+          aria-label="Ampliar vista previa"
+          title="Ampliar"
+        >
+          <img src={src} alt={alt} />
+        </button>
+        <button
+          type="button"
+          className="import-menu-preview-fs-btn"
+          disabled={disabled}
+          onClick={() => setExpanded(true)}
+          aria-label="Ampliar a pantalla completa"
+          title="Ampliar"
+        >
+          <IconExpandFullscreen />
+        </button>
+      </div>
+
+      {expanded && (
+        <div
+          className="import-menu-preview-lightbox"
+          role="dialog"
+          aria-modal="true"
+          aria-label="Vista previa ampliada"
+          onClick={() => setExpanded(false)}
+        >
+          <div
+            className="import-menu-preview-lightbox-inner"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <img src={src} alt={alt} />
+            <button
+              type="button"
+              className="import-menu-preview-fs-btn import-menu-preview-fs-btn--lightbox"
+              onClick={() => setExpanded(false)}
+              aria-label="Cerrar pantalla completa"
+              title="Cerrar"
+            >
+              <IconCollapseFullscreen />
+            </button>
+          </div>
+        </div>
+      )}
+    </>
+  );
+}
+
 export function ImportMenuModal({
   open,
   onClose,
@@ -330,9 +442,11 @@ export function ImportMenuModal({
               )}
 
               {previewUrl && (
-                <div className="import-menu-preview">
-                  <img src={previewUrl} alt="Vista previa de la carta" />
-                </div>
+                <ImportImagePreview
+                  src={previewUrl}
+                  alt="Vista previa de la carta"
+                  disabled={busy}
+                />
               )}
             </div>
           )}
@@ -378,9 +492,11 @@ export function ImportMenuModal({
               )}
 
               {selectedAsset?.url && (
-                <div className="import-menu-preview">
-                  <img src={selectedAsset.url} alt="Vista previa del archivo seleccionado" />
-                </div>
+                <ImportImagePreview
+                  src={selectedAsset.url}
+                  alt="Vista previa del archivo seleccionado"
+                  disabled={busy}
+                />
               )}
             </div>
           )}
