@@ -33,7 +33,13 @@ export function QrsPage() {
   }, [load]);
 
   async function handleUnpublish(id: string) {
-    if (!confirm('¿Despublicar esta carta? El QR dejará de funcionar.')) return;
+    if (
+      !confirm(
+        '¿Despublicar esta carta?\n\nEl enlace y el QR actuales dejarán de funcionar. Al volver a publicar se creará un enlace nuevo.',
+      )
+    ) {
+      return;
+    }
     await unpublishMenu(id);
     await load();
   }

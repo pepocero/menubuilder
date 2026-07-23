@@ -1,4 +1,5 @@
 import { getMenuById, unpublishMenu } from '../../../lib/db';
+import { deleteMenuExportPng } from '../../../lib/menu-export';
 import { errorResponse, jsonResponse } from '../../../lib/types';
 
 export const onRequestPost: PagesFunction<Env> = async (context) => {
@@ -15,5 +16,12 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
     return errorResponse('No se pudo despublicar', 500);
   }
 
-  return jsonResponse({ ok: true, is_public: false });
+  // Invalidar PNG público cacheado; al republicar se regenera con el canvas actual.
+  try {
+    await deleteMenuExportPng(context.env.MEDIA, userId, menuId);
+  } catch {
+    /* best-effort */
+  }
+
+  return jsonResponse({ ok: true, is_public: false, public_slug: null });
 };

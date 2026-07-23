@@ -65,7 +65,7 @@ function layerPreviewStyle(layer: CanvasLayer, scale: number): React.CSSProperti
   if (layer.type === 'image') {
     return {
       ...base,
-      background: '#d4d4d8',
+      background: 'transparent',
       backgroundImage: `url(${layer.src})`,
       backgroundSize: 'cover',
       backgroundPosition: 'center',

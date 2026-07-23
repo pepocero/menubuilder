@@ -175,7 +175,7 @@ export async function unpublishMenu(
 ): Promise<boolean> {
   const result = await db
     .prepare(
-      `UPDATE menus SET is_public = 0, updated_at = datetime('now')
+      `UPDATE menus SET is_public = 0, public_slug = NULL, export_png_url = NULL, updated_at = datetime('now')
        WHERE id = ? AND user_id = ?`,
     )
     .bind(id, userId)

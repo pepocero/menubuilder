@@ -10,7 +10,8 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
     return errorResponse('Menú no encontrado', 404);
   }
 
-  const slug = menu.public_slug ?? generateSlug();
+  // Siempre un slug nuevo: el enlace anterior queda inválido tras despublicar.
+  const slug = generateSlug();
   const published = await publishMenu(context.env.DB, menuId, userId, slug);
 
   if (!published) {

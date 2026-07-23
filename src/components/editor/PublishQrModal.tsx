@@ -63,13 +63,20 @@ export function PublishQrModal({
   }
 
   async function handleUnpublish() {
-    if (!confirm('¿Despublicar esta carta? El QR dejará de funcionar.')) return;
+    if (
+      !confirm(
+        '¿Despublicar esta carta?\n\nEl enlace y el QR actuales dejarán de funcionar. Al volver a publicar se creará un enlace nuevo.',
+      )
+    ) {
+      return;
+    }
     setBusy(true);
     setError('');
     try {
       await unpublishMenu(menuId);
       setIsPublic(false);
-      onStatusChange(false, slug);
+      setSlug(null);
+      onStatusChange(false, null);
     } catch (err) {
       setError(err instanceof ApiError ? err.message : 'No se pudo despublicar');
     } finally {

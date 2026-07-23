@@ -74,7 +74,9 @@ function layerStyle(layer: CanvasLayer, scale: number): React.CSSProperties {
   if (layer.type === 'image') {
     return {
       ...base,
-      background: '#d4d4d8',
+      // Sin fondo opaco: los PNG con alpha deben dejar ver las capas de debajo
+      // (como en Fabric). Un gris de “placeholder” tapaba el pergamino.
+      background: 'transparent',
     };
   }
 
