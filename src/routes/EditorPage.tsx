@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
-import type { FabricObject, FabricImage } from 'fabric';
+import { ActiveSelection, type FabricObject, type FabricImage } from 'fabric';
 import type { StockImage } from '@shared/stock';
-import type { CanvasData, MenuPage } from '@/types/canvas';
+import type { CanvasData, CanvasLayer, MenuPage } from '@/types/canvas';
 import {
   createBlankPage,
   normalizeCanvasData,
@@ -23,10 +23,13 @@ import {
   createShapeLayer,
   createTextLayer,
   ensureA4Canvas,
+  fabricObjectToLayer,
   fitImageToA4,
   imageLayerToFabricObject,
   isImageObject,
 } from '@/lib/canvas-serializer';
+import { transferObjectsBetweenPages } from '@/lib/transfer-page-objects';
+import type { PageSpillDirection } from '@/lib/transfer-page-objects';
 import {
   canMergeSelectedTextLayers,
   getSelectedTextObjects,
@@ -49,7 +52,7 @@ import {
 } from '@/lib/vision-menu-import';
 import { exportMenuDocumentJson, exportPagesToPdf, parseMenuJsonFile } from '@/lib/export';
 import { preloadCommonEditorFonts } from '@/lib/google-fonts';
-import { isLayerLocked, setLayerObjectData } from '@/lib/layer-utils';
+import { ensureUniqueLayerIds, isLayerLocked, setLayerObjectData } from '@/lib/layer-utils';
 import { CanvasEditor, type CanvasEditorHandle } from '@/components/editor/Canvas';
 import { EditorZoomControls, type CanvasInteractionMode } from '@/components/editor/EditorZoomControls';
 import { LayersPanel } from '@/components/editor/LayersPanel';
@@ -94,6 +97,18 @@ export function EditorPage() {
   const canvasAreaRef = useRef<HTMLElement | null>(null);
   const historyByPageIdRef = useRef<Map<string, PageHistoryState>>(new Map());
   const isRestoringHistoryRef = useRef(false);
+  /**
+   * Traslado entre páginas: Deshacer/Rehacer debe restaurar origen y destino juntos.
+   * Se invalida al editar una sola página después.
+   */
+  const transferHistoryLinkRef = useRef<{
+    fromPageId: string;
+    toPageId: string;
+  } | null>(null);
+  const transferRedoLinkRef = useRef<{
+    fromPageId: string;
+    toPageId: string;
+  } | null>(null);
   const activePageIndexRef = useRef(activePageIndex);
   activePageIndexRef.current = activePageIndex;
   const titleRef = useRef(title);
@@ -101,6 +116,12 @@ export function EditorPage() {
   const pagesMetaRef = useRef(pages);
   pagesMetaRef.current = pages;
   const handleDeleteRef = useRef<(obj: FabricObject) => Promise<void>>(async () => {});
+  /** Portapapeles interno de capas (permite pegar en otra página). */
+  const layerClipboardRef = useRef<{ layers: CanvasLayer[]; pasteCount: number }>({
+    layers: [],
+    pasteCount: 0,
+  });
+  const [clipboardLayerCount, setClipboardLayerCount] = useState(0);
 
   const getActiveHandle = useCallback(
     () => pageRefs.current[activePageIndex] ?? null,
@@ -129,7 +150,11 @@ export function EditorPage() {
   const refreshObjects = useCallback(() => {
     const canvas = getActiveCanvas();
     if (canvas) {
-      setObjects([...canvas.getObjects()]);
+      const objs = canvas.getObjects();
+      if (ensureUniqueLayerIds(objs)) {
+        canvas.requestRenderAll();
+      }
+      setObjects([...objs]);
       const bg = canvas.backgroundColor;
       if (typeof bg === 'string') setBackgroundColor(bg);
       setObjectsTick((t) => t + 1);
@@ -179,6 +204,27 @@ export function EditorPage() {
     setHistoryVersion((v) => v + 1);
   }, []);
 
+  const pushHistoryImmediate = useCallback(
+    (pageIndex: number, snapshot: MenuPage): boolean => {
+      const pageId = pagesMetaRef.current[pageIndex]?.id;
+      if (!pageId) return false;
+
+      const prev = historyByPageIdRef.current.get(pageId);
+      if (!prev) {
+        historyByPageIdRef.current.set(pageId, createPageHistory(snapshot));
+        bumpHistoryUi();
+        return false;
+      }
+
+      const next = pushHistoryState(prev, snapshot);
+      if (next === prev) return false;
+      historyByPageIdRef.current.set(pageId, next);
+      bumpHistoryUi();
+      return true;
+    },
+    [bumpHistoryUi],
+  );
+
   const recordHistoryForPage = useCallback(
     (pageIndex: number) => {
       if (isRestoringHistoryRef.current) return;
@@ -200,6 +246,11 @@ export function EditorPage() {
       }
 
       const next = pushHistoryState(base, snapshot);
+      if (next !== base) {
+        // Una edición local rompe el enlace de traslado entre páginas.
+        transferHistoryLinkRef.current = null;
+        transferRedoLinkRef.current = null;
+      }
       historyByPageIdRef.current.set(pageId, next);
       bumpHistoryUi();
     },
@@ -222,6 +273,10 @@ export function EditorPage() {
     [bumpHistoryUi],
   );
 
+  const findPageIndexById = useCallback((pageId: string) => {
+    return pagesMetaRef.current.findIndex((p) => p.id === pageId);
+  }, []);
+
   const restorePageState = useCallback(
     async (pageIndex: number, state: MenuPage) => {
       isRestoringHistoryRef.current = true;
@@ -239,10 +294,93 @@ export function EditorPage() {
     [refreshObjects, scheduleSave, bumpHistoryUi],
   );
 
+  const undoTransferLink = useCallback(
+    async (link: { fromPageId: string; toPageId: string }) => {
+      const fromIdx = findPageIndexById(link.fromPageId);
+      const toIdx = findPageIndexById(link.toPageId);
+      const fromHist = historyByPageIdRef.current.get(link.fromPageId);
+      const toHist = historyByPageIdRef.current.get(link.toPageId);
+      if (
+        fromIdx < 0 ||
+        toIdx < 0 ||
+        !fromHist ||
+        !toHist ||
+        !canUndoHistory(fromHist) ||
+        !canUndoHistory(toHist)
+      ) {
+        return false;
+      }
+
+      const fromUndo = undoHistory(fromHist);
+      const toUndo = undoHistory(toHist);
+      if (!fromUndo.state || !toUndo.state) return false;
+
+      historyByPageIdRef.current.set(link.fromPageId, fromUndo.history);
+      historyByPageIdRef.current.set(link.toPageId, toUndo.history);
+      transferHistoryLinkRef.current = null;
+      transferRedoLinkRef.current = link;
+
+      await restorePageState(fromIdx, fromUndo.state);
+      await restorePageState(toIdx, toUndo.state);
+      activePageIndexRef.current = fromIdx;
+      setActivePageIndex(fromIdx);
+      setActiveObject(null);
+      refreshObjects();
+      return true;
+    },
+    [findPageIndexById, restorePageState, refreshObjects],
+  );
+
+  const redoTransferLink = useCallback(
+    async (link: { fromPageId: string; toPageId: string }) => {
+      const fromIdx = findPageIndexById(link.fromPageId);
+      const toIdx = findPageIndexById(link.toPageId);
+      const fromHist = historyByPageIdRef.current.get(link.fromPageId);
+      const toHist = historyByPageIdRef.current.get(link.toPageId);
+      if (
+        fromIdx < 0 ||
+        toIdx < 0 ||
+        !fromHist ||
+        !toHist ||
+        !canRedoHistory(fromHist) ||
+        !canRedoHistory(toHist)
+      ) {
+        return false;
+      }
+
+      const fromRedo = redoHistory(fromHist);
+      const toRedo = redoHistory(toHist);
+      if (!fromRedo.state || !toRedo.state) return false;
+
+      historyByPageIdRef.current.set(link.fromPageId, fromRedo.history);
+      historyByPageIdRef.current.set(link.toPageId, toRedo.history);
+      transferRedoLinkRef.current = null;
+      transferHistoryLinkRef.current = link;
+
+      await restorePageState(fromIdx, fromRedo.state);
+      await restorePageState(toIdx, toRedo.state);
+      activePageIndexRef.current = toIdx;
+      setActivePageIndex(toIdx);
+      setActiveObject(null);
+      refreshObjects();
+      return true;
+    },
+    [findPageIndexById, restorePageState, refreshObjects],
+  );
+
   const handleUndo = useCallback(async () => {
     const pageIndex = activePageIndexRef.current;
     const pageId = pagesMetaRef.current[pageIndex]?.id;
     if (!pageId) return;
+
+    const transferLink = transferHistoryLinkRef.current;
+    if (
+      transferLink &&
+      (pageId === transferLink.fromPageId || pageId === transferLink.toPageId)
+    ) {
+      const ok = await undoTransferLink(transferLink);
+      if (ok) return;
+    }
 
     const current = historyByPageIdRef.current.get(pageId);
     if (!current || !canUndoHistory(current)) return;
@@ -251,13 +389,23 @@ export function EditorPage() {
     if (!state) return;
 
     historyByPageIdRef.current.set(pageId, history);
+    transferRedoLinkRef.current = null;
     await restorePageState(pageIndex, state);
-  }, [restorePageState]);
+  }, [restorePageState, undoTransferLink]);
 
   const handleRedo = useCallback(async () => {
     const pageIndex = activePageIndexRef.current;
     const pageId = pagesMetaRef.current[pageIndex]?.id;
     if (!pageId) return;
+
+    const transferLink = transferRedoLinkRef.current;
+    if (
+      transferLink &&
+      (pageId === transferLink.fromPageId || pageId === transferLink.toPageId)
+    ) {
+      const ok = await redoTransferLink(transferLink);
+      if (ok) return;
+    }
 
     const current = historyByPageIdRef.current.get(pageId);
     if (!current || !canRedoHistory(current)) return;
@@ -266,8 +414,9 @@ export function EditorPage() {
     if (!state) return;
 
     historyByPageIdRef.current.set(pageId, history);
+    transferHistoryLinkRef.current = null;
     await restorePageState(pageIndex, state);
-  }, [restorePageState]);
+  }, [restorePageState, redoTransferLink]);
 
   const activePageHistory = pages[activePageIndex]
     ? historyByPageIdRef.current.get(pages[activePageIndex].id)
@@ -300,6 +449,8 @@ export function EditorPage() {
   useEffect(() => {
     if (!menuId) return;
     historyByPageIdRef.current.clear();
+    transferHistoryLinkRef.current = null;
+    transferRedoLinkRef.current = null;
     bumpHistoryUi();
     getMenu(menuId)
       .then(({ menu }) => {
@@ -351,6 +502,81 @@ export function EditorPage() {
     scheduleSave();
   }, [refreshObjects, scheduleSave, recordHistoryForPage]);
 
+  const handleCopyLayers = useCallback((): boolean => {
+    const canvas = getActiveCanvas();
+    if (!canvas) return false;
+    const active = canvas.getActiveObject();
+    if (!active) return false;
+    // En edición de texto, dejar que el navegador copie el texto seleccionado.
+    if ((active as FabricObject & { isEditing?: boolean }).isEditing) return false;
+
+    let objects: FabricObject[];
+    let restore: FabricObject[] | null = null;
+
+    if (active instanceof ActiveSelection) {
+      restore = [...active.getObjects()];
+      canvas.discardActiveObject();
+      objects = restore.filter((o) => canvas.getObjects().includes(o));
+    } else {
+      objects = [active];
+    }
+
+    const layers: CanvasLayer[] = [];
+    for (let i = 0; i < objects.length; i++) {
+      const layer = fabricObjectToLayer(objects[i], i + 1);
+      if (layer) layers.push(structuredClone(layer));
+    }
+
+    if (restore && restore.length > 0) {
+      if (restore.length === 1) {
+        canvas.setActiveObject(restore[0]);
+      } else {
+        canvas.setActiveObject(new ActiveSelection(restore, { canvas }));
+      }
+      canvas.requestRenderAll();
+    }
+
+    if (layers.length === 0) return false;
+    layerClipboardRef.current = { layers, pasteCount: 0 };
+    setClipboardLayerCount(layers.length);
+    return true;
+  }, [getActiveCanvas]);
+
+  const handlePasteLayers = useCallback(async () => {
+    const canvas = getActiveCanvas();
+    if (!canvas) return;
+    const active = canvas.getActiveObject();
+    if (active && (active as FabricObject & { isEditing?: boolean }).isEditing) {
+      return;
+    }
+
+    const clip = layerClipboardRef.current;
+    if (clip.layers.length === 0) return;
+
+    clip.pasteCount += 1;
+    const offset = 20 * clip.pasteCount;
+    const added: FabricObject[] = [];
+
+    for (const layer of clip.layers) {
+      const copy = structuredClone(layer);
+      copy.id = `layer_${crypto.randomUUID().replace(/-/g, '').slice(0, 8)}`;
+      copy.x = (copy.x ?? 0) + offset;
+      copy.y = (copy.y ?? 0) + offset;
+      await addLayerToCanvas(canvas, copy);
+      const sel = canvas.getActiveObject();
+      if (sel && !added.includes(sel)) added.push(sel);
+    }
+
+    if (added.length > 1) {
+      canvas.setActiveObject(new ActiveSelection(added, { canvas }));
+    } else if (added.length === 1) {
+      canvas.setActiveObject(added[0]);
+    }
+    canvas.requestRenderAll();
+    setActiveObject(canvas.getActiveObject() ?? null);
+    handleChange();
+  }, [getActiveCanvas, handleChange]);
+
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
       const target = event.target as HTMLElement | null;
@@ -401,12 +627,35 @@ export function EditorPage() {
       if (event.key === 'y' || (event.key === 'z' && event.shiftKey)) {
         event.preventDefault();
         void handleRedo();
+        return;
+      }
+
+      const key = event.key.toLowerCase();
+      if (key === 'c') {
+        if (handleCopyLayers()) event.preventDefault();
+        return;
+      }
+
+      if (key === 'v') {
+        if (layerClipboardRef.current.layers.length === 0) return;
+        const canvas = getActiveCanvas();
+        const obj = canvas?.getActiveObject() ?? null;
+        if (obj && (obj as FabricObject & { isEditing?: boolean }).isEditing) return;
+        event.preventDefault();
+        void handlePasteLayers();
       }
     };
 
     window.addEventListener('keydown', onKeyDown);
     return () => window.removeEventListener('keydown', onKeyDown);
-  }, [handleUndo, handleRedo, getActiveCanvas, handleChange]);
+  }, [
+    handleUndo,
+    handleRedo,
+    getActiveCanvas,
+    handleChange,
+    handleCopyLayers,
+    handlePasteLayers,
+  ]);
 
   function handleActivatePage(index: number) {
     if (index === activePageIndexRef.current) return;
@@ -438,6 +687,115 @@ export function EditorPage() {
     setActivePageIndex(Math.min(activePageIndex, next.length - 1));
     setActiveObject(null);
     scheduleSave();
+  }
+
+  /** Reordena páginas; el historial va por id de página, no por índice. */
+  function handleMovePage(from: number, to: number) {
+    if (
+      from === to ||
+      from < 0 ||
+      to < 0 ||
+      from >= pages.length ||
+      to >= pages.length
+    ) {
+      return;
+    }
+
+    setPages((prev) => {
+      const next = [...prev];
+      const [page] = next.splice(from, 1);
+      next.splice(to, 0, page);
+      return next;
+    });
+
+    const refs = [...pageRefs.current];
+    const [handle] = refs.splice(from, 1);
+    refs.splice(to, 0, handle ?? null);
+    pageRefs.current = refs;
+
+    let nextActive = activePageIndexRef.current;
+    if (nextActive === from) nextActive = to;
+    else if (from < nextActive && to >= nextActive) nextActive -= 1;
+    else if (from > nextActive && to <= nextActive) nextActive += 1;
+    activePageIndexRef.current = nextActive;
+    setActivePageIndex(nextActive);
+    scheduleSave();
+  }
+
+  function handleMovePageUp(index = activePageIndexRef.current) {
+    handleMovePage(index, index - 1);
+  }
+
+  function handleMovePageDown(index = activePageIndexRef.current) {
+    handleMovePage(index, index + 1);
+  }
+
+  async function handleTransferSelectionToPage(
+    toIndex: number,
+    fromSpill = false,
+  ) {
+    const fromIndex = activePageIndexRef.current;
+    if (
+      toIndex === fromIndex ||
+      toIndex < 0 ||
+      toIndex >= pagesMetaRef.current.length
+    ) {
+      return;
+    }
+
+    const fromCanvas = pageRefs.current[fromIndex]?.getCanvas() ?? null;
+    const toCanvas = pageRefs.current[toIndex]?.getCanvas() ?? null;
+    if (!fromCanvas || !toCanvas) return;
+
+    const fromPageId = pagesMetaRef.current[fromIndex]?.id;
+    const toPageId = pagesMetaRef.current[toIndex]?.id;
+    if (!fromPageId || !toPageId) return;
+
+    // Baseline en ambas páginas antes del traslado (para poder deshacer).
+    const fromBefore = pageRefs.current[fromIndex]?.getPageData();
+    const toBefore = pageRefs.current[toIndex]?.getPageData();
+    if (fromBefore) pushHistoryImmediate(fromIndex, fromBefore);
+    if (toBefore) pushHistoryImmediate(toIndex, toBefore);
+
+    const direction: PageSpillDirection =
+      toIndex > fromIndex ? 'next' : 'prev';
+
+    const added = await transferObjectsBetweenPages({
+      fromCanvas,
+      toCanvas,
+      direction,
+      fromSpill,
+    });
+    if (added.length === 0) return;
+
+    const fromAfter = pageRefs.current[fromIndex]?.getPageData();
+    const toAfter = pageRefs.current[toIndex]?.getPageData();
+    if (fromAfter) pushHistoryImmediate(fromIndex, fromAfter);
+    if (toAfter) pushHistoryImmediate(toIndex, toAfter);
+
+    transferHistoryLinkRef.current = { fromPageId, toPageId };
+    transferRedoLinkRef.current = null;
+
+    handleActivatePage(toIndex);
+    setActiveObject(toCanvas.getActiveObject() ?? added[0] ?? null);
+    refreshObjects();
+    // No usar handleChange(): el historial ya está en ambas páginas.
+    scheduleSave();
+    bumpHistoryUi();
+
+    requestAnimationFrame(() => {
+      const block = document.querySelectorAll('.page-block')[toIndex];
+      block?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    });
+  }
+
+  async function handleTransferSelectionToAdjacentPage(
+    direction: PageSpillDirection,
+    fromSpill = false,
+  ) {
+    const fromIndex = activePageIndexRef.current;
+    const toIndex = direction === 'next' ? fromIndex + 1 : fromIndex - 1;
+    await handleTransferSelectionToPage(toIndex, fromSpill);
   }
 
   function handleClearCanvas() {
@@ -917,6 +1275,8 @@ export function EditorPage() {
       if (!confirmed) return;
 
       historyByPageIdRef.current.clear();
+      transferHistoryLinkRef.current = null;
+      transferRedoLinkRef.current = null;
       bumpHistoryUi();
       pageRefs.current = [];
       setPages(imported.pages);
@@ -1024,6 +1384,8 @@ export function EditorPage() {
     const canvas = getActiveCanvas();
     if (!canvas) return;
     const cloned = await obj.clone();
+    const newId = `layer_${crypto.randomUUID().replace(/-/g, '').slice(0, 8)}`;
+    setLayerObjectData(cloned, { layerId: newId });
     cloned.set({
       left: (obj.left ?? 0) + 20,
       top: (obj.top ?? 0) + 20,
@@ -1188,7 +1550,11 @@ export function EditorPage() {
         onOpenQr={() => setQrOpen(true)}
         onAddPage={handleAddPage}
         onDeletePage={handleDeletePage}
+        onMovePageUp={() => handleMovePageUp()}
+        onMovePageDown={() => handleMovePageDown()}
         canDeletePage={pages.length > 1}
+        canMovePageUp={activePageIndex > 0}
+        canMovePageDown={activePageIndex < pages.length - 1}
         pageIndex={activePageIndex}
         pageCount={pages.length}
         backgroundColor={backgroundColor}
@@ -1243,20 +1609,52 @@ export function EditorPage() {
                   handleActivatePage(index);
                 }}
               >
-                <button
-                  type="button"
-                  className="page-label"
-                  onClick={() => handleActivatePage(index)}
-                >
-                  Página {index + 1}
-                  {index === activePageIndex && (
-                    <span className="page-label-active"> · editando</span>
+                <div className="page-label-row">
+                  <button
+                    type="button"
+                    className="page-label"
+                    onClick={() => handleActivatePage(index)}
+                  >
+                    Página {index + 1}
+                    {index === activePageIndex && (
+                      <span className="page-label-active"> · editando</span>
+                    )}
+                    <span className="page-label-size">
+                      {' '}
+                      · {ptToCm(getPageSize(page).width)}×{ptToCm(getPageSize(page).height)} cm
+                    </span>
+                  </button>
+                  {pages.length > 1 && (
+                    <div className="page-order-actions" role="group" aria-label="Orden de página">
+                      <button
+                        type="button"
+                        title="Subir página"
+                        aria-label={`Subir página ${index + 1}`}
+                        disabled={index === 0}
+                        onPointerDown={(e) => e.stopPropagation()}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleMovePageUp(index);
+                        }}
+                      >
+                        ↑
+                      </button>
+                      <button
+                        type="button"
+                        title="Bajar página"
+                        aria-label={`Bajar página ${index + 1}`}
+                        disabled={index === pages.length - 1}
+                        onPointerDown={(e) => e.stopPropagation()}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleMovePageDown(index);
+                        }}
+                      >
+                        ↓
+                      </button>
+                    </div>
                   )}
-                  <span className="page-label-size">
-                    {' '}
-                    · {ptToCm(getPageSize(page).width)}×{ptToCm(getPageSize(page).height)} cm
-                  </span>
-                </button>
+                </div>
                 <CanvasEditor
                   ref={(handle) => {
                     pageRefs.current[index] = handle;
@@ -1266,6 +1664,19 @@ export function EditorPage() {
                   zoom={zoom}
                   active={index === activePageIndex}
                   interactionMode={interactionMode}
+                  pageIndex={index}
+                  canSpillPrev={index > 0}
+                  canSpillNext={index < pages.length - 1}
+                  onSpillOffPage={(payload) => {
+                    if (payload.type === 'index') {
+                      void handleTransferSelectionToPage(payload.index, true);
+                    } else {
+                      void handleTransferSelectionToAdjacentPage(
+                        payload.direction,
+                        true,
+                      );
+                    }
+                  }}
                   onSelectionChange={(obj) => {
                     if (index !== activePageIndexRef.current) return;
                     setActiveObject(obj);
@@ -1294,6 +1705,29 @@ export function EditorPage() {
           <PropertiesPanel
             activeObject={activeObject}
             selectedTextCount={getSelectedTextObjects(getActiveCanvas()).length}
+            pageIndex={activePageIndex}
+            pageCount={pages.length}
+            canPasteLayer={clipboardLayerCount > 0}
+            onCopyLayer={() => {
+              handleCopyLayers();
+            }}
+            onPasteLayer={() => {
+              void handlePasteLayers();
+            }}
+            onMoveToPrevPage={
+              activePageIndex > 0
+                ? () => {
+                    void handleTransferSelectionToAdjacentPage('prev', false);
+                  }
+                : undefined
+            }
+            onMoveToNextPage={
+              activePageIndex < pages.length - 1
+                ? () => {
+                    void handleTransferSelectionToAdjacentPage('next', false);
+                  }
+                : undefined
+            }
             onUpdate={handleChange}
             onMergeTexts={handleMergeTexts}
             onSendToBack={

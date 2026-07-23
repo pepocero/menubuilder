@@ -19,6 +19,24 @@ export function setLayerObjectData(obj: FabricObject, patch: Partial<LayerObject
   (obj as FabricObject & { data?: LayerObjectData }).data = { ...current, ...patch };
 }
 
+/** Corrige layerId duplicados (p. ej. tras copias fallidas entre páginas). */
+export function ensureUniqueLayerIds(objects: FabricObject[]): boolean {
+  const seen = new Set<string>();
+  let changed = false;
+  for (const obj of objects) {
+    const current = getLayerObjectData(obj).layerId?.trim();
+    if (current && !seen.has(current)) {
+      seen.add(current);
+      continue;
+    }
+    const nextId = `layer_${crypto.randomUUID().replace(/-/g, '').slice(0, 8)}`;
+    setLayerObjectData(obj, { layerId: nextId });
+    seen.add(nextId);
+    changed = true;
+  }
+  return changed;
+}
+
 /** Capa bloqueada: no se puede seleccionar ni mover. */
 export function isLayerLocked(obj: FabricObject): boolean {
   const data = getLayerObjectData(obj);

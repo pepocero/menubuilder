@@ -66,8 +66,9 @@ export function LayersPanel({
   }, [activeObject, objectsTick]);
 
   function startRename(obj: FabricObject) {
-    const key = getLayerObjectData(obj).layerId ?? String(objects.indexOf(obj));
-    setEditingKey(key);
+    const idx = reversed.indexOf(obj);
+    const layerId = getLayerObjectData(obj).layerId ?? 'layer';
+    setEditingKey(`${layerId}-${idx}`);
     setEditValue(getLayerDisplayName(obj));
   }
 
@@ -84,7 +85,7 @@ export function LayersPanel({
       <ul className="layers-list">
         {reversed.map((obj, index) => {
           const data = getLayerObjectData(obj);
-          const rowKey = data.layerId ?? `layer-${index}`;
+          const rowKey = `${data.layerId ?? 'layer'}-${index}`;
           const locked = isLayerLocked(obj);
           const isEditing = editingKey === rowKey;
           const isActive = activeObject === obj;

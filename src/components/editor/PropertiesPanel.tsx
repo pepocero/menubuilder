@@ -25,6 +25,13 @@ import { FontFamilyPicker } from '@/components/editor/FontFamilyPicker';
 interface PropertiesPanelProps {
   activeObject: FabricObject | null;
   selectedTextCount?: number;
+  pageIndex?: number;
+  pageCount?: number;
+  canPasteLayer?: boolean;
+  onCopyLayer?: () => void;
+  onPasteLayer?: () => void;
+  onMoveToPrevPage?: () => void;
+  onMoveToNextPage?: () => void;
   onUpdate: () => void;
   onMergeTexts?: () => void;
   onSendToBack?: () => void;
@@ -55,9 +62,34 @@ function preserveTextSelection(e: React.MouseEvent) {
   e.preventDefault();
 }
 
+function CopyLayerIcon() {
+  return (
+    <svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true" fill="none" stroke="currentColor" strokeWidth="1.5">
+      <rect x="5.5" y="5.5" width="8" height="8" rx="1.2" />
+      <path d="M10.5 5.5V4.2A1.2 1.2 0 0 0 9.3 3H4.2A1.2 1.2 0 0 0 3 4.2v5.1A1.2 1.2 0 0 0 4.2 10.5H5.5" />
+    </svg>
+  );
+}
+
+function PasteLayerIcon() {
+  return (
+    <svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true" fill="none" stroke="currentColor" strokeWidth="1.5">
+      <path d="M6 3.5h4a1 1 0 0 1 1 1V5h1.2A1.3 1.3 0 0 1 13.5 6.3v6.4A1.3 1.3 0 0 1 12.2 14H3.8A1.3 1.3 0 0 1 2.5 12.7V6.3A1.3 1.3 0 0 1 3.8 5H5V4.5a1 1 0 0 1 1-1Z" />
+      <path d="M6 5h4V4.5a.5.5 0 0 0-.5-.5h-3a.5.5 0 0 0-.5.5V5Z" fill="currentColor" stroke="none" />
+    </svg>
+  );
+}
+
 export function PropertiesPanel({
   activeObject,
   selectedTextCount = 0,
+  pageIndex = 0,
+  pageCount = 1,
+  canPasteLayer = false,
+  onCopyLayer,
+  onPasteLayer,
+  onMoveToPrevPage,
+  onMoveToNextPage,
   onUpdate,
   onMergeTexts,
   onSendToBack,
@@ -101,6 +133,31 @@ export function PropertiesPanel({
       <div className="properties-panel">
         <h3>Propiedades</h3>
         <p className="panel-empty">Selecciona una capa para editar sus propiedades.</p>
+        {(onPasteLayer || onCopyLayer) && (
+          <div className="properties-page-transfer" role="group" aria-label="Copiar y pegar capa">
+            <div className="properties-page-transfer-row properties-page-transfer-row--icons">
+              <button
+                type="button"
+                className="btn-secondary properties-icon-btn"
+                disabled
+                title="Selecciona una capa para copiarla"
+                aria-label="Copiar capa"
+              >
+                <CopyLayerIcon />
+              </button>
+              <button
+                type="button"
+                className="btn-secondary properties-icon-btn"
+                disabled={!onPasteLayer || !canPasteLayer}
+                title="Pegar en esta página (Ctrl+V)"
+                aria-label="Pegar capa"
+                onClick={() => onPasteLayer?.()}
+              >
+                <PasteLayerIcon />
+              </button>
+            </div>
+          </div>
+        )}
       </div>
     );
   }
@@ -328,6 +385,65 @@ export function PropertiesPanel({
         >
           Enviar al fondo
         </button>
+      )}
+
+      {(onCopyLayer || onPasteLayer) && (
+        <div className="properties-page-transfer" role="group" aria-label="Copiar y pegar capa">
+          <div className="properties-page-transfer-row properties-page-transfer-row--icons">
+            <button
+              type="button"
+              className="btn-secondary properties-icon-btn"
+              disabled={!onCopyLayer || !activeObject}
+              title="Copiar capa (Ctrl+C)"
+              aria-label="Copiar capa"
+              onMouseDown={preserveTextSelection}
+              onClick={() => onCopyLayer?.()}
+            >
+              <CopyLayerIcon />
+            </button>
+            <button
+              type="button"
+              className="btn-secondary properties-icon-btn"
+              disabled={!onPasteLayer || !canPasteLayer}
+              title="Pegar en esta página (Ctrl+V)"
+              aria-label="Pegar capa"
+              onMouseDown={preserveTextSelection}
+              onClick={() => onPasteLayer?.()}
+            >
+              <PasteLayerIcon />
+            </button>
+          </div>
+        </div>
+      )}
+
+      {pageCount > 1 && (onMoveToPrevPage || onMoveToNextPage) && (
+        <div className="properties-page-transfer" role="group" aria-label="Mover a otra página">
+          <p className="panel-hint" style={{ marginBottom: '0.35rem' }}>
+            Mover capa a otra página
+          </p>
+          <div className="properties-page-transfer-row">
+            <button
+              type="button"
+              className="btn-secondary"
+              disabled={!onMoveToPrevPage}
+              title={`Mover a la página ${pageIndex}`}
+              onMouseDown={preserveTextSelection}
+              onClick={() => onMoveToPrevPage?.()}
+            >
+              ↑ Pág. {pageIndex}
+            </button>
+            <button
+              type="button"
+              className="btn-secondary"
+              disabled={!onMoveToNextPage}
+              title={`Mover a la página ${pageIndex + 2}`}
+              onMouseDown={preserveTextSelection}
+              onClick={() => onMoveToNextPage?.()}
+            >
+              ↓ Pág. {pageIndex + 2}
+            </button>
+          </div>
+        </div>
       )}
 
       {textObj && (

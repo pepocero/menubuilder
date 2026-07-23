@@ -181,7 +181,7 @@ export function readTextboxBorder(text: Textbox): TextBorder {
 
 /** CSS para vista pública / HTML (margen → padding CSS = espacio dentro del borde). */
 export function textBorderToCss(
-  border: TextBorder | undefined | null,
+  border: unknown,
   scale = 1,
 ): {
   border?: string;

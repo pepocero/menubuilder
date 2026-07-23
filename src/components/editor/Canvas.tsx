@@ -1,5 +1,6 @@
 import { useEffect, useRef, useImperativeHandle, forwardRef } from 'react';
 import { Canvas } from 'fabric';
+import type { FabricObject } from 'fabric';
 import type { MenuPage } from '@/types/canvas';
 import { getPageSize } from '@/lib/page-size';
 import {
@@ -11,6 +12,12 @@ import {
   resizeCanvasPage,
 } from '@/lib/canvas-serializer';
 import type { CanvasInteractionMode } from '@/components/editor/EditorZoomControls';
+import {
+  clampActiveObjectsIntoPage,
+  detectPageSpill,
+  isPageTransferInFlight,
+  resolveDropPageIndex,
+} from '@/lib/transfer-page-objects';
 
 export interface CanvasEditorHandle {
   getCanvas: () => Canvas | null;
@@ -21,15 +28,40 @@ export interface CanvasEditorHandle {
   resizePage: (width: number, height: number) => void;
 }
 
+export type SpillOffPagePayload =
+  | { type: 'index'; index: number }
+  | { type: 'direction'; direction: 'prev' | 'next' };
+
 interface CanvasEditorProps {
   pageId: string;
   initialPage: MenuPage;
   zoom?: number;
   active?: boolean;
   interactionMode?: CanvasInteractionMode;
-  onSelectionChange?: (object: import('fabric').FabricObject | null) => void;
+  pageIndex?: number;
+  canSpillPrev?: boolean;
+  canSpillNext?: boolean;
+  onSpillOffPage?: (payload: SpillOffPagePayload) => void;
+  onSelectionChange?: (object: FabricObject | null) => void;
   onChange?: () => void;
   onReady?: () => void;
+}
+
+function readClientPoint(evt: Event | undefined | null): { x: number; y: number } | null {
+  if (!evt) return null;
+  if ('clientX' in evt && typeof (evt as MouseEvent).clientX === 'number') {
+    const e = evt as MouseEvent;
+    if (Number.isFinite(e.clientX) && Number.isFinite(e.clientY)) {
+      return { x: e.clientX, y: e.clientY };
+    }
+  }
+  if ('changedTouches' in evt) {
+    const t = (evt as TouchEvent).changedTouches?.[0];
+    if (t && Number.isFinite(t.clientX) && Number.isFinite(t.clientY)) {
+      return { x: t.clientX, y: t.clientY };
+    }
+  }
+  return null;
 }
 
 export const CanvasEditor = forwardRef<CanvasEditorHandle, CanvasEditorProps>(
@@ -40,6 +72,10 @@ export const CanvasEditor = forwardRef<CanvasEditorHandle, CanvasEditorProps>(
       zoom = 100,
       active = false,
       interactionMode = 'move',
+      pageIndex = 0,
+      canSpillPrev = false,
+      canSpillNext = false,
+      onSpillOffPage,
       onSelectionChange,
       onChange,
       onReady,
@@ -59,6 +95,14 @@ export const CanvasEditor = forwardRef<CanvasEditorHandle, CanvasEditorProps>(
     onReadyRef.current = onReady;
     const onSelectionChangeRef = useRef(onSelectionChange);
     onSelectionChangeRef.current = onSelectionChange;
+    const onSpillOffPageRef = useRef(onSpillOffPage);
+    onSpillOffPageRef.current = onSpillOffPage;
+    const pageIndexRef = useRef(pageIndex);
+    pageIndexRef.current = pageIndex;
+    const canSpillPrevRef = useRef(canSpillPrev);
+    canSpillPrevRef.current = canSpillPrev;
+    const canSpillNextRef = useRef(canSpillNext);
+    canSpillNextRef.current = canSpillNext;
     const interactionModeRef = useRef(interactionMode);
     interactionModeRef.current = interactionMode;
     const activeRef = useRef(active);
@@ -129,6 +173,11 @@ export const CanvasEditor = forwardRef<CanvasEditorHandle, CanvasEditorProps>(
       muteEventsRef.current = true;
       const size = getPageSize(initialPage);
 
+      /** Solo un intento de spill/clamp por gesto de arrastre. */
+      let dragMoved = false;
+      let dragHandled = false;
+      const lastPointer = { x: 0, y: 0 };
+
       const canvas = new Canvas(canvasElRef.current, {
         width: size.width,
         height: size.height,
@@ -162,6 +211,56 @@ export const CanvasEditor = forwardRef<CanvasEditorHandle, CanvasEditorProps>(
           }
         });
 
+      const rememberPointer = (evt: Event | undefined | null) => {
+        const pt = readClientPoint(evt);
+        if (pt) {
+          lastPointer.x = pt.x;
+          lastPointer.y = pt.y;
+        }
+      };
+
+      /**
+       * Al soltar tras arrastrar: transferir a otra página o recuperar dentro del lienzo.
+       * Devuelve true si se disparó transferencia (el padre hará onChange).
+       */
+      const finishDragIfNeeded = (target: FabricObject | null | undefined): boolean => {
+        if (!dragMoved || dragHandled) return false;
+        dragHandled = true;
+        dragMoved = false;
+
+        if (muteEventsRef.current || !activeRef.current) return false;
+        if (interactionModeRef.current === 'scroll') return false;
+        if (isPageTransferInFlight()) {
+          clampActiveObjectsIntoPage(canvas);
+          return false;
+        }
+
+        const spillHandler = onSpillOffPageRef.current;
+        if (spillHandler) {
+          const dropIndex = resolveDropPageIndex(
+            lastPointer.x,
+            lastPointer.y,
+            pageIndexRef.current,
+          );
+          if (dropIndex != null) {
+            spillHandler({ type: 'index', index: dropIndex });
+            return true;
+          }
+
+          const spill = detectPageSpill(canvas, target ?? canvas.getActiveObject());
+          const canSpill =
+            (spill === 'next' && canSpillNextRef.current) ||
+            (spill === 'prev' && canSpillPrevRef.current);
+          if (spill && canSpill) {
+            spillHandler({ type: 'direction', direction: spill });
+            return true;
+          }
+        }
+
+        clampActiveObjectsIntoPage(canvas);
+        return false;
+      };
+
       canvas.on('selection:created', () => {
         if (muteEventsRef.current) return;
         if (!activeRef.current) return;
@@ -180,7 +279,48 @@ export const CanvasEditor = forwardRef<CanvasEditorHandle, CanvasEditorProps>(
         if (interactionModeRef.current === 'scroll') return;
         onSelectionChangeRef.current?.(null);
       });
-      canvas.on('object:modified', () => emitChange());
+
+      canvas.on('object:moving', (e) => {
+        if (muteEventsRef.current || !activeRef.current) return;
+        if (interactionModeRef.current === 'scroll') return;
+        dragMoved = true;
+        dragHandled = false;
+        rememberPointer((e as { e?: Event }).e);
+      });
+
+      canvas.on('mouse:move', (opt) => {
+        rememberPointer(opt.e as Event | undefined);
+      });
+
+      canvas.on('mouse:up', (opt) => {
+        rememberPointer(opt.e as Event | undefined);
+        // Preferimos resolver aquí: el puntero es fiable al soltar.
+        if (!dragMoved || dragHandled) return;
+        const spilled = finishDragIfNeeded(canvas.getActiveObject());
+        if (!spilled) emitChange();
+      });
+
+      canvas.on('object:modified', (e) => {
+        if (muteEventsRef.current || !activeRef.current) return;
+        if (interactionModeRef.current === 'scroll') return;
+
+        const action =
+          (e as { action?: string }).action ??
+          (e as { transform?: { action?: string } }).transform?.action;
+        rememberPointer((e as { e?: Event }).e);
+
+        // Si mouse:up ya resolvió el arrastre, no repetir.
+        if (dragHandled) return;
+
+        // Respaldo si modified llega sin mouse:up previo.
+        if ((!action || action === 'drag') && dragMoved) {
+          const spilled = finishDragIfNeeded(e.target ?? null);
+          if (!spilled) emitChange();
+          return;
+        }
+
+        emitChange();
+      });
 
       canvas.on('text:changed', (e) => {
         const target = e.target;

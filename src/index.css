@@ -1432,6 +1432,9 @@ textarea {
   box-shadow: 0 4px 24px rgb(0 0 0 / 15%);
   background: #fff;
   line-height: 0;
+  /* Evita que un objeto arrastrado se pinte encima de la página siguiente
+     (parecía una «copia» fantasma y no se transfería). */
+  overflow: hidden;
 }
 
 .editor-canvas-wrap .canvas-container {
@@ -1736,6 +1739,37 @@ textarea {
 
 .properties-panel {
   padding-bottom: 1rem;
+}
+
+.properties-page-transfer {
+  margin-bottom: 0.75rem;
+}
+
+.properties-page-transfer-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.35rem;
+}
+
+.properties-page-transfer-row button {
+  width: 100%;
+  margin: 0;
+}
+
+.properties-page-transfer-row--icons {
+  grid-template-columns: repeat(2, 2.5rem);
+  justify-content: start;
+}
+
+.properties-icon-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2.5rem !important;
+  min-width: 2.5rem;
+  height: 2.5rem;
+  padding: 0;
+  line-height: 0;
 }
 
 .properties-field {
@@ -2711,10 +2745,19 @@ textarea {
   gap: 0.5rem;
 }
 
+.page-label-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  width: 100%;
+}
+
 .page-label {
   display: block;
-  width: 100%;
-  margin: 0 0 0.35rem;
+  flex: 1;
+  min-width: 0;
+  margin: 0;
   padding: 0;
   border: none;
   background: transparent;
@@ -2728,6 +2771,38 @@ textarea {
 
 .page-label:hover {
   color: var(--color-text);
+}
+
+.page-order-actions {
+  display: inline-flex;
+  gap: 0.2rem;
+  flex-shrink: 0;
+}
+
+.page-order-actions button {
+  width: 1.75rem;
+  height: 1.75rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--color-border);
+  border-radius: 4px;
+  background: var(--color-surface);
+  color: var(--color-text);
+  font-size: 0.85rem;
+  line-height: 1;
+  cursor: pointer;
+  padding: 0;
+}
+
+.page-order-actions button:hover:not(:disabled) {
+  border-color: var(--color-primary);
+  color: var(--color-primary);
+}
+
+.page-order-actions button:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
 }
 
 .page-label-active {

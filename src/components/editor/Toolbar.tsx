@@ -30,7 +30,11 @@ interface ToolbarProps {
   onOpenQr: () => void;
   onAddPage: () => void;
   onDeletePage: () => void;
+  onMovePageUp: () => void;
+  onMovePageDown: () => void;
   canDeletePage: boolean;
+  canMovePageUp: boolean;
+  canMovePageDown: boolean;
   pageIndex: number;
   pageCount: number;
   backgroundColor: string;
@@ -64,7 +68,11 @@ export function Toolbar({
   onOpenQr,
   onAddPage,
   onDeletePage,
+  onMovePageUp,
+  onMovePageDown,
   canDeletePage,
+  canMovePageUp,
+  canMovePageDown,
   pageIndex,
   pageCount,
   backgroundColor,
@@ -238,6 +246,22 @@ export function Toolbar({
           title="Eliminar página activa"
         >
           − Página
+        </button>
+        <button
+          type="button"
+          onClick={onMovePageUp}
+          disabled={!canMovePageUp}
+          title="Subir página activa (antes en el menú)"
+        >
+          ↑ Página
+        </button>
+        <button
+          type="button"
+          onClick={onMovePageDown}
+          disabled={!canMovePageDown}
+          title="Bajar página activa (después en el menú)"
+        >
+          ↓ Página
         </button>
       </div>
 
