@@ -5,12 +5,8 @@ import { PublicPageView } from '@/components/public/PublicPageView';
 import { ApiError } from '@/lib/api';
 import { SITE_NAME, applyPageSeo } from '@/lib/seo';
 import type { MenuPage } from '@/types/canvas';
-import { normalizeCanvasData } from '@/types/canvas';
-import {
-  canvasDataToMenuDocument,
-  parseMenuDocument,
-  type MenuDocument,
-} from '@shared/menu-document';
+import { normalizeCanvasData, validateCanvasData } from '@/types/canvas';
+import { parseMenuDocument, type MenuDocument } from '@shared/menu-document';
 
 interface PublicMenuPayload {
   title: string;
@@ -44,11 +40,10 @@ function isHttpUrl(value: string | null | undefined): value is string {
 }
 
 /**
- * Prioridad de render público:
- * 1) menu_document → HTML
- * 2) generar MenuDocument desde canvas_data → HTML
- * 3) capas canvas (PublicPageView) → HTML posicionado
- * 4) PNG exportado (último recurso)
+ * Prioridad de render público (fidelidad con el editor):
+ * 1) canvas_data → PublicPageView (mismo modelo que el editor)
+ * 2) menu_document → HtmlRenderer
+ * 3) PNG exportado (último recurso)
  */
 export function PublicMenuPage() {
   const { slug } = useParams<{ slug: string }>();
@@ -79,6 +74,15 @@ export function PublicMenuPage() {
 
         setExportPngUrl(isHttpUrl(menu.export_png_url) ? menu.export_png_url : null);
 
+        // Misma fuente de verdad que el editor.
+        if (validateCanvasData(menu.canvas_data)) {
+          const canvasDoc = normalizeCanvasData(menu.canvas_data);
+          setPages(canvasDoc.pages);
+          setMenuDocument(null);
+          setLoading(false);
+          return;
+        }
+
         const storedDoc = parseMenuDocument(menu.menu_document);
         if (storedDoc) {
           setMenuDocument(storedDoc);
@@ -87,21 +91,8 @@ export function PublicMenuPage() {
           return;
         }
 
-        const canvasDoc = normalizeCanvasData(menu.canvas_data);
-        const generatedDoc = canvasDataToMenuDocument(canvasDoc, {
-          title: safeTitle,
-          sourceMenuId: menu.public_slug,
-        });
-
-        if (generatedDoc && generatedDoc.pages.length > 0) {
-          setMenuDocument(generatedDoc);
-          setPages([]);
-          setLoading(false);
-          return;
-        }
-
         setMenuDocument(null);
-        setPages(canvasDoc.pages);
+        setPages([]);
         setLoading(false);
       } catch {
         if (!disposed) {
@@ -116,19 +107,15 @@ export function PublicMenuPage() {
     };
   }, [slug]);
 
-  const showDocument = !!menuDocument;
-  const showPages = !showDocument && pages.length > 0;
-  const showPng = !showDocument && !showPages && !!exportPngUrl;
+  const showPages = pages.length > 0;
+  const showDocument = !showPages && !!menuDocument;
+  const showPng = !showPages && !showDocument && !!exportPngUrl;
 
   return (
     <div className="public-menu-page">
       <main className="public-menu-main">
         {loading && <p className="public-menu-status">Cargando carta…</p>}
         {error && <div className="error-banner">{error}</div>}
-
-        {!loading && !error && showDocument && (
-          <HtmlRenderer document={menuDocument!} showTitle={false} />
-        )}
 
         {!loading && !error && showPages && (
           <div className="public-pages-stack">
@@ -138,6 +125,10 @@ export function PublicMenuPage() {
               </div>
             ))}
           </div>
+        )}
+
+        {!loading && !error && showDocument && (
+          <HtmlRenderer document={menuDocument!} showTitle={false} />
         )}
 
         {!loading && !error && showPng && (
@@ -152,7 +143,7 @@ export function PublicMenuPage() {
           </figure>
         )}
 
-        {!loading && !error && !showDocument && !showPages && !showPng && (
+        {!loading && !error && !showPages && !showDocument && !showPng && (
           <p className="public-menu-status">Esta carta no tiene contenido para mostrar.</p>
         )}
       </main>

@@ -28,6 +28,7 @@ export interface MenuDocumentTextStyle {
   /** Tamaño como % del ancho del lienzo (responsive). */
   fontSize: Percent;
   fontWeight?: string;
+  fontStyle?: string;
   lineHeight?: number;
   letterSpacing?: Percent;
   textAlign: 'left' | 'center' | 'right';
@@ -35,11 +36,22 @@ export interface MenuDocumentTextStyle {
   color: string;
 }
 
+/**
+ * Estilos por carácter (Fabric): línea → índice en línea → props.
+ * Si hay `fontSize`, va como % del ancho del lienzo (igual que style.fontSize).
+ */
+export type MenuDocumentCharStyles = Record<
+  string,
+  Record<string, Record<string, unknown>>
+>;
+
 export interface MenuDocumentTextElement extends MenuDocumentBox {
   id: string;
   type: 'text';
   text: string;
   style: MenuDocumentTextStyle;
+  /** Negrita/cursiva/etc. por carácter o por tramo (misma capa). */
+  charStyles?: MenuDocumentCharStyles;
   /** Sugerencia semántica para el renderer (h1, h2, p…). */
   semantic?: 'heading' | 'subheading' | 'body' | 'caption';
 }

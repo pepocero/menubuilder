@@ -223,19 +223,27 @@ function styleRecordToCss(
   },
   charStyle: Record<string, unknown> | undefined,
   fontSizeScale: number,
+  fontSizeUnit: 'px' | 'cqw' = 'px',
 ): CSSProperties {
   const fill = charStyle?.fill;
   const fontSize = charStyle?.fontSize;
+  const resolvedSize =
+    typeof fontSize === 'number'
+      ? Math.max(fontSize * fontSizeScale, fontSizeUnit === 'cqw' ? 0.05 : 4)
+      : base.fontSize !== undefined
+        ? Math.max(base.fontSize * fontSizeScale, fontSizeUnit === 'cqw' ? 0.05 : 4)
+        : undefined;
+
   return {
     color: typeof fill === 'string' ? fill : base.color,
     fontFamily:
       typeof charStyle?.fontFamily === 'string' ? charStyle.fontFamily : base.fontFamily,
     fontSize:
-      typeof fontSize === 'number'
-        ? Math.max(fontSize * fontSizeScale, 4)
-        : base.fontSize !== undefined
-          ? Math.max(base.fontSize * fontSizeScale, 4)
-          : undefined,
+      resolvedSize === undefined
+        ? undefined
+        : fontSizeUnit === 'cqw'
+          ? `${resolvedSize}cqw`
+          : resolvedSize,
     fontWeight:
       charStyle?.fontWeight !== undefined
         ? (charStyle.fontWeight as string | number)
@@ -247,6 +255,7 @@ function styleRecordToCss(
 
 /**
  * Renderiza texto con estilos por carácter de Fabric como nodos React (vista pública).
+ * @param fontSizeUnit `cqw` cuando los tamaños ya van en % del ancho del contenedor (MenuDocument).
  */
 export function renderTextContentWithCharStyles(
   content: string,
@@ -259,6 +268,7 @@ export function renderTextContentWithCharStyles(
     fontStyle?: string;
   },
   fontSizeScale = 1,
+  fontSizeUnit: 'px' | 'cqw' = 'px',
 ): ReactNode {
   if (!styles || Object.keys(styles).length === 0) {
     return content;
@@ -303,7 +313,7 @@ export function renderTextContentWithCharStyles(
 
     for (let i = 0; i < line.length; i++) {
       const charStyle = lineStyles[String(i)] ?? lineStyles[i as unknown as string];
-      const css = styleRecordToCss(base, charStyle, fontSizeScale);
+      const css = styleRecordToCss(base, charStyle, fontSizeScale, fontSizeUnit);
       const key = JSON.stringify(css);
       if (buffer && key !== bufferStyleKey) flush();
       if (!buffer) {

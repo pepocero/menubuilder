@@ -1,5 +1,6 @@
 import {
   type ConverterCanvasData,
+  type ConverterCharStyles,
   type ConverterImageLayer,
   type ConverterLayer,
   type ConverterPage,
@@ -10,6 +11,7 @@ import {
 import {
   MENU_DOCUMENT_VERSION,
   type MenuDocument,
+  type MenuDocumentCharStyles,
   type MenuDocumentDividerElement,
   type MenuDocumentElement,
   type MenuDocumentImageElement,
@@ -36,11 +38,57 @@ function inferSemantic(fontSize: number, canvasHeight: number): MenuDocumentText
   return 'body';
 }
 
+/** Convierte fontSize px de Fabric a % del ancho; deja el resto igual. */
+function convertCharStylesToDocument(
+  styles: ConverterCharStyles | undefined,
+  canvasW: number,
+): MenuDocumentCharStyles | undefined {
+  if (!styles || typeof styles !== 'object') return undefined;
+  const out: MenuDocumentCharStyles = {};
+  for (const [lineKey, line] of Object.entries(styles)) {
+    if (!line || typeof line !== 'object') continue;
+    const outLine: Record<string, Record<string, unknown>> = {};
+    for (const [charKey, style] of Object.entries(line)) {
+      if (!style || typeof style !== 'object') continue;
+      const next: Record<string, unknown> = { ...style };
+      if (typeof next.fontSize === 'number' && Number.isFinite(next.fontSize)) {
+        next.fontSize = toPercent(next.fontSize, canvasW);
+      }
+      outLine[charKey] = next;
+    }
+    if (Object.keys(outLine).length > 0) out[lineKey] = outLine;
+  }
+  return Object.keys(out).length > 0 ? out : undefined;
+}
+
+function convertCharStylesFromDocument(
+  styles: MenuDocumentCharStyles | undefined,
+  canvasW: number,
+): ConverterCharStyles | undefined {
+  if (!styles || typeof styles !== 'object') return undefined;
+  const out: ConverterCharStyles = {};
+  for (const [lineKey, line] of Object.entries(styles)) {
+    if (!line || typeof line !== 'object') continue;
+    const outLine: Record<string, Record<string, unknown>> = {};
+    for (const [charKey, style] of Object.entries(line)) {
+      if (!style || typeof style !== 'object') continue;
+      const next: Record<string, unknown> = { ...style };
+      if (typeof next.fontSize === 'number' && Number.isFinite(next.fontSize)) {
+        next.fontSize = Math.max(fromPercent(next.fontSize, canvasW), 4);
+      }
+      outLine[charKey] = next;
+    }
+    if (Object.keys(outLine).length > 0) out[lineKey] = outLine;
+  }
+  return Object.keys(out).length > 0 ? out : undefined;
+}
+
 function convertTextLayer(
   layer: ConverterTextLayer,
   canvasW: number,
   canvasH: number,
 ): MenuDocumentTextElement {
+  const charStyles = convertCharStylesToDocument(layer.charStyles, canvasW);
   return {
     id: layer.id,
     type: 'text',
@@ -53,10 +101,12 @@ function convertTextLayer(
     opacity: layer.opacity ?? layer.style.opacity,
     zIndex: layer.zIndex,
     semantic: inferSemantic(layer.style.fontSize, canvasH),
+    ...(charStyles ? { charStyles } : {}),
     style: {
       fontFamily: layer.style.fontFamily,
       fontSize: toPercent(layer.style.fontSize, canvasW),
       fontWeight: layer.style.fontWeight,
+      fontStyle: layer.style.fontStyle,
       lineHeight: 1.2,
       letterSpacing: 0,
       textAlign: layer.style.align,
@@ -249,16 +299,19 @@ function elementToLayer(
   };
 
   if (el.type === 'text') {
+    const charStyles = convertCharStylesFromDocument(el.charStyles, canvasW);
     return {
       ...base,
       type: 'text',
       content: el.text,
+      ...(charStyles ? { charStyles } : {}),
       style: {
         fontFamily: el.style.fontFamily || 'Arial',
         fontSize: Math.max(fromPercent(el.style.fontSize, canvasW), 8),
         color: el.style.color || '#1a1a1a',
         align: el.style.textAlign || 'left',
         fontWeight: el.style.fontWeight,
+        fontStyle: el.style.fontStyle,
       },
     };
   }

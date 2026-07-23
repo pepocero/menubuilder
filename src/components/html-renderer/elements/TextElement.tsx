@@ -1,4 +1,7 @@
+import { useEffect } from 'react';
 import type { MenuDocumentTextElement } from '@shared/menu-document/types';
+import { ensureEditorFontLoaded } from '@/lib/google-fonts';
+import { renderTextContentWithCharStyles } from '@/lib/text-char-styles';
 import { PositionedElement, textTagForSemantic } from '../positioned-element';
 
 interface TextElementProps {
@@ -7,6 +10,22 @@ interface TextElementProps {
 
 export function TextElement({ element }: TextElementProps) {
   const Tag = textTagForSemantic(element.semantic);
+
+  useEffect(() => {
+    try {
+      ensureEditorFontLoaded(element.style.fontFamily);
+      if (!element.charStyles) return;
+      for (const line of Object.values(element.charStyles)) {
+        for (const style of Object.values(line)) {
+          if (typeof style.fontFamily === 'string') {
+            ensureEditorFontLoaded(style.fontFamily);
+          }
+        }
+      }
+    } catch {
+      /* fuentes opcionales */
+    }
+  }, [element]);
 
   return (
     <PositionedElement box={element} className="html-renderer-text">
@@ -19,6 +38,7 @@ export function TextElement({ element }: TextElementProps) {
           fontFamily: element.style.fontFamily,
           fontSize: `${element.style.fontSize}cqw`,
           fontWeight: element.style.fontWeight,
+          fontStyle: element.style.fontStyle,
           lineHeight: element.style.lineHeight ?? 1.2,
           letterSpacing: element.style.letterSpacing
             ? `${element.style.letterSpacing}cqw`
@@ -30,7 +50,19 @@ export function TextElement({ element }: TextElementProps) {
           overflow: 'hidden',
         }}
       >
-        {element.text}
+        {renderTextContentWithCharStyles(
+          element.text,
+          element.charStyles,
+          {
+            color: element.style.color,
+            fontFamily: element.style.fontFamily,
+            fontSize: element.style.fontSize,
+            fontWeight: element.style.fontWeight,
+            fontStyle: element.style.fontStyle,
+          },
+          1,
+          'cqw',
+        )}
       </Tag>
     </PositionedElement>
   );

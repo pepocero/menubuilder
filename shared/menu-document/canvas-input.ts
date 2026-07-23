@@ -10,6 +10,7 @@ export interface ConverterTextStyle {
   color: string;
   align: 'left' | 'center' | 'right';
   fontWeight?: string;
+  fontStyle?: string;
   opacity?: number;
 }
 
@@ -33,10 +34,17 @@ export interface ConverterLayerBase {
   opacity?: number;
 }
 
+/** Estilos por carácter (formato Fabric Textbox.styles: línea → índice → props). */
+export type ConverterCharStyles = Record<
+  string,
+  Record<string, Record<string, unknown>>
+>;
+
 export interface ConverterTextLayer extends ConverterLayerBase {
   type: 'text';
   content: string;
   style: ConverterTextStyle;
+  charStyles?: ConverterCharStyles;
 }
 
 export interface ConverterShapeLayer extends ConverterLayerBase {
