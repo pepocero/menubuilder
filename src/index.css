@@ -1429,6 +1429,7 @@ textarea {
 }
 
 .editor-canvas-wrap {
+  position: relative;
   box-shadow: 0 4px 24px rgb(0 0 0 / 15%);
   background: #fff;
   line-height: 0;
@@ -1439,6 +1440,37 @@ textarea {
 
 .editor-canvas-wrap .canvas-container {
   margin: 0 auto;
+}
+
+.page-safe-zone {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 6;
+}
+
+.page-safe-zone__frame {
+  position: absolute;
+  border: 1px dashed rgb(37 99 235 / 55%);
+  border-radius: 2px;
+  box-shadow: 0 0 0 9999px rgb(15 23 42 / 7%);
+}
+
+.page-safe-zone__label {
+  position: absolute;
+  left: 50%;
+  transform: translate(-50%, calc(-100% - 4px));
+  font-size: 0.65rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: rgb(37 99 235 / 90%);
+  background: rgb(255 255 255 / 88%);
+  padding: 0.1rem 0.35rem;
+  border-radius: 3px;
+  line-height: 1.2;
+  white-space: nowrap;
+  pointer-events: none;
 }
 
 .editor-error-banner {
@@ -2904,10 +2936,15 @@ textarea {
   box-sizing: border-box;
 }
 
-/* Anclado arriba: el margen superior del diseño se ve; el exceso se corta abajo. */
+/* Anclado arriba + scroll vertical si la página es más alta que la pantalla. */
 .public-page-viewport--cover {
   align-items: flex-start;
   justify-content: center;
+  overflow-x: hidden;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior-y: contain;
+  overscroll-behavior-x: none;
 }
 
 .public-pages-stack--horizontal .public-page-frame,

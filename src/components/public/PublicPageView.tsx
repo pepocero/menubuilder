@@ -12,8 +12,8 @@ interface PublicPageViewProps {
   pageHeight?: number;
   /**
    * `width`: escala al ancho del contenedor (vista vertical).
-   * `cover`: llena el ancho del viewport (scroll horizontal), anclado arriba;
-   *         si el alto diseñado supera la zona útil, se recorta abajo (no el título).
+   * `cover`: llena el ancho del viewport (scroll horizontal entre páginas);
+   *         si el alto diseñado supera la zona útil, scroll vertical dentro de la página.
    */
   fit?: 'width' | 'cover';
 }
@@ -143,7 +143,7 @@ export function PublicPageView({
     if (typeof window === 'undefined') return 1;
     const approxW = Math.max(window.innerWidth || 0, 1);
     if (fillViewport) {
-      // Ancho completo; el exceso de alto se recorta abajo (anclado arriba).
+      // Ancho completo; si el alto supera la pantalla, hay scroll vertical en la página.
       return approxW / width;
     }
     const padded = Math.min(approxW - 24, 920);
@@ -160,7 +160,7 @@ export function PublicPageView({
       if (frameWidth <= 0) return;
 
       // En horizontal: escalar solo por ancho (misma proporción que el editor).
-      // La zona útil vertical la marca el contenedor (svh); el sobrante se corta abajo.
+      // Si el alto supera la zona útil, el viewport permite scroll vertical.
       setScale(frameWidth / width);
     };
 

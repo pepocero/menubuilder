@@ -18,6 +18,7 @@ import {
   isPageTransferInFlight,
   resolveDropPageIndex,
 } from '@/lib/transfer-page-objects';
+import { safeZoneInsetCss } from '@/lib/safe-zone';
 
 export interface CanvasEditorHandle {
   getCanvas: () => Canvas | null;
@@ -392,6 +393,14 @@ export const CanvasEditor = forwardRef<CanvasEditorHandle, CanvasEditorProps>(
         }}
       >
         <canvas ref={canvasElRef} />
+        <div className="page-safe-zone" aria-hidden="true">
+          <div className="page-safe-zone__frame" style={safeZoneInsetCss()} />
+          {active ? (
+            <span className="page-safe-zone__label" style={{ top: safeZoneInsetCss().top }}>
+              Zona segura
+            </span>
+          ) : null}
+        </div>
       </div>
     );
   },
