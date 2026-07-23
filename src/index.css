@@ -2744,6 +2744,8 @@ textarea {
   min-height: 100dvh;
   overflow: hidden;
   background: transparent;
+  /* Permite gestos del navegador (zoom / refresh) en el eje Y. */
+  overscroll-behavior-y: auto;
 }
 
 @supports (height: 100svh) {
@@ -2775,7 +2777,7 @@ textarea {
   scroll-snap-type: x mandatory;
   -webkit-overflow-scrolling: touch;
   overscroll-behavior-x: contain;
-  touch-action: pan-x;
+  /* Sin touch-action: pan-x — bloqueaba zoom y pull-to-refresh en móvil. */
 }
 
 .public-pages-stack--horizontal .public-page-block {
@@ -2793,7 +2795,6 @@ textarea {
   justify-content: flex-start;
   align-items: stretch;
   overflow: hidden;
-  touch-action: pan-x;
 }
 
 .public-page-viewport {
@@ -2810,7 +2811,6 @@ textarea {
   align-items: center;
   justify-content: center;
   overflow: hidden;
-  touch-action: pan-x;
 }
 
 .public-page-viewport-vertical {

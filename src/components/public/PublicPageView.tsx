@@ -80,27 +80,71 @@ function layerStyle(layer: CanvasLayer, scale: number): React.CSSProperties {
 function TextLayerView({ layer, scale }: { layer: TextLayer; scale: number }) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [ready, setReady] = useState(false);
+  const paintKey = [
+    layer.id,
+    layer.content,
+    layer.width,
+    layer.height,
+    layer.style.fontFamily,
+    layer.style.fontSize,
+    layer.style.fontWeight,
+    layer.style.fontStyle,
+    layer.style.color,
+    layer.style.align,
+    JSON.stringify(layer.charStyles ?? null),
+    scale,
+  ].join('|');
 
   useEffect(() => {
     let cancelled = false;
     const canvas = canvasRef.current;
     if (!canvas) return;
 
-    setReady(false);
-    try {
-      ensureEditorFontLoaded(layer.style.fontFamily);
-    } catch {
-      /* opcional */
-    }
+    const paint = async () => {
+      try {
+        ensureEditorFontLoaded(layer.style.fontFamily);
+        if (layer.charStyles) {
+          for (const line of Object.values(layer.charStyles)) {
+            for (const style of Object.values(line)) {
+              if (typeof style.fontFamily === 'string') {
+                ensureEditorFontLoaded(style.fontFamily);
+              }
+            }
+          }
+        }
+      } catch {
+        /* opcional */
+      }
 
-    void paintPublicTextLayer(canvas, layer, scale).then(() => {
+      await paintPublicTextLayer(canvas, layer, scale);
       if (!cancelled) setReady(true);
-    });
+    };
+
+    setReady(false);
+    void paint();
+
+    // Segunda pasada cuando llegan las fuentes (móvil / display=swap).
+    const onFontsDone = () => {
+      if (cancelled) return;
+      void paint();
+    };
+    document.fonts?.addEventListener?.('loadingdone', onFontsDone);
+    window.addEventListener('orientationchange', onFontsDone);
+    window.addEventListener('pageshow', onFontsDone);
+
+    // Repintado tardío por si iOS aplicó la fuente después de ready.
+    const latePass = window.setTimeout(() => {
+      if (!cancelled) void paint();
+    }, 400);
 
     return () => {
       cancelled = true;
+      document.fonts?.removeEventListener?.('loadingdone', onFontsDone);
+      window.removeEventListener('orientationchange', onFontsDone);
+      window.removeEventListener('pageshow', onFontsDone);
+      window.clearTimeout(latePass);
     };
-  }, [layer, scale]);
+  }, [paintKey, layer, scale]);
 
   return (
     <div style={layerStyle(layer, scale)}>

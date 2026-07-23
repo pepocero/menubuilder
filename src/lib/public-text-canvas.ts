@@ -25,22 +25,48 @@ function cssFont(
 async function waitForFonts(families: string[], fontSize: number): Promise<void> {
   if (typeof document === 'undefined' || !document.fonts?.load) return;
   const unique = [...new Set(families.filter(Boolean))];
+  for (const family of unique) {
+    ensureEditorFontLoaded(family);
+  }
+
   await Promise.all(
     unique.map(async (family) => {
+      const quoted = family.includes(' ') ? `"${family}"` : family;
       try {
-        ensureEditorFontLoaded(family);
-        await document.fonts.load(`400 ${fontSize}px "${family}"`);
-        await document.fonts.load(`700 ${fontSize}px "${family}"`);
-        await document.fonts.load(`italic 400 ${fontSize}px "${family}"`);
+        await Promise.all([
+          document.fonts.load(`400 ${fontSize}px ${quoted}`),
+          document.fonts.load(`700 ${fontSize}px ${quoted}`),
+          document.fonts.load(`italic 400 ${fontSize}px ${quoted}`),
+          document.fonts.load(`italic 700 ${fontSize}px ${quoted}`),
+        ]);
       } catch {
         /* fuente opcional */
       }
     }),
   );
+
   try {
     await document.fonts.ready;
   } catch {
     /* ignore */
+  }
+
+  // iOS a veces marca ready antes de aplicar la cara; breve espera + recheck.
+  const pending = unique.some((family) => {
+    const quoted = family.includes(' ') ? `"${family}"` : family;
+    try {
+      return !document.fonts.check(`400 ${fontSize}px ${quoted}`);
+    } catch {
+      return false;
+    }
+  });
+  if (pending) {
+    await new Promise((r) => setTimeout(r, 120));
+    try {
+      await document.fonts.ready;
+    } catch {
+      /* ignore */
+    }
   }
 }
 
@@ -191,6 +217,17 @@ export async function paintPublicTextLayer(
   ctx.setTransform(dpr * scale, 0, 0, dpr * scale, 0, 0);
   ctx.clearRect(0, 0, layer.width, layer.height);
   ctx.imageSmoothingEnabled = true;
+  // Métricas más estables entre escritorio y móvil (espacios / precios).
+  const ctxExt = ctx as CanvasRenderingContext2D & {
+    fontKerning?: string;
+    letterSpacing?: string;
+  };
+  if (typeof ctxExt.fontKerning === 'string' || 'fontKerning' in ctx) {
+    ctxExt.fontKerning = 'none';
+  }
+  if ('letterSpacing' in ctx) {
+    ctxExt.letterSpacing = '0px';
+  }
 
   const baseFont = cssFont(
     layer.style.fontStyle,
