@@ -10,6 +10,14 @@ import {
   refreshTextboxLayout,
   resizeCanvasPage,
 } from '@/lib/canvas-serializer';
+import { getLayerObjectData, setLayerObjectData } from '@/lib/layer-utils';
+import {
+  finalizeMenuLineTransform,
+  isMenuLineGroup,
+  findMenuLineCellAtPoint,
+  beginMenuLineColumnEditing,
+  layoutMenuLineGroup,
+} from '@/lib/menu-line';
 import { hydrateDesign } from '@/lib/canvas/render-design';
 import type { CanvasInteractionMode } from '@/components/editor/EditorZoomControls';
 import {
@@ -304,6 +312,11 @@ export const CanvasEditor = forwardRef<CanvasEditorHandle, CanvasEditorProps>(
         if (muteEventsRef.current || !activeRef.current) return;
         if (interactionModeRef.current === 'scroll') return;
 
+        const target = e.target ?? null;
+        if (target && isMenuLineGroup(target)) {
+          finalizeMenuLineTransform(target);
+        }
+
         const action =
           (e as { action?: string }).action ??
           (e as { transform?: { action?: string } }).transform?.action;
@@ -322,9 +335,29 @@ export const CanvasEditor = forwardRef<CanvasEditorHandle, CanvasEditorProps>(
         emitChange();
       });
 
+      canvas.on('mouse:dblclick', (opt) => {
+        if (muteEventsRef.current || !activeRef.current) return;
+        const target = opt.target;
+        if (!target || !isMenuLineGroup(target)) return;
+        const pointer = canvas.getScenePoint(opt.e);
+        const cell = findMenuLineCellAtPoint(target, pointer.x, pointer.y);
+        if (!cell) return;
+        beginMenuLineColumnEditing(canvas, target, cell.key, cell.rowIndex);
+      });
+
       canvas.on('text:changed', (e) => {
         const target = e.target;
         if (!target || !isTextObject(target)) return;
+        const role = getLayerObjectData(target).menuLineRole;
+        const parent = (target as { group?: import('fabric').Group }).group;
+        if (role && parent && isMenuLineGroup(parent)) {
+          if (role === 'center') {
+            setLayerObjectData(target, { menuLineLeader: 'custom' });
+          }
+          layoutMenuLineGroup(parent);
+          emitChange();
+          return;
+        }
         const text = target as import('fabric').Textbox;
         if ((text.width ?? 0) < 48) {
           refreshTextboxLayout(target);
@@ -339,6 +372,16 @@ export const CanvasEditor = forwardRef<CanvasEditorHandle, CanvasEditorProps>(
       canvas.on('text:editing:exited', (e) => {
         const target = e.target;
         if (!target || !isTextObject(target)) return;
+        const role = getLayerObjectData(target).menuLineRole;
+        const parent = (target as { group?: import('fabric').Group }).group;
+        if (role && parent && isMenuLineGroup(parent)) {
+          if (role === 'center') {
+            setLayerObjectData(target, { menuLineLeader: 'custom' });
+          }
+          layoutMenuLineGroup(parent);
+          emitChange();
+          return;
+        }
         refreshTextboxLayout(target);
         emitChange();
       });

@@ -21,6 +21,9 @@ import {
   type TextBorderLineStyle,
 } from '@/lib/text-border';
 import { FontFamilyPicker } from '@/components/editor/FontFamilyPicker';
+import { MenuLineProperties } from '@/components/editor/MenuLineProperties';
+import { isMenuLineGroup } from '@/lib/menu-line';
+import type { Group } from 'fabric';
 
 interface PropertiesPanelProps {
   activeObject: FabricObject | null;
@@ -157,6 +160,127 @@ export function PropertiesPanel({
               </button>
             </div>
           </div>
+        )}
+      </div>
+    );
+  }
+
+  if (isMenuLineGroup(activeObject)) {
+    const group = activeObject as Group;
+    const layerData = getLayerObjectData(group);
+    const layerName = layerData.layerName ?? '';
+
+    function refreshMenuLine() {
+      setTick((t) => t + 1);
+      onUpdate();
+    }
+
+    function updateMenuLineObject(props: Record<string, unknown>) {
+      group.set(props);
+      group.setCoords();
+      group.canvas?.requestRenderAll();
+      refreshMenuLine();
+    }
+
+    return (
+      <div className="properties-panel">
+        <h3>Línea de carta</h3>
+
+        <label>
+          Nombre de capa
+          <input
+            type="text"
+            value={layerName}
+            placeholder={getLayerDisplayName(group)}
+            onChange={(e) => {
+              setLayerObjectData(group, { layerName: e.target.value.trim() || undefined });
+              refreshMenuLine();
+            }}
+          />
+        </label>
+
+        <label>
+          X
+          <input
+            type="number"
+            value={Math.round(group.left ?? 0)}
+            onChange={(e) => updateMenuLineObject({ left: Number(e.target.value) })}
+          />
+        </label>
+        <label>
+          Y
+          <input
+            type="number"
+            value={Math.round(group.top ?? 0)}
+            onChange={(e) => updateMenuLineObject({ top: Number(e.target.value) })}
+          />
+        </label>
+        <label>
+          Opacidad
+          <input
+            type="range"
+            min={0}
+            max={1}
+            step={0.05}
+            value={group.opacity ?? 1}
+            onChange={(e) => updateMenuLineObject({ opacity: Number(e.target.value) })}
+          />
+        </label>
+
+        <MenuLineProperties group={group} onUpdate={onUpdate} />
+
+        {(onCopyLayer || onPasteLayer) && (
+          <div className="properties-page-transfer" role="group" aria-label="Copiar y pegar capa">
+            <div className="properties-page-transfer-row properties-page-transfer-row--icons">
+              <button
+                type="button"
+                className="btn-secondary properties-icon-btn"
+                disabled={!onCopyLayer}
+                title="Copiar línea de carta"
+                aria-label="Copiar capa"
+                onClick={() => onCopyLayer?.()}
+              >
+                <CopyLayerIcon />
+              </button>
+              <button
+                type="button"
+                className="btn-secondary properties-icon-btn"
+                disabled={!onPasteLayer || !canPasteLayer}
+                title="Pegar en esta página (Ctrl+V)"
+                aria-label="Pegar capa"
+                onClick={() => onPasteLayer?.()}
+              >
+                <PasteLayerIcon />
+              </button>
+            </div>
+          </div>
+        )}
+
+        {(onMoveToPrevPage || onMoveToNextPage) && (
+          <div className="properties-page-transfer" role="group" aria-label="Mover de página">
+            <button
+              type="button"
+              className="btn-secondary"
+              disabled={!onMoveToPrevPage || pageIndex <= 0}
+              onClick={() => onMoveToPrevPage?.()}
+            >
+              ← Página anterior
+            </button>
+            <button
+              type="button"
+              className="btn-secondary"
+              disabled={!onMoveToNextPage || pageIndex >= pageCount - 1}
+              onClick={() => onMoveToNextPage?.()}
+            >
+              Página siguiente →
+            </button>
+          </div>
+        )}
+
+        {onSendToBack && (
+          <button type="button" className="btn-secondary" onClick={onSendToBack}>
+            Enviar al fondo
+          </button>
         )}
       </div>
     );

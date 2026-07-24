@@ -5,6 +5,22 @@ import type { MenuPage } from '@/types/canvas';
 export function extractFontFamiliesFromPage(page: MenuPage): string[] {
   const fonts = new Set<string>();
   for (const layer of page.layers) {
+    if (layer.type === 'menuLine') {
+      const normalizedRows =
+        Array.isArray(layer.rows) && layer.rows.length > 0
+          ? layer.rows
+          : layer.columns
+            ? [layer.columns]
+            : [];
+      for (const row of normalizedRows) {
+        for (const col of Object.values(row)) {
+          if (col && typeof col === 'object' && 'style' in col && col.style?.fontFamily) {
+            fonts.add(col.style.fontFamily);
+          }
+        }
+      }
+      continue;
+    }
     if (layer.type !== 'text') continue;
     if (layer.style.fontFamily) fonts.add(layer.style.fontFamily);
     if (!layer.charStyles) continue;

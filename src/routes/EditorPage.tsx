@@ -33,6 +33,7 @@ import {
 } from '@/lib/transfer-page-objects';
 import {
   addLayerToCanvas,
+  createMenuLineLayer,
   createShapeLayer,
   createTextLayer,
   ensureA4Canvas,
@@ -920,6 +921,16 @@ export function EditorPage() {
     handleChange();
   }
 
+  async function handleAddMenuLine() {
+    const canvas = getActiveCanvas();
+    if (!canvas) return;
+    const { width } = getCanvasLogicalSize(canvas);
+    const lineWidth = Math.max(160, Math.min(520, Math.round(width - 96)));
+    await addLayerToCanvas(canvas, createMenuLineLayer(48, 120, lineWidth));
+    setActiveObject(canvas.getActiveObject() ?? null);
+    handleChange();
+  }
+
   function handleMergeTexts() {
     const canvas = getActiveCanvas();
     if (!canvas) return;
@@ -1629,6 +1640,7 @@ export function EditorPage() {
         onClearCanvas={handleClearCanvas}
         canClearCanvas={objects.length > 0}
         onAddText={handleAddText}
+        onAddMenuLine={handleAddMenuLine}
         onAddRect={() => handleAddShape('rect')}
         onAddLine={() => handleAddShape('line')}
         onAddCircle={() => handleAddShape('circle')}

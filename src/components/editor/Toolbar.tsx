@@ -11,6 +11,7 @@ interface ToolbarProps {
   onClearCanvas: () => void;
   canClearCanvas: boolean;
   onAddText: () => void;
+  onAddMenuLine: () => void;
   onAddRect: () => void;
   onAddLine: () => void;
   onAddCircle: () => void;
@@ -51,6 +52,7 @@ export function Toolbar({
   onClearCanvas,
   canClearCanvas,
   onAddText,
+  onAddMenuLine,
   onAddRect,
   onAddLine,
   onAddCircle,
@@ -145,6 +147,9 @@ export function Toolbar({
         <span className="toolbar-label">Añadir</span>
         <button type="button" onClick={onAddText} title="Texto">
           T
+        </button>
+        <button type="button" onClick={onAddMenuLine} title="Línea de carta (plato ··· precio)">
+          ··€
         </button>
         <button type="button" onClick={onAddRect} title="Rectángulo">
           ▭

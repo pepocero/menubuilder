@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import type { MenuPage } from '@/types/canvas';
 import { getPageSize } from '@/lib/page-size';
 import {
+  computePublicRenderMultiplier,
   pageLetterboxColor,
   renderMenuPageToDataUrl,
 } from '@/lib/render-menu-page';
@@ -17,7 +18,8 @@ interface PublicPageViewProps {
 
 /**
  * Carta pública: renderiza con Fabric (igual que el editor) a PNG y escala
- * la imagen. Así tipografía, espacios y capas coinciden en cualquier móvil.
+ * la imagen. El multiplier se calcula según el ancho visible y el DPR para
+ * que en monitores grandes no se vea borroso.
  */
 export function PublicPageView({ page, fit = 'width' }: PublicPageViewProps) {
   const frameRef = useRef<HTMLDivElement>(null);
@@ -29,38 +31,92 @@ export function PublicPageView({ page, fit = 'width' }: PublicPageViewProps) {
 
   useEffect(() => {
     let cancelled = false;
+    let debounceTimer: ReturnType<typeof setTimeout> | null = null;
+    let lastMultiplier: number | null = null;
 
-    const run = async () => {
+    const measureDisplayWidthCss = (): number => {
+      const el = frameRef.current;
+      if (!el) {
+        return typeof window !== 'undefined' ? window.innerWidth : 0;
+      }
+
+      if (containFit) {
+        const vw = el.clientWidth;
+        const vh = el.clientHeight;
+        if (vw <= 0 || vh <= 0) {
+          return window.innerWidth;
+        }
+        const scale = Math.min(vw / size.width, vh / size.height);
+        return size.width * scale;
+      }
+
+      return el.clientWidth > 0 ? el.clientWidth : window.innerWidth;
+    };
+
+    const run = async (force: boolean) => {
+      const displayWidthCss = measureDisplayWidthCss();
+      const multiplier = computePublicRenderMultiplier(size.width, displayWidthCss);
+
+      if (!force && lastMultiplier === multiplier) {
+        return;
+      }
+
       setError(false);
-      const png = await renderMenuPageToDataUrl(page);
+      const png = await renderMenuPageToDataUrl(page, { multiplier });
       if (cancelled) return;
       if (!png) {
         setError(true);
         setDataUrl(null);
         return;
       }
+      lastMultiplier = multiplier;
       setDataUrl(png);
     };
 
-    void run();
+    const schedule = (force: boolean) => {
+      if (debounceTimer) clearTimeout(debounceTimer);
+      debounceTimer = setTimeout(() => {
+        void run(force);
+      }, force ? 0 : 160);
+    };
+
+    void run(true);
 
     const onFontsDone = () => {
-      if (!cancelled) void run();
+      if (!cancelled) schedule(true);
     };
     document.fonts?.addEventListener?.('loadingdone', onFontsDone);
     window.addEventListener('orientationchange', onFontsDone);
 
     const late = window.setTimeout(() => {
-      if (!cancelled) void run();
+      if (!cancelled) void run(true);
     }, 500);
+
+    const resizeObserver =
+      typeof ResizeObserver !== 'undefined'
+        ? new ResizeObserver(() => {
+            if (!cancelled) schedule(false);
+          })
+        : null;
+    if (frameRef.current && resizeObserver) {
+      resizeObserver.observe(frameRef.current);
+    }
+
+    const onWindowResize = () => {
+      if (!cancelled) schedule(false);
+    };
+    window.addEventListener('resize', onWindowResize);
 
     return () => {
       cancelled = true;
       document.fonts?.removeEventListener?.('loadingdone', onFontsDone);
       window.removeEventListener('orientationchange', onFontsDone);
+      window.removeEventListener('resize', onWindowResize);
       window.clearTimeout(late);
+      if (debounceTimer) clearTimeout(debounceTimer);
+      resizeObserver?.disconnect();
     };
-  }, [page]);
+  }, [page, containFit, size.width, size.height]);
 
   if (containFit) {
     return (

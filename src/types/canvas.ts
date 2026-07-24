@@ -72,7 +72,76 @@ export interface ImageLayer extends LayerBase {
   assetId?: string;
 }
 
-export type CanvasLayer = TextLayer | ShapeLayer | ImageLayer;
+/** Separador de la columna central de una línea de carta. */
+export type MenuLineLeader = 'dots' | 'dashes' | 'spaces' | 'custom';
+
+export type MenuLineColumnKey = 'left' | 'center' | 'right';
+
+/** Estilo de una celda (independiente del resto). */
+export interface MenuLineColumnStyle {
+  fontFamily: string;
+  fontSize: number;
+  color: string;
+  align: 'left' | 'center' | 'right';
+  fontWeight?: string;
+  fontStyle?: string;
+}
+
+/** Celda de una fila (contenido + formato). */
+export interface MenuLineCell {
+  content: string;
+  style: MenuLineColumnStyle;
+}
+
+/** Una fila: plato | separador | precio. */
+export interface MenuLineRow {
+  left: MenuLineCell;
+  center: MenuLineCell;
+  right: MenuLineCell;
+  /** Si falta, usa el leader del bloque. */
+  leader?: MenuLineLeader;
+}
+
+/** Proporciones compartidas por todas las filas (suman ~1). */
+export interface MenuLineColumnRatios {
+  left: number;
+  center: number;
+  right: number;
+}
+
+/**
+ * @deprecated Formato de una sola fila. Se normaliza a `rows` + `columnRatios`.
+ */
+export interface MenuLineColumn {
+  content: string;
+  style: MenuLineColumnStyle;
+  widthRatio: number;
+}
+
+/**
+ * Bloque de carta: N filas × 3 columnas, con anchos compartidos.
+ * En el lienzo se representa como un Group de Textbox.
+ */
+export interface MenuLineLayer extends LayerBase {
+  type: 'menuLine';
+  /** Separador por defecto (filas sin override). */
+  leader: MenuLineLeader;
+  columnRatios: MenuLineColumnRatios;
+  rows: MenuLineRow[];
+  /** Espacio vertical entre filas (px de diseño). */
+  rowGap?: number;
+  /**
+   * @deprecated compat 1 fila.
+   * Si existe y `rows` está vacío, se convierte al cargar.
+   */
+  columns?: {
+    left: MenuLineColumn;
+    center: MenuLineColumn;
+    right: MenuLineColumn;
+  };
+}
+
+export type CanvasLayer = TextLayer | ShapeLayer | ImageLayer | MenuLineLayer;
 
 /** Una página del menú (tamaño independiente; por defecto A4). */
 export interface MenuPage {

@@ -3,6 +3,7 @@ import {
   Circle,
   FabricImage,
   FabricObject,
+  Group,
   Line,
   Rect,
   Textbox,
@@ -11,6 +12,7 @@ import type {
   CanvasData,
   CanvasLayer,
   ImageLayer,
+  MenuLineLayer,
   MenuPage,
   ShapeLayer,
   TextLayer,
@@ -21,6 +23,12 @@ import {
   syncTextboxBorder,
   textBorderIsVisible,
 } from '@/lib/text-border';
+import {
+  isMenuLineGroup,
+  menuLineGroupToLayer,
+  menuLineLayerToGroup,
+  finalizeMenuLineTransform,
+} from '@/lib/menu-line';
 
 type CanvasWithLogicalSize = Canvas & {
   __logicalWidth?: number;
@@ -203,6 +211,10 @@ export function layerToFabricObject(layer: CanvasLayer): FabricObject | null {
     return obj;
   }
 
+  if (layer.type === 'menuLine') {
+    return menuLineLayerToGroup(layer as MenuLineLayer);
+  }
+
   if (layer.type === 'shape') {
     const shapeLayer = layer as ShapeLayer;
     let obj: FabricObject;
@@ -319,6 +331,10 @@ export async function loadPageOntoCanvas(
 
   // Textbox: alto según contenido (tras fuentes / métricas reales).
   for (const obj of canvas.getObjects()) {
+    if (isMenuLineGroup(obj)) {
+      finalizeMenuLineTransform(obj);
+      continue;
+    }
     if (!isTextObject(obj)) continue;
     const text = obj as Textbox;
     text.set({ dirty: true });
@@ -355,6 +371,10 @@ export function fabricObjectToLayer(obj: FabricObject, zIndex: number): CanvasLa
     locked: typeof data.locked === 'boolean' ? data.locked : obj.selectable === false,
     opacity: obj.opacity ?? 1,
   };
+
+  if (isMenuLineGroup(obj)) {
+    return menuLineGroupToLayer(obj as Group, zIndex);
+  }
 
   if (isTextObject(obj)) {
     const textObj = obj as Textbox;
@@ -530,6 +550,8 @@ export function createTextLayer(x = 80, y = 120): TextLayer {
     },
   };
 }
+
+export { createMenuLineLayer } from '@/lib/menu-line';
 
 export function createShapeLayer(
   shape: 'rect' | 'line' | 'circle',

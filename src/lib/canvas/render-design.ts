@@ -7,6 +7,7 @@ import {
   loadPageOntoCanvas,
   setCanvasLogicalSize,
 } from '@/lib/canvas-serializer';
+import { finalizeMenuLineTransform, isMenuLineGroup } from '@/lib/menu-line';
 import { ensureFontsLoaded, extractFontFamiliesFromPage } from '@/lib/canvas/fonts';
 import { DEFAULT_TEXT_LINE_HEIGHT } from '@/lib/canvas/text-props';
 
@@ -31,6 +32,10 @@ export interface RenderDesignOptions {
  */
 export function recalculateTextboxHeights(canvas: DesignCanvas): void {
   for (const obj of canvas.getObjects()) {
+    if (isMenuLineGroup(obj)) {
+      finalizeMenuLineTransform(obj);
+      continue;
+    }
     if (!isTextObject(obj)) continue;
     const text = obj as Textbox;
     const width = Math.max(Number(text.width) || 0, 8);

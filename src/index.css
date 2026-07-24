@@ -1629,6 +1629,53 @@ textarea {
   color: #fff;
 }
 
+.menu-line-properties {
+  display: flex;
+  flex-direction: column;
+  gap: 0.65rem;
+  margin-top: 0.35rem;
+  padding-top: 0.65rem;
+  border-top: 1px solid var(--color-border);
+}
+
+.menu-line-column-tabs {
+  display: flex;
+  gap: 0.25rem;
+  margin-bottom: 0.15rem;
+}
+
+.menu-line-column-tab {
+  flex: 1;
+  min-height: 2rem;
+  border: 1px solid var(--color-border);
+  border-radius: 4px;
+  background: var(--color-surface);
+  color: var(--color-text);
+  font-size: 0.78rem;
+  cursor: pointer;
+}
+
+.menu-line-column-tab.is-active {
+  background: var(--color-primary);
+  border-color: var(--color-primary);
+  color: #fff;
+}
+
+.menu-line-row-controls {
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+}
+
+.menu-line-row-actions {
+  display: flex;
+  gap: 0.35rem;
+}
+
+.menu-line-row-actions button {
+  flex: 1;
+}
+
 .properties-align-row {
   display: flex;
   gap: 0.35rem;

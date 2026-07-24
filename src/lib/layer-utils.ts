@@ -8,6 +8,14 @@ export interface LayerObjectData {
   src?: string;
   shape?: string;
   border?: unknown;
+  menuLineRole?: 'left' | 'center' | 'right';
+  menuLineLeader?: 'dots' | 'dashes' | 'spaces' | 'custom';
+  menuLineWidthRatio?: number;
+  menuLineRowIndex?: number;
+  menuLineRowGap?: number;
+  menuLineRatioLeft?: number;
+  menuLineRatioCenter?: number;
+  menuLineRatioRight?: number;
 }
 
 export function getLayerObjectData(obj: FabricObject): LayerObjectData {
@@ -53,6 +61,11 @@ export function getLayerDisplayName(obj: FabricObject): string {
     if (text) return text.slice(0, 32);
     return 'Texto';
   }
+  if (data.layerType === 'menuLine' || obj.type === 'group') {
+    if (data.layerType === 'menuLine') {
+      return data.layerName?.trim() || 'Línea de carta';
+    }
+  }
   if (data.layerType === 'image' || obj.type === 'image') return 'Imagen';
   if (data.layerType === 'shape' || obj.type === 'rect' || obj.type === 'circle' || obj.type === 'line') {
     if (data.shape === 'line') return 'Línea';
@@ -64,6 +77,7 @@ export function getLayerDisplayName(obj: FabricObject): string {
 
 export function getLayerDefaultName(obj: FabricObject): string {
   const data = getLayerObjectData(obj);
+  if (data.layerType === 'menuLine') return 'Línea de carta';
   if (data.layerType === 'text' || obj.type === 'textbox' || obj.type === 'text') return 'Texto';
   if (data.layerType === 'image' || obj.type === 'image') return 'Imagen';
   if (data.layerType === 'shape' || obj.type === 'rect' || obj.type === 'circle' || obj.type === 'line') {
