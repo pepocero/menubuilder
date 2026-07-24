@@ -111,7 +111,7 @@ export function EditorPage() {
   const uploadInFlightRef = useRef(false);
   const [mobilePanel, setMobilePanel] = useState<'canvas' | 'layers' | 'props'>('canvas');
   const [zoom, setZoom] = useState(100);
-  const [interactionMode, setInteractionMode] = useState<CanvasInteractionMode>('move');
+  const [interactionMode, setInteractionMode] = useState<CanvasInteractionMode>('scroll');
   const [historyVersion, setHistoryVersion] = useState(0);
 
   const saveTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
