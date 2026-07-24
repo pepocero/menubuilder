@@ -2,10 +2,17 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { ActiveSelection, type FabricObject, type FabricImage } from 'fabric';
 import type { StockImage } from '@shared/stock';
-import type { CanvasData, CanvasLayer, MenuPage, PageScrollDirection } from '@/types/canvas';
+import type {
+  CanvasData,
+  CanvasLayer,
+  MenuPage,
+  PageGap,
+  PageScrollDirection,
+} from '@/types/canvas';
 import {
   createBlankPage,
   normalizeCanvasData,
+  normalizePageGap,
   serializeCanvasData,
 } from '@/types/canvas';
 import {
@@ -83,6 +90,7 @@ export function EditorPage() {
   const [title, setTitle] = useState('');
   const [pages, setPages] = useState<MenuPage[]>([]);
   const [pageScroll, setPageScroll] = useState<PageScrollDirection>('vertical');
+  const [pageGap, setPageGap] = useState<PageGap>(0);
   const [activePageIndex, setActivePageIndex] = useState(0);
   const [loading, setLoading] = useState(true);
   const [saveStatus, setSaveStatus] = useState<'saved' | 'saving' | 'unsaved'>('saved');
@@ -148,6 +156,8 @@ export function EditorPage() {
 
   const pageScrollRef = useRef<PageScrollDirection>('vertical');
   pageScrollRef.current = pageScroll;
+  const pageGapRef = useRef<PageGap>(0);
+  pageGapRef.current = pageGap;
 
   const collectDocument = useCallback((): CanvasData => {
     const collected: MenuPage[] = pagesMetaRef.current.map((page, index) => {
@@ -158,6 +168,7 @@ export function EditorPage() {
       width: 595,
       height: 842,
       pageScroll: pageScrollRef.current,
+      pageGap: pageGapRef.current,
       pages: collected.length > 0 ? collected : [createBlankPage()],
     });
   }, []);
@@ -475,6 +486,7 @@ export function EditorPage() {
         const doc = normalizeCanvasData(menu.canvas_data);
         setPages(doc.pages);
         setPageScroll(doc.pageScroll ?? 'vertical');
+        setPageGap(normalizePageGap(doc.pageGap));
         setActivePageIndex(0);
         setIsPublic(menu.is_public);
         setPublicSlug(menu.public_slug);
@@ -1367,6 +1379,7 @@ export function EditorPage() {
       pageRefs.current = [];
       setPages(imported.pages);
       setPageScroll(imported.pageScroll ?? 'vertical');
+      setPageGap(normalizePageGap(imported.pageGap));
       setActivePageIndex(0);
       setActiveObject(null);
       const firstBg = imported.pages[0]?.background;
@@ -1802,9 +1815,14 @@ export function EditorPage() {
 
         <aside className="editor-sidebar right">
           <PublicScrollControls
-            value={pageScroll}
-            onChange={(next) => {
+            scroll={pageScroll}
+            onScrollChange={(next) => {
               setPageScroll(next);
+              scheduleSave();
+            }}
+            gap={pageGap}
+            onGapChange={(next) => {
+              setPageGap(next);
               scheduleSave();
             }}
           />

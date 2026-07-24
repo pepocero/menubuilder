@@ -4,8 +4,12 @@ import { HtmlRenderer } from '@/components/html-renderer';
 import { PublicPageView } from '@/components/public/PublicPageView';
 import { ApiError } from '@/lib/api';
 import { SITE_NAME, applyPageSeo } from '@/lib/seo';
-import type { MenuPage, PageScrollDirection } from '@/types/canvas';
-import { normalizeCanvasData, validateCanvasData } from '@/types/canvas';
+import type { MenuPage, PageGap, PageScrollDirection } from '@/types/canvas';
+import {
+  normalizeCanvasData,
+  normalizePageGap,
+  validateCanvasData,
+} from '@/types/canvas';
 import { parseMenuDocument, type MenuDocument } from '@shared/menu-document';
 
 interface PublicMenuPayload {
@@ -50,6 +54,7 @@ export function PublicMenuPage() {
   const [menuDocument, setMenuDocument] = useState<MenuDocument | null>(null);
   const [pages, setPages] = useState<MenuPage[]>([]);
   const [pageScroll, setPageScroll] = useState<PageScrollDirection>('vertical');
+  const [pageGap, setPageGap] = useState<PageGap>(0);
   const [exportPngUrl, setExportPngUrl] = useState<string | null>(null);
   const [title, setTitle] = useState('');
   const [error, setError] = useState('');
@@ -80,6 +85,7 @@ export function PublicMenuPage() {
           const canvasDoc = normalizeCanvasData(menu.canvas_data);
           setPages(canvasDoc.pages);
           setPageScroll(canvasDoc.pageScroll ?? 'vertical');
+          setPageGap(normalizePageGap(canvasDoc.pageGap));
           setMenuDocument(null);
           setLoading(false);
           return;
@@ -90,6 +96,7 @@ export function PublicMenuPage() {
           setMenuDocument(storedDoc);
           setPages([]);
           setPageScroll('vertical');
+          setPageGap(0);
           setLoading(false);
           return;
         }
@@ -97,6 +104,7 @@ export function PublicMenuPage() {
         setMenuDocument(null);
         setPages([]);
         setPageScroll('vertical');
+        setPageGap(0);
         setLoading(false);
       } catch {
         if (!disposed) {
@@ -134,6 +142,7 @@ export function PublicMenuPage() {
                 ? 'public-pages-stack public-pages-stack--horizontal'
                 : 'public-pages-stack'
             }
+            style={{ ['--public-page-gap' as string]: `${pageGap}px` }}
           >
             {pages.map((page) => (
               <div key={page.id} className="public-page-block">

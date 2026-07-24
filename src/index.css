@@ -2732,7 +2732,8 @@ textarea {
   display: flex;
   flex-direction: column;
   align-items: stretch;
-  gap: 0;
+  --public-page-gap: 0px;
+  gap: var(--public-page-gap);
   width: 100%;
   max-width: 100%;
 }
@@ -2768,7 +2769,7 @@ textarea {
   flex-direction: row;
   flex-wrap: nowrap;
   align-items: stretch;
-  gap: 0;
+  gap: var(--public-page-gap);
   max-width: none;
   width: 100%;
   height: 100%;
@@ -3258,7 +3259,6 @@ textarea {
   }
 
   .public-pages-stack {
-    gap: 0;
     max-width: 100%;
   }
 

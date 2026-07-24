@@ -89,6 +89,23 @@ export interface MenuPage {
 export type PageScrollDirection = 'vertical' | 'horizontal';
 
 /**
+ * Separación entre páginas en la vista pública (px).
+ * Valores fijos para no romper estética ni scroll/snap.
+ */
+export type PageGap = 0 | 8 | 16 | 24 | 32 | 48;
+
+export const PAGE_GAP_OPTIONS: ReadonlyArray<{ value: PageGap; label: string }> = [
+  { value: 0, label: 'Ninguna' },
+  { value: 8, label: 'Mínima' },
+  { value: 16, label: 'Compacta' },
+  { value: 24, label: 'Normal' },
+  { value: 32, label: 'Amplia' },
+  { value: 48, label: 'Muy amplia' },
+];
+
+const PAGE_GAP_VALUES = new Set<number>(PAGE_GAP_OPTIONS.map((o) => o.value));
+
+/**
  * Documento del menú.
  * Formato nuevo: `pages[]`.
  * Formato legado (1 página): `background` + `layers` — se normaliza al cargar.
@@ -102,6 +119,11 @@ export interface CanvasData {
    * Por defecto: vertical. El editor siempre apila en vertical.
    */
   pageScroll?: PageScrollDirection;
+  /**
+   * Separación entre páginas solo en la vista pública.
+   * Por defecto: 0 (sin hueco). El editor no la usa al apilar.
+   */
+  pageGap?: PageGap;
   /** @deprecated compat */
   background?: CanvasBackground;
   /** @deprecated compat */
@@ -121,6 +143,13 @@ export function normalizePageScroll(value: unknown): PageScrollDirection {
   return value === 'horizontal' ? 'horizontal' : 'vertical';
 }
 
+export function normalizePageGap(value: unknown): PageGap {
+  if (typeof value === 'number' && PAGE_GAP_VALUES.has(value)) {
+    return value as PageGap;
+  }
+  return 0;
+}
+
 export function createBlankPage(
   bg = '#FAF6F0',
   size?: { width?: number; height?: number },
@@ -138,6 +167,7 @@ export const DEFAULT_CANVAS: CanvasData = {
   width: A4_WIDTH,
   height: A4_HEIGHT,
   pageScroll: 'vertical',
+  pageGap: 0,
   pages: [
     {
       id: 'page_1',
@@ -154,6 +184,7 @@ export function createBlankCanvas(): CanvasData {
     width: A4_WIDTH,
     height: A4_HEIGHT,
     pageScroll: 'vertical',
+    pageGap: 0,
     pages: [createBlankPage()],
   };
 }
@@ -167,6 +198,7 @@ export function normalizeCanvasData(raw: unknown): CanvasData {
   const width = normalizePageSize(d.width, A4_WIDTH);
   const height = normalizePageSize(d.height, A4_HEIGHT);
   const pageScroll = normalizePageScroll(d.pageScroll);
+  const pageGap = normalizePageGap(d.pageGap);
 
   if (Array.isArray(d.pages) && d.pages.length > 0) {
     const pages: MenuPage[] = d.pages.map((p, index) => {
@@ -183,7 +215,7 @@ export function normalizeCanvasData(raw: unknown): CanvasData {
         height: normalizePageSize(page.height, height),
       };
     });
-    return { width, height, pageScroll, pages };
+    return { width, height, pageScroll, pageGap, pages };
   }
 
   // Legado: una sola página con background + layers
@@ -192,6 +224,7 @@ export function normalizeCanvasData(raw: unknown): CanvasData {
       width,
       height,
       pageScroll,
+      pageGap,
       pages: [
         {
           id: 'page_1',
@@ -239,6 +272,7 @@ export function serializeCanvasData(data: CanvasData): CanvasData {
     width: normalized.width || A4_WIDTH,
     height: normalized.height || A4_HEIGHT,
     pageScroll: normalizePageScroll(normalized.pageScroll ?? data.pageScroll),
+    pageGap: normalizePageGap(normalized.pageGap ?? data.pageGap),
     pages: normalized.pages.map((page) => ({
       ...page,
       width: normalizePageSize(page.width, normalized.width || A4_WIDTH),
