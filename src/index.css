@@ -2816,8 +2816,29 @@ textarea {
 .public-page-viewport-vertical {
   width: 100%;
   display: flex;
-  justify-content: center;
+  flex-direction: column;
+  align-items: stretch;
+  justify-content: flex-start;
   box-sizing: border-box;
+}
+
+.public-page-fabric-image {
+  pointer-events: none;
+  user-select: none;
+  -webkit-user-drag: none;
+}
+
+.public-page-fabric-image--contain {
+  box-shadow: none;
+}
+
+.public-page-fabric-image--width {
+  box-shadow: none;
+}
+
+.public-page-loading {
+  margin: 1.5rem auto;
+  font-size: 0.9rem;
 }
 
 .public-pages-stack--horizontal .public-page-frame,

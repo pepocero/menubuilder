@@ -172,6 +172,7 @@ export function layerToFabricObject(layer: CanvasLayer): FabricObject | null {
     const textLayer = layer as TextLayer;
     const obj = new Textbox(textLayer.content, {
       ...common,
+      // Ancho fijo; el alto lo recalcula Fabric (initDimensions), no un height guardado.
       width: textLayer.width,
       fontFamily: textLayer.style.fontFamily,
       fontSize: textLayer.style.fontSize,
@@ -182,8 +183,18 @@ export function layerToFabricObject(layer: CanvasLayer): FabricObject | null {
         textLayer.style.fontStyle === 'italic' || textLayer.style.fontStyle === 'oblique'
           ? textLayer.style.fontStyle
           : 'normal',
+      lineHeight:
+        typeof textLayer.style.lineHeight === 'number' && textLayer.style.lineHeight > 0
+          ? textLayer.style.lineHeight
+          : 1.16,
+      charSpacing:
+        typeof textLayer.style.charSpacing === 'number'
+          ? textLayer.style.charSpacing
+          : 0,
       styles: textLayer.charStyles ? structuredClone(textLayer.charStyles) : {},
     });
+    obj.initDimensions();
+    obj.setCoords();
     (obj as FabricObject & { data?: unknown }).data = layerDataFromLayer(layer);
     const border = normalizeTextBorder(textLayer.style.border);
     if (border && textBorderIsVisible(border)) {
@@ -306,6 +317,15 @@ export async function loadPageOntoCanvas(
     }
   }
 
+  // Textbox: alto según contenido (tras fuentes / métricas reales).
+  for (const obj of canvas.getObjects()) {
+    if (!isTextObject(obj)) continue;
+    const text = obj as Textbox;
+    text.set({ dirty: true });
+    text.initDimensions();
+    text.setCoords();
+  }
+
   canvas.requestRenderAll();
 }
 
@@ -338,6 +358,8 @@ export function fabricObjectToLayer(obj: FabricObject, zIndex: number): CanvasLa
 
   if (isTextObject(obj)) {
     const textObj = obj as Textbox;
+    // Altura = la que Fabric calcula, no un valor divergente previo.
+    textObj.initDimensions();
     const charStyles = (() => {
       const styles = textObj.styles;
       if (!styles || typeof styles !== 'object' || Object.keys(styles).length === 0) {
@@ -352,8 +374,16 @@ export function fabricObjectToLayer(obj: FabricObject, zIndex: number): CanvasLa
     const border = normalizeTextBorder(
       (textObj as Textbox & { data?: { border?: unknown } }).data?.border,
     );
+    const lineHeight =
+      typeof textObj.lineHeight === 'number' && textObj.lineHeight > 0
+        ? textObj.lineHeight
+        : undefined;
+    const charSpacing =
+      typeof textObj.charSpacing === 'number' ? textObj.charSpacing : undefined;
     return {
       ...base,
+      width: (textObj.width ?? 0) * (textObj.scaleX ?? 1),
+      height: (textObj.height ?? 0) * (textObj.scaleY ?? 1),
       type: 'text',
       content: textObj.text ?? '',
       style: {
@@ -364,6 +394,8 @@ export function fabricObjectToLayer(obj: FabricObject, zIndex: number): CanvasLa
         fontWeight: textObj.fontWeight as string | undefined,
         fontStyle: (textObj.fontStyle as string | undefined) || undefined,
         opacity: textObj.opacity,
+        ...(lineHeight != null ? { lineHeight } : {}),
+        ...(charSpacing != null && charSpacing !== 0 ? { charSpacing } : {}),
         ...(border && textBorderIsVisible(border) ? { border } : {}),
       },
       ...(charStyles ? { charStyles } : {}),
@@ -573,8 +605,8 @@ export function fitImageToA4(
 }
 
 /**
- * Zoom de vista del editor: redimensiona el canvas de Fabric para que no se vea borroso
- * (a diferencia de un CSS transform: scale sobre el bitmap).
+ * Zoom de vista del editor: mismo mecanismo que fitCanvasToContainer
+ * (setZoom + setDimensions; no CSS transform: scale).
  */
 export function applyCanvasZoom(
   canvas: Canvas,
@@ -582,7 +614,6 @@ export function applyCanvasZoom(
   pageWidth?: number,
   pageHeight?: number,
 ): void {
-  // Fabric 6: el DOM vive en canvas.elements.lower (no en canvas.lower).
   const el =
     typeof canvas.getElement === 'function'
       ? canvas.getElement()

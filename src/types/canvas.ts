@@ -11,6 +11,10 @@ export interface TextStyle {
   fontWeight?: string;
   fontStyle?: string;
   opacity?: number;
+  /** Interlineado Fabric (por defecto 1.16). */
+  lineHeight?: number;
+  /** Espaciado entre caracteres Fabric (milésimas de em). */
+  charSpacing?: number;
   /** Borde decorativo de la caja (no del trazo de glifos). */
   border?: {
     style: 'none' | 'solid' | 'dashed' | 'dotted';

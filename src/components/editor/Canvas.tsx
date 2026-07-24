@@ -6,11 +6,11 @@ import { getPageSize } from '@/lib/page-size';
 import {
   applyCanvasZoom,
   isTextObject,
-  loadPageOntoCanvas,
   canvasToPageData,
   refreshTextboxLayout,
   resizeCanvasPage,
 } from '@/lib/canvas-serializer';
+import { hydrateDesign } from '@/lib/canvas/render-design';
 import type { CanvasInteractionMode } from '@/components/editor/EditorZoomControls';
 import {
   clampActiveObjectsIntoPage,
@@ -137,7 +137,7 @@ export const CanvasEditor = forwardRef<CanvasEditorHandle, CanvasEditorProps>(
           const size = getPageSize(page);
           muteEventsRef.current = true;
           try {
-            await loadPageOntoCanvas(canvas, page, size.width, size.height);
+            await hydrateDesign(canvas, page);
             if (canvasRef.current === canvas) {
               applyCanvasZoom(canvas, zoomRef.current, size.width, size.height);
             }
@@ -192,7 +192,7 @@ export const CanvasEditor = forwardRef<CanvasEditorHandle, CanvasEditorProps>(
 
       canvasRef.current = canvas;
 
-      loadPageOntoCanvas(canvas, initialPage, size.width, size.height)
+      hydrateDesign(canvas, initialPage)
         .then(() => {
           if (cancelled || canvasRef.current !== canvas) return;
           applyCanvasZoom(canvas, zoomRef.current, size.width, size.height);

@@ -41,7 +41,7 @@ function isHttpUrl(value: string | null | undefined): value is string {
 
 /**
  * Prioridad de render público (fidelidad con el editor):
- * 1) canvas_data → PublicPageView (mismo modelo que el editor)
+ * 1) canvas_data → PublicPageView (Fabric → PNG, mismo motor que el editor)
  * 2) menu_document → HtmlRenderer
  * 3) PNG exportado (último recurso)
  */

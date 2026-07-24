@@ -1,12 +1,10 @@
-import { Canvas } from 'fabric';
 import type { CanvasData } from '@/types/canvas';
-import { getPageSize } from '@/lib/page-size';
-import { loadPageOntoCanvas } from '@/lib/canvas-serializer';
 import { generateThumbnail } from '@/lib/image-compress';
+import { renderMenuPageToDataUrl } from '@/lib/render-menu-page';
 
 /**
  * Renderiza la primera página del documento a una miniatura PNG (data URL)
- * para la tarjeta de «Mis menús».
+ * para la tarjeta de «Mis menús» — misma ruta `renderDesign` que la carta pública.
  */
 export async function renderCanvasDataThumbnail(
   data: CanvasData,
@@ -15,37 +13,12 @@ export async function renderCanvasDataThumbnail(
   const page = data.pages?.[0];
   if (!page) return null;
 
-  const size = getPageSize(page);
-  const el = document.createElement('canvas');
-  el.width = size.width;
-  el.height = size.height;
-  el.style.cssText = 'position:fixed;left:-99999px;top:0;pointer-events:none;';
-  document.body.appendChild(el);
-
-  const canvas = new Canvas(el, {
-    width: size.width,
-    height: size.height,
-    enableRetinaScaling: false,
-    renderOnAddRemove: false,
-    backgroundColor:
-      page.background.type === 'color' ? page.background.value : '#ffffff',
-  });
-
   try {
-    await loadPageOntoCanvas(canvas, page, size.width, size.height);
-    canvas.requestRenderAll();
-    const png = canvas.toDataURL({ format: 'png', multiplier: 1 });
-    if (!png || png.length < 32) return null;
+    const png = await renderMenuPageToDataUrl(page, { multiplier: 1 });
+    if (!png) return null;
     return await generateThumbnail(png, maxWidth);
   } catch {
     return null;
-  } finally {
-    try {
-      canvas.dispose();
-    } catch {
-      /* ignore */
-    }
-    el.remove();
   }
 }
 

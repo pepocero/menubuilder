@@ -17,7 +17,10 @@
     "db:add-magnific-templates": "wrangler d1 execute menu-db --local --file=./migrations/0004_magnific_templates.sql",
     "db:migrate:006": "wrangler d1 execute menu-db --local --file=./migrations/0006_menu_document_export.sql",
     "db:migrate:006:remote": "wrangler d1 execute menu-db --remote --file=./migrations/0006_menu_document_export.sql",
-    "cf-typegen": "wrangler types"
+    "cf-typegen": "wrangler types",
+    "test": "node scripts/fidelity-check.mjs",
+    "test:vitest": "vitest run",
+    "test:watch": "vitest"
   },
   "dependencies": {
     "browser-image-compression": "^2.0.2",
