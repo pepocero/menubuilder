@@ -192,13 +192,18 @@ export async function transferObjectsBetweenPages(options: {
 /** Si el objeto quedó fuera del lienzo al arrastrar, lo devuelve dentro. */
 export function clampActiveObjectsIntoPage(canvas: Canvas): boolean {
   const { width, height } = getCanvasLogicalSize(canvas);
-  const objects =
-    canvas.getActiveObjects().length > 0
-      ? canvas.getActiveObjects()
-      : canvas.getActiveObject()
-        ? [canvas.getActiveObject()!]
-        : [];
-  if (objects.length === 0) return false;
+  const active = canvas.getActiveObject();
+  if (!active) return false;
+
+  // En ActiveSelection los hijos tienen coords relativas al grupo.
+  // Hay que clampear la selección entera; si no, al tratar left/top de cada
+  // miembro como absolutos se apilan (p. ej. al mover con flechas).
+  const objects: FabricObject[] =
+    active instanceof ActiveSelection
+      ? [active]
+      : canvas.getActiveObjects().length > 0
+        ? canvas.getActiveObjects()
+        : [active];
 
   let changed = false;
   for (const obj of objects) {
