@@ -180,12 +180,28 @@ export function normalizeMenuLineLayerData(
   let rows: MenuLineRow[] = [];
 
   if (Array.isArray(layer.rows) && layer.rows.length > 0) {
-    rows = layer.rows.map((row) => ({
-      left: normalizeCell(row?.left, template.left),
-      center: normalizeCell(row?.center, template.center),
-      right: normalizeCell(row?.right, template.right),
-      leader: row?.leader ? normalizeLeader(row.leader) : undefined,
-    }));
+    rows = layer.rows.map((row) => {
+      const base: MenuLineRow = {
+        left: normalizeCell(row?.left, template.left),
+        center: normalizeCell(row?.center, template.center),
+        right: normalizeCell(row?.right, template.right),
+        leader: row?.leader ? normalizeLeader(row.leader) : undefined,
+      };
+      if (row?.ingredients && typeof row.ingredients === 'object') {
+        const ingFallback: MenuLineCell = {
+          content: '',
+          style: {
+            ...template.left.style,
+            fontSize: Math.max(8, template.left.style.fontSize - 3),
+            color: '#666666',
+            fontWeight: 'normal',
+          },
+        };
+        const ing = normalizeCell(row.ingredients, ingFallback);
+        if (ing.content.trim()) base.ingredients = ing;
+      }
+      return base;
+    });
   } else if (layer.columns) {
     rows = [rowFromLegacyColumns(layer.columns)];
   } else {
@@ -265,21 +281,28 @@ export function isMenuLineGroup(obj: FabricObject | null | undefined): obj is Gr
   if (data.layerType === 'menuLine') return true;
   if (!(obj instanceof Group)) return false;
   const kids = obj.getObjects();
-  if (kids.length < 3 || kids.length % 3 !== 0) return false;
-  return kids.every((child) => {
-    const role = getLayerObjectData(child).menuLineRole;
-    return role === 'left' || role === 'center' || role === 'right';
-  });
+  if (kids.length < 3) return false;
+  return kids.some((child) => getLayerObjectData(child).menuLineRole === 'left')
+    && kids.some((child) => getLayerObjectData(child).menuLineRole === 'right');
 }
 
 export function getMenuLineRowCount(group: Group): number {
+  let max = -1;
+  for (const child of group.getObjects()) {
+    if (!(child instanceof Textbox)) continue;
+    const data = getLayerObjectData(child);
+    if (data.menuLineRole !== 'left') continue;
+    const idx = typeof data.menuLineRowIndex === 'number' ? data.menuLineRowIndex : 0;
+    max = Math.max(max, idx);
+  }
+  if (max >= 0) return max + 1;
   const kids = group.getObjects().filter((c) => c instanceof Textbox);
   return Math.max(1, Math.floor(kids.length / 3));
 }
 
 export function getMenuLineColumn(
   group: Group,
-  key: MenuLineColumnKey,
+  key: MenuLineColumnKey | 'ingredients',
   rowIndex = 0,
 ): Textbox | null {
   for (const child of group.getObjects()) {
@@ -288,8 +311,7 @@ export function getMenuLineColumn(
     const idx = typeof data.menuLineRowIndex === 'number' ? data.menuLineRowIndex : 0;
     if (data.menuLineRole === key && idx === rowIndex) return child;
   }
-  // Compat grupos antiguos sin índice: primera coincidencia de rol
-  if (rowIndex === 0) {
+  if (rowIndex === 0 && key !== 'ingredients') {
     for (const child of group.getObjects()) {
       if (
         child instanceof Textbox &&
@@ -398,6 +420,42 @@ function createCellTextbox(
     menuLineRole: key,
     menuLineRowIndex: rowIndex,
     ...(key === 'center' && rowLeader ? { menuLineLeader: rowLeader } : {}),
+  });
+  return box;
+}
+
+const MENU_LINE_INGREDIENTS_GAP = 2;
+
+function createIngredientsTextbox(
+  rowIndex: number,
+  cell: MenuLineCell,
+  width: number,
+): Textbox {
+  const box = new Textbox(cell.content, {
+    originX: 'left',
+    originY: 'top',
+    left: 0,
+    top: 0,
+    width: Math.max(8, width),
+    fontFamily: cell.style.fontFamily,
+    fontSize: cell.style.fontSize,
+    fill: cell.style.color,
+    textAlign: cell.style.align,
+    fontWeight: cell.style.fontWeight ?? 'normal',
+    fontStyle:
+      cell.style.fontStyle === 'italic' || cell.style.fontStyle === 'oblique'
+        ? cell.style.fontStyle
+        : 'normal',
+    editable: true,
+    selectable: false,
+    evented: false,
+    objectCaching: false,
+    perPixelTargetFind: false,
+  });
+  box.initDimensions();
+  setLayerObjectData(box, {
+    menuLineRole: 'ingredients',
+    menuLineRowIndex: rowIndex,
   });
   return box;
 }
@@ -586,14 +644,17 @@ export function layoutMenuLineGroup(group: Group): void {
 
   const rowCount = getMenuLineRowCount(group);
   const rowGap = getMenuLineRowGap(group);
-  const rowHeights: number[] = [];
+  const dishHeights: number[] = [];
+  const ingredientHeights: number[] = [];
 
   for (let r = 0; r < rowCount; r++) {
     const leftBox = getMenuLineColumn(group, 'left', r);
     const centerBox = getMenuLineColumn(group, 'center', r);
     const rightBox = getMenuLineColumn(group, 'right', r);
+    const ingredientsBox = getMenuLineColumn(group, 'ingredients', r);
     if (!leftBox || !centerBox || !rightBox) {
-      rowHeights.push(0);
+      dishHeights.push(0);
+      ingredientHeights.push(0);
       continue;
     }
 
@@ -614,22 +675,41 @@ export function layoutMenuLineGroup(group: Group): void {
       box.setCoords();
     }
 
-    rowHeights.push(
+    dishHeights.push(
       Math.max(leftBox.height ?? 0, centerBox.height ?? 0, rightBox.height ?? 0, 1),
     );
+
+    if (ingredientsBox && (ingredientsBox.text ?? '').trim()) {
+      ingredientsBox.set({ scaleX: 1, scaleY: 1, width: widths.total });
+      ingredientsBox.initDimensions();
+      ingredientsBox.setCoords();
+      ingredientHeights.push(Math.max(1, ingredientsBox.height ?? 0));
+    } else {
+      if (ingredientsBox) {
+        ingredientsBox.set({ scaleX: 1, scaleY: 1, width: widths.total, text: '' });
+        ingredientsBox.initDimensions();
+      }
+      ingredientHeights.push(0);
+    }
   }
 
-  const totalHeight =
-    rowHeights.reduce((a, b) => a + b, 0) + Math.max(0, rowCount - 1) * rowGap;
+  let totalHeight = 0;
+  for (let r = 0; r < rowCount; r++) {
+    totalHeight += dishHeights[r] ?? 0;
+    const ingH = ingredientHeights[r] ?? 0;
+    if (ingH > 0) totalHeight += MENU_LINE_INGREDIENTS_GAP + ingH;
+    if (r < rowCount - 1) totalHeight += rowGap;
+  }
   let yCursor = -totalHeight / 2;
 
   for (let r = 0; r < rowCount; r++) {
     const leftBox = getMenuLineColumn(group, 'left', r);
     const centerBox = getMenuLineColumn(group, 'center', r);
     const rightBox = getMenuLineColumn(group, 'right', r);
+    const ingredientsBox = getMenuLineColumn(group, 'ingredients', r);
     if (!leftBox || !centerBox || !rightBox) continue;
 
-    const rowH = rowHeights[r] ?? 1;
+    const dishH = dishHeights[r] ?? 1;
     const top = yCursor;
 
     leftBox.set({ left: -widths.total / 2, top });
@@ -637,12 +717,33 @@ export function layoutMenuLineGroup(group: Group): void {
     rightBox.set({ left: -widths.total / 2 + widths.left + widths.center, top });
 
     for (const box of [leftBox, centerBox, rightBox]) {
-      const h = box.height ?? rowH;
-      box.set({ top: top + (rowH - h) / 2 });
+      const h = box.height ?? dishH;
+      box.set({ top: top + (dishH - h) / 2 });
       box.setCoords();
     }
 
-    yCursor += rowH + rowGap;
+    yCursor += dishH;
+
+    const ingH = ingredientHeights[r] ?? 0;
+    if (ingredientsBox && ingH > 0) {
+      yCursor += MENU_LINE_INGREDIENTS_GAP;
+      ingredientsBox.set({
+        left: -widths.total / 2,
+        top: yCursor,
+        visible: true,
+      });
+      ingredientsBox.setCoords();
+      yCursor += ingH;
+    } else if (ingredientsBox) {
+      ingredientsBox.set({
+        left: -widths.total / 2,
+        top: yCursor,
+        visible: false,
+      });
+      ingredientsBox.setCoords();
+    }
+
+    if (r < rowCount - 1) yCursor += rowGap;
   }
 
   const left = group.left ?? 0;
@@ -699,6 +800,12 @@ function createBoxesForLayer(
       ),
       createCellTextbox('right', rowIndex, row.right, widths.right, row.right.content),
     );
+
+    if (row.ingredients?.content.trim()) {
+      boxes.push(
+        createIngredientsTextbox(rowIndex, row.ingredients, widths.total),
+      );
+    }
   });
 
   return boxes;
@@ -775,11 +882,19 @@ export function menuLineGroupToLayer(group: Group, zIndex: number): MenuLineLaye
       ? normalizeLeader(centerData.menuLineLeader)
       : undefined;
 
+    const ingredientsBox = getMenuLineColumn(group, 'ingredients', r);
+    const ingredientsText = ingredientsBox?.text?.trim() ?? '';
+    const ingredients =
+      ingredientsBox && ingredientsText
+        ? readCellFromBox(ingredientsBox)
+        : undefined;
+
     rows.push({
       left: readCellFromBox(leftBox),
       center: readCellFromBox(centerBox),
       right: readCellFromBox(rightBox),
       ...(rowLeader ? { leader: rowLeader } : {}),
+      ...(ingredients ? { ingredients } : {}),
     });
   }
 
@@ -904,6 +1019,74 @@ export function updateMenuLineColumnContent(
   layoutMenuLineGroup(group);
 }
 
+/** Actualiza (o crea/elimina) la línea de ingredientes bajo una fila. */
+export function updateMenuLineIngredientsContent(
+  group: Group,
+  content: string,
+  rowIndex = 0,
+): void {
+  const trimmed = content.trim();
+  const existing = getMenuLineColumn(group, 'ingredients', rowIndex);
+  if (existing) {
+    if (!trimmed) {
+      const layer = menuLineGroupToLayer(group, 1);
+      if (!layer?.rows[rowIndex]) return;
+      delete layer.rows[rowIndex].ingredients;
+      rebuildGroupFromLayer(group, layer);
+      return;
+    }
+    existing.set({ text: trimmed, visible: true });
+    layoutMenuLineGroup(group);
+    return;
+  }
+  if (!trimmed) return;
+
+  const layer = menuLineGroupToLayer(group, 1);
+  if (!layer?.rows[rowIndex]) return;
+  const leftStyle = layer.rows[rowIndex].left.style;
+  layer.rows[rowIndex].ingredients = {
+    content: trimmed,
+    style: {
+      ...leftStyle,
+      fontSize: Math.max(8, leftStyle.fontSize - 3),
+      color: '#666666',
+      fontWeight: 'normal',
+      align: 'left',
+    },
+  };
+  rebuildGroupFromLayer(group, layer);
+}
+
+export function updateMenuLineIngredientsStyle(
+  group: Group,
+  patch: Partial<MenuLineColumnStyle>,
+  rowIndex: number | 'all' = 0,
+): void {
+  const count = getMenuLineRowCount(group);
+  const indices =
+    rowIndex === 'all'
+      ? Array.from({ length: count }, (_, i) => i)
+      : [rowIndex];
+
+  let needsRebuild = false;
+  for (const i of indices) {
+    const box = getMenuLineColumn(group, 'ingredients', i);
+    if (!box) continue;
+    const next: MenuLineColumnStyle = {
+      fontFamily: box.fontFamily ?? 'Arial',
+      fontSize: box.fontSize ?? 14,
+      color: typeof box.fill === 'string' ? box.fill : '#666666',
+      align: (box.textAlign as MenuLineColumnStyle['align']) ?? 'left',
+      fontWeight: String(box.fontWeight ?? 'normal'),
+      fontStyle: (box.fontStyle as string) || 'normal',
+      ...patch,
+    };
+    applyColumnStyle(box, next);
+    needsRebuild = true;
+  }
+  if (needsRebuild) layoutMenuLineGroup(group);
+}
+
 export function updateMenuLineLeader(
   group: Group,
   leader: MenuLineLeader,
@@ -973,17 +1156,25 @@ export function findMenuLineCellAtPoint(
   const rowGap = getMenuLineRowGap(group);
   let y = 0;
   for (let r = 0; r < rowCount; r++) {
-    const h =
+    const dishH =
       Math.max(
         getMenuLineColumn(group, 'left', r)?.height ?? 0,
         getMenuLineColumn(group, 'center', r)?.height ?? 0,
         getMenuLineColumn(group, 'right', r)?.height ?? 0,
         1,
       ) * (group.scaleY ?? 1);
-    if (relY >= y && relY <= y + h + (r < rowCount - 1 ? rowGap : 0)) {
+    const ingBox = getMenuLineColumn(group, 'ingredients', r);
+    const ingText = ingBox?.text?.trim() ?? '';
+    const ingH =
+      ingBox && ingText && ingBox.visible !== false
+        ? (ingBox.height ?? 0) * (group.scaleY ?? 1) + MENU_LINE_INGREDIENTS_GAP
+        : 0;
+    const blockH = dishH + ingH;
+    const gapAfter = r < rowCount - 1 ? rowGap : 0;
+    if (relY >= y && relY <= y + blockH + gapAfter) {
       return { rowIndex: r, key };
     }
-    y += h + rowGap;
+    y += blockH + gapAfter;
   }
 
   if (rowCount > 0) return { rowIndex: rowCount - 1, key };

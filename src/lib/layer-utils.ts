@@ -8,7 +8,7 @@ export interface LayerObjectData {
   src?: string;
   shape?: string;
   border?: unknown;
-  menuLineRole?: 'left' | 'center' | 'right';
+  menuLineRole?: 'left' | 'center' | 'right' | 'ingredients';
   menuLineLeader?: 'dots' | 'dashes' | 'spaces' | 'custom';
   menuLineWidthRatio?: number;
   menuLineRowIndex?: number;

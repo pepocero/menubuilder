@@ -80,7 +80,7 @@ export const CanvasEditor = forwardRef<CanvasEditorHandle, CanvasEditorProps>(
       initialPage,
       zoom = 100,
       active = false,
-      interactionMode = 'scroll',
+      interactionMode = 'move',
       pageIndex = 0,
       canSpillPrev = false,
       canSpillNext = false,

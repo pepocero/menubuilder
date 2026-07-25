@@ -17,6 +17,7 @@ import {
   updateMenuLineColumnContent,
   updateMenuLineColumnRatio,
   updateMenuLineColumnStyle,
+  updateMenuLineIngredientsContent,
   updateMenuLineLeader,
   updateMenuLineRowGap,
 } from '@/lib/menu-line';
@@ -137,13 +138,17 @@ export function MenuLineProperties({ group, onUpdate }: MenuLinePropertiesProps)
     ? alignInfo.value
     : ((previewBox.textAlign as 'left' | 'center' | 'right') ?? 'left');
   const leader = applyAll ? leaderInfo.value : readRowLeader(group, rowIndex);
+  const ingredientsBox = applyAll
+    ? null
+    : getMenuLineColumn(group, 'ingredients', rowIndex);
+  const ingredientsText = ingredientsBox?.text ?? '';
 
   return (
     <div className="menu-line-properties">
       <p className="panel-hint">
         El ancho del bloque se cambia con las asas del lienzo (solo el contenedor). Plato: ancho
-        fijo. Precio: al contenido. Separador: rellena el resto. «Todas» aplica formato a una
-        columna en todas las filas.
+        fijo. Precio: al contenido. Separador: rellena el resto. Ingredientes (opcional) debajo a
+        ancho completo. «Todas» aplica formato a una columna en todas las filas.
       </p>
 
       <div className="menu-line-row-controls">
@@ -271,6 +276,21 @@ export function MenuLineProperties({ group, onUpdate }: MenuLinePropertiesProps)
           }}
         />
       </label>
+
+      {!applyAll && (
+        <label>
+          Ingredientes (fila {rowIndex + 1})
+          <input
+            type="text"
+            value={ingredientsText}
+            placeholder="Mozzarella - Tomàquet - … (opcional)"
+            onChange={(e) => {
+              updateMenuLineIngredientsContent(group, e.target.value, rowIndex);
+              refresh();
+            }}
+          />
+        </label>
+      )}
 
       {activeColumn === 'left' ? (
         <label>

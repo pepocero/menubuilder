@@ -1,9 +1,13 @@
+import type { CanvasInteractionMode } from '@/components/editor/EditorZoomControls';
+
 export interface UploadProgressState {
   phase: 'compress' | 'upload' | 'place' | 'ocr' | 'import';
   percent: number;
 }
 
 interface ToolbarProps {
+  interactionMode: CanvasInteractionMode;
+  onInteractionModeChange: (mode: CanvasInteractionMode) => void;
   onUndo: () => void;
   onRedo: () => void;
   canUndo: boolean;
@@ -23,6 +27,8 @@ interface ToolbarProps {
   canFitImage: boolean;
   onMergeTexts: () => void;
   canMergeTexts: boolean;
+  onConvertTextToMenuLine: () => void;
+  canConvertTextToMenuLine: boolean;
   onChangeBackground: (color: string) => void;
   onPickBackgroundColor: () => void;
   backgroundPickActive?: boolean;
@@ -45,6 +51,8 @@ interface ToolbarProps {
 }
 
 export function Toolbar({
+  interactionMode,
+  onInteractionModeChange,
   onUndo,
   onRedo,
   canUndo,
@@ -64,6 +72,8 @@ export function Toolbar({
   canFitImage,
   onMergeTexts,
   canMergeTexts,
+  onConvertTextToMenuLine,
+  canConvertTextToMenuLine,
   onChangeBackground,
   onPickBackgroundColor,
   backgroundPickActive = false,
@@ -113,6 +123,28 @@ export function Toolbar({
 
   return (
     <div className="toolbar">
+      <div className="toolbar-group" role="group" aria-label="Modo del lienzo">
+        <span className="toolbar-label">Lienzo</span>
+        <button
+          type="button"
+          className={interactionMode === 'move' ? 'is-active' : undefined}
+          title="Mover y editar capas"
+          aria-pressed={interactionMode === 'move'}
+          onClick={() => onInteractionModeChange('move')}
+        >
+          Mover
+        </button>
+        <button
+          type="button"
+          className={interactionMode === 'scroll' ? 'is-active' : undefined}
+          title="Desplazar el lienzo (scroll)"
+          aria-pressed={interactionMode === 'scroll'}
+          onClick={() => onInteractionModeChange('scroll')}
+        >
+          Scroll
+        </button>
+      </div>
+
       <div className="toolbar-group">
         <span className="toolbar-label">Editar</span>
         <button
@@ -167,6 +199,14 @@ export function Toolbar({
           title="Unir las capas de texto seleccionadas en una sola (orden de arriba a abajo)"
         >
           Unir textos
+        </button>
+        <button
+          type="button"
+          onClick={onConvertTextToMenuLine}
+          disabled={!canConvertTextToMenuLine}
+          title="Convertir el texto seleccionado en línea de carta (plato ··· precio por cada fila)"
+        >
+          →··€
         </button>
       </div>
 

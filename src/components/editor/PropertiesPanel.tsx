@@ -37,6 +37,7 @@ interface PropertiesPanelProps {
   onMoveToNextPage?: () => void;
   onUpdate: () => void;
   onMergeTexts?: () => void;
+  onConvertTextToMenuLine?: () => void;
   onSendToBack?: () => void;
 }
 
@@ -95,6 +96,7 @@ export function PropertiesPanel({
   onMoveToNextPage,
   onUpdate,
   onMergeTexts,
+  onConvertTextToMenuLine,
   onSendToBack,
 }: PropertiesPanelProps) {
   const [, setTick] = useState(0);
@@ -586,6 +588,17 @@ export function PropertiesPanel({
               rows={4}
             />
           </label>
+          {onConvertTextToMenuLine && selectedTextCount === 1 && (
+            <button
+              type="button"
+              className="properties-convert-menu-line"
+              onMouseDown={preserveTextSelection}
+              onClick={() => onConvertTextToMenuLine()}
+              title="Convertir a línea de carta (plato ··· precio por cada fila)"
+            >
+              → Línea de carta
+            </button>
+          )}
           {hasPartialSelection && (
             <p className="panel-hint properties-selection-hint">
               Hay texto seleccionado en el lienzo: negrita, cursiva, fuente, tamaño y color se

@@ -93,11 +93,16 @@ export interface MenuLineCell {
   style: MenuLineColumnStyle;
 }
 
-/** Una fila: plato | separador | precio. */
+/** Una fila: plato | separador | precio (+ ingredientes opcionales debajo). */
 export interface MenuLineRow {
   left: MenuLineCell;
   center: MenuLineCell;
   right: MenuLineCell;
+  /**
+   * Ingredientes / descripción bajo el plato (p. ej. "Mozzarella - Tomàquet - …").
+   * No ocupa columna de precio; se muestra a ancho completo bajo la fila.
+   */
+  ingredients?: MenuLineCell;
   /** Si falta, usa el leader del bloque. */
   leader?: MenuLineLeader;
 }

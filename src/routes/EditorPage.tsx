@@ -48,6 +48,10 @@ import {
   getSelectedTextObjects,
   mergeSelectedTextLayers,
 } from '@/lib/merge-text-layers';
+import {
+  canConvertTextToMenuLine,
+  convertTextObjectToMenuLine,
+} from '@/lib/text-to-menu-line';
 import { compressImage, dataUrlToBlob, generateThumbnail } from '@/lib/image-compress';
 import { getPageSize, ptToCm } from '@/lib/page-size';
 import {
@@ -83,6 +87,12 @@ import { ImportMenuModal, type ImportMenuOptions, type ImportMenuSource } from '
 import { StockImageSearch } from '@/components/editor/StockImageSearch';
 import { Toolbar, type UploadProgressState } from '@/components/editor/Toolbar';
 
+/** Escritorio: Mover (seleccionar capas). Móvil: Scroll (desplazar el lienzo). */
+function getDefaultInteractionMode(): CanvasInteractionMode {
+  if (typeof window === 'undefined') return 'move';
+  return window.matchMedia('(max-width: 900px)').matches ? 'scroll' : 'move';
+}
+
 export function EditorPage() {
   const { menuId } = useParams<{ menuId: string }>();
   const navigate = useNavigate();
@@ -111,7 +121,7 @@ export function EditorPage() {
   const uploadInFlightRef = useRef(false);
   const [mobilePanel, setMobilePanel] = useState<'canvas' | 'layers' | 'props'>('canvas');
   const [zoom, setZoom] = useState(100);
-  const [interactionMode, setInteractionMode] = useState<CanvasInteractionMode>('scroll');
+  const [interactionMode, setInteractionMode] = useState<CanvasInteractionMode>(getDefaultInteractionMode);
   const [historyVersion, setHistoryVersion] = useState(0);
 
   const saveTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -941,6 +951,16 @@ export function EditorPage() {
     handleChange();
   }
 
+  function handleConvertTextToMenuLine() {
+    const canvas = getActiveCanvas();
+    if (!canvas) return;
+    const group = convertTextObjectToMenuLine(canvas);
+    if (!group) return;
+    setInteractionMode('move');
+    setActiveObject(group);
+    handleChange();
+  }
+
   async function handleAddShape(shape: 'rect' | 'line' | 'circle') {
     const canvas = getActiveCanvas();
     if (!canvas) return;
@@ -1633,6 +1653,8 @@ export function EditorPage() {
       )}
 
       <Toolbar
+        interactionMode={interactionMode}
+        onInteractionModeChange={setInteractionMode}
         onUndo={handleUndo}
         onRedo={handleRedo}
         canUndo={canUndo}
@@ -1652,6 +1674,8 @@ export function EditorPage() {
         canFitImage={!!activeObject && isImageObject(activeObject)}
         onMergeTexts={handleMergeTexts}
         canMergeTexts={canMergeSelectedTextLayers(getActiveCanvas())}
+        onConvertTextToMenuLine={handleConvertTextToMenuLine}
+        canConvertTextToMenuLine={canConvertTextToMenuLine(getActiveCanvas())}
         onChangeBackground={handleChangeBackground}
         onPickBackgroundColor={() => {
           void handlePickBackgroundColor();
@@ -1873,6 +1897,7 @@ export function EditorPage() {
             }
             onUpdate={handleChange}
             onMergeTexts={handleMergeTexts}
+            onConvertTextToMenuLine={handleConvertTextToMenuLine}
             onSendToBack={
               activeObject ? () => handleSendToBack(activeObject) : undefined
             }
