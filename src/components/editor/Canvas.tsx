@@ -18,6 +18,7 @@ import {
   beginMenuLineColumnEditing,
   endMenuLineColumnEditing,
   layoutMenuLineGroup,
+  normalizeLeaderUnit,
 } from '@/lib/menu-line';
 import { hydrateDesign } from '@/lib/canvas/render-design';
 import type { CanvasInteractionMode } from '@/components/editor/EditorZoomControls';
@@ -353,7 +354,16 @@ export const CanvasEditor = forwardRef<CanvasEditorHandle, CanvasEditorProps>(
         const parent = (target as { group?: import('fabric').Group }).group;
         if (role && parent && isMenuLineGroup(parent)) {
           if (role === 'center') {
-            setLayerObjectData(target, { menuLineLeader: 'custom' });
+            const unit = normalizeLeaderUnit(
+              (target as import('fabric').Textbox).text ?? '',
+            );
+            setLayerObjectData(target, {
+              menuLineLeader: 'custom',
+              menuLineLeaderUnit: unit,
+            });
+            // No relayout mientras escribe: al salir se rellena el símbolo.
+            emitChange();
+            return;
           }
           layoutMenuLineGroup(parent);
           emitChange();
@@ -377,7 +387,13 @@ export const CanvasEditor = forwardRef<CanvasEditorHandle, CanvasEditorProps>(
         const parent = (target as { group?: import('fabric').Group }).group;
         if (role && parent && isMenuLineGroup(parent)) {
           if (role === 'center') {
-            setLayerObjectData(target, { menuLineLeader: 'custom' });
+            const unit = normalizeLeaderUnit(
+              (target as import('fabric').Textbox).text ?? '',
+            );
+            setLayerObjectData(target, {
+              menuLineLeader: 'custom',
+              menuLineLeaderUnit: unit,
+            });
           }
           endMenuLineColumnEditing(parent);
           emitChange();

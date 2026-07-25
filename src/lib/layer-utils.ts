@@ -10,6 +10,8 @@ export interface LayerObjectData {
   border?: unknown;
   menuLineRole?: 'left' | 'center' | 'right' | 'ingredients';
   menuLineLeader?: 'dots' | 'dashes' | 'spaces' | 'custom';
+  /** Símbolo a repetir cuando el leader es `custom`. */
+  menuLineLeaderUnit?: string;
   menuLineWidthRatio?: number;
   menuLineRowIndex?: number;
   menuLineRowGap?: number;

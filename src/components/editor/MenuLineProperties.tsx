@@ -8,6 +8,7 @@ import {
   getMenuLineBlankLinesAfter,
   getMenuLineColumn,
   getMenuLineLeader,
+  getMenuLineLeaderUnit,
   getMenuLineLeftWidth,
   getMenuLineRowCount,
   getMenuLineRowGap,
@@ -22,6 +23,7 @@ import {
   updateMenuLineColumnStyle,
   updateMenuLineIngredientsContent,
   updateMenuLineLeader,
+  updateMenuLineLeaderUnit,
   updateMenuLineRowGap,
 } from '@/lib/menu-line';
 import type { MenuLineColumnKey, MenuLineLeader } from '@/types/canvas';
@@ -152,6 +154,13 @@ export function MenuLineProperties({ group, onUpdate }: MenuLinePropertiesProps)
   const blankLinesAfter = applyAll
     ? blankLinesInfo.value
     : getMenuLineBlankLinesAfter(group, rowIndex);
+  const leaderUnitInfo = sharedStyleValue(
+    Array.from({ length: rowCount }, (_, i) => getMenuLineLeaderUnit(group, i)),
+    '·',
+  );
+  const leaderUnit = applyAll
+    ? leaderUnitInfo.value
+    : getMenuLineLeaderUnit(group, rowIndex);
 
   return (
     <div className="menu-line-properties">
@@ -272,21 +281,66 @@ export function MenuLineProperties({ group, onUpdate }: MenuLinePropertiesProps)
         <p className="panel-hint">Había separadores distintos; el valor mostrado es el de la primera fila.</p>
       )}
 
-      <label>
-        Texto ({menuLineColumnLabel(activeColumn)}
-        {applyAll ? ', todas' : `, fila ${rowIndex + 1}`})
-        <input
-          type="text"
-          value={applyAll ? '' : (previewBox.text ?? '')}
-          disabled={applyAll}
-          placeholder={applyAll ? 'Elige una fila para editar el texto' : undefined}
-          onChange={(e) => {
-            if (applyAll) return;
-            updateMenuLineColumnContent(group, activeColumn, e.target.value, rowIndex);
-            refresh();
-          }}
-        />
-      </label>
+      {activeColumn === 'center' && leader === 'custom' ? (
+        <>
+          <label>
+            Símbolo del separador
+            {applyAll ? ' (todas las filas)' : ` (fila ${rowIndex + 1})`}
+            {applyAll && leaderUnitInfo.mixed ? ' (varios)' : ''}
+            <input
+              type="text"
+              maxLength={4}
+              value={leaderUnit}
+              placeholder="·"
+              title="Un solo símbolo; se repite solo hasta llenar el espacio"
+              onFocus={(e) => e.currentTarget.select()}
+              onChange={(e) => {
+                const raw = e.target.value;
+                // Si borra todo, aún no forzamos · hasta que escriba (evita pelear con el teclado).
+                if (!raw.trim()) {
+                  updateMenuLineLeaderUnit(
+                    group,
+                    '·',
+                    applyAll ? 'all' : rowIndex,
+                  );
+                  refresh();
+                  return;
+                }
+                updateMenuLineLeaderUnit(
+                  group,
+                  raw,
+                  applyAll ? 'all' : rowIndex,
+                );
+                refresh();
+              }}
+            />
+          </label>
+          <p className="panel-hint">
+            Escribe un símbolo (p. ej. · * ~ •). El sistema lo repite automáticamente en el
+            espacio entre plato y precio.
+          </p>
+        </>
+      ) : activeColumn === 'center' ? (
+        <p className="panel-hint">
+          El separador se rellena solo. Elige «Personalizado» si quieres usar otro símbolo.
+        </p>
+      ) : (
+        <label>
+          Texto ({menuLineColumnLabel(activeColumn)}
+          {applyAll ? ', todas' : `, fila ${rowIndex + 1}`})
+          <input
+            type="text"
+            value={applyAll ? '' : (previewBox.text ?? '')}
+            disabled={applyAll}
+            placeholder={applyAll ? 'Elige una fila para editar el texto' : undefined}
+            onChange={(e) => {
+              if (applyAll) return;
+              updateMenuLineColumnContent(group, activeColumn, e.target.value, rowIndex);
+              refresh();
+            }}
+          />
+        </label>
+      )}
 
       {!applyAll && (
         <label>

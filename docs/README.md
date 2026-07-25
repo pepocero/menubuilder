@@ -1,10 +1,16 @@
 # Documentación del editor de menús
 
-Guía de módulos y comportamientos del editor. Cada documento describe un módulo tal como debe usarse y cómo está modelado en código.
+## Guía para usuarios (en la app)
+
+Tras iniciar sesión: **Documentación** en la barra superior → ruta `/documentacion`.
+
+Explica de forma práctica textos, líneas de carta, conversión, filas, publicación QR, etc.
+
+## Notas técnicas (desarrolladores)
 
 | Documento | Contenido |
 |-----------|-----------|
-| [Línea de carta](./linea-de-carta.md) | Capas `menuLine`, cajas de texto, conversión a plato ··· precio e ingredientes |
+| [Línea de carta](./linea-de-carta.md) | Capas `menuLine`, conversión, ingredientes, modelo de datos |
 
 ## Principios comunes
 

@@ -334,15 +334,27 @@ function leaderChar(leader: MenuLineLeader): string {
   return '·';
 }
 
-export function buildLeaderContent(
-  leader: MenuLineLeader,
+/**
+ * Símbolo que se repite en el separador personalizado.
+ * - Vacío → ·
+ * - "····" → ·
+ * - Al escribir encima de otro (p. ej. "–*"), se queda con el último símbolo.
+ */
+export function normalizeLeaderUnit(raw: string | undefined | null): string {
+  const cleaned = (raw ?? '').replace(/\u00a0/g, ' ').trim();
+  if (!cleaned) return '·';
+  const chars = Array.from(cleaned);
+  if (chars.length === 0) return '·';
+  if (chars.length > 1 && chars.every((c) => c === chars[0])) return chars[0];
+  return chars[chars.length - 1] ?? '·';
+}
+
+function repeatLeaderUnit(
+  unitRaw: string,
   columnWidth: number,
   style: MenuLineColumnStyle,
-  customContent = '',
 ): string {
-  if (leader === 'custom') return customContent;
-
-  const ch = leaderChar(leader);
+  const ch = normalizeLeaderUnit(unitRaw);
   const probe = new Textbox(ch.repeat(20), {
     fontFamily: style.fontFamily,
     fontSize: style.fontSize,
@@ -355,9 +367,45 @@ export function buildLeaderContent(
   });
   probe.initDimensions();
   const measured = probe.calcTextWidth();
-  const unit = measured > 0 ? measured / 20 : Math.max(4, style.fontSize * 0.45);
-  const count = Math.max(1, Math.floor(Math.max(0, columnWidth - 4) / unit));
+  const unitWidth = measured > 0 ? measured / 20 : Math.max(4, style.fontSize * 0.45);
+  const count = Math.max(1, Math.floor(Math.max(0, columnWidth - 4) / unitWidth));
   return ch.repeat(count);
+}
+
+export function buildLeaderContent(
+  leader: MenuLineLeader,
+  columnWidth: number,
+  style: MenuLineColumnStyle,
+  customContent = '',
+): string {
+  if (leader === 'custom') {
+    return repeatLeaderUnit(customContent, columnWidth, style);
+  }
+  return repeatLeaderUnit(leaderChar(leader), columnWidth, style);
+}
+
+export function getMenuLineLeaderUnit(group: Group, rowIndex = 0): string {
+  const center = getMenuLineColumn(group, 'center', rowIndex);
+  if (!center) return '·';
+  const data = getLayerObjectData(center);
+  if (typeof data.menuLineLeaderUnit === 'string' && data.menuLineLeaderUnit.length > 0) {
+    return normalizeLeaderUnit(data.menuLineLeaderUnit);
+  }
+  return normalizeLeaderUnit(center.text ?? '');
+}
+
+export function setMenuLineLeaderUnit(
+  group: Group,
+  rowIndex: number,
+  unit: string,
+): void {
+  const center = getMenuLineColumn(group, 'center', rowIndex);
+  if (!center) return;
+  const next = normalizeLeaderUnit(unit);
+  setLayerObjectData(center, {
+    menuLineLeader: 'custom',
+    menuLineLeaderUnit: next,
+  });
 }
 
 function applyColumnStyle(box: Textbox, style: MenuLineColumnStyle): void {
@@ -423,6 +471,7 @@ function createCellTextbox(
   content: string,
   rowLeader?: MenuLineLeader,
   blankLinesAfter = 0,
+  leaderUnit?: string,
 ): Textbox {
   const box = new Textbox(content, {
     originX: 'left',
@@ -452,6 +501,9 @@ function createCellTextbox(
     menuLineRole: key,
     menuLineRowIndex: rowIndex,
     ...(key === 'center' && rowLeader ? { menuLineLeader: rowLeader } : {}),
+    ...(key === 'center' && rowLeader === 'custom'
+      ? { menuLineLeaderUnit: normalizeLeaderUnit(leaderUnit ?? cell.content) }
+      : {}),
     ...(key === 'left'
       ? { menuLineBlankLinesAfter: normalizeBlankLinesAfter(blankLinesAfter) }
       : {}),
@@ -694,12 +746,17 @@ export function layoutMenuLineGroup(group: Group): void {
     }
 
     const leader = getRowLeader(group, r);
-    if (leader !== 'custom') {
-      const style = styleFromBox(centerBox);
-      centerBox.set({
-        text: buildLeaderContent(leader, widths.center, style, centerBox.text ?? ''),
-      });
+    const style = styleFromBox(centerBox);
+    const unit =
+      leader === 'custom'
+        ? getMenuLineLeaderUnit(group, r)
+        : leaderChar(leader);
+    if (leader === 'custom') {
+      setLayerObjectData(centerBox, { menuLineLeaderUnit: unit });
     }
+    centerBox.set({
+      text: buildLeaderContent(leader, widths.center, style, unit),
+    });
 
     leftBox.set({ scaleX: 1, scaleY: 1, width: widths.left });
     centerBox.set({ scaleX: 1, scaleY: 1, width: widths.center });
@@ -825,10 +882,14 @@ function createBoxesForLayer(
 
   layer.rows.forEach((row, rowIndex) => {
     const rowLeader = normalizeLeader(row.leader ?? layer.leader);
-    const centerContent =
-      rowLeader === 'custom'
-        ? row.center.content
-        : buildLeaderContent(rowLeader, widths.center, row.center.style, row.center.content);
+    const leaderUnit =
+      rowLeader === 'custom' ? normalizeLeaderUnit(row.center.content) : undefined;
+    const centerContent = buildLeaderContent(
+      rowLeader,
+      widths.center,
+      row.center.style,
+      leaderUnit ?? row.center.content,
+    );
 
     boxes.push(
       createCellTextbox(
@@ -847,6 +908,8 @@ function createBoxesForLayer(
         widths.center,
         centerContent,
         rowLeader,
+        0,
+        leaderUnit,
       ),
       createCellTextbox('right', rowIndex, row.right, widths.right, row.right.content),
     );
@@ -940,10 +1003,14 @@ export function menuLineGroupToLayer(group: Group, zIndex: number): MenuLineLaye
         : undefined;
 
     const blankLinesAfter = getMenuLineBlankLinesAfter(group, r);
+    const centerCell = readCellFromBox(centerBox);
+    if (rowLeader === 'custom') {
+      centerCell.content = getMenuLineLeaderUnit(group, r);
+    }
 
     rows.push({
       left: readCellFromBox(leftBox),
-      center: readCellFromBox(centerBox),
+      center: centerCell,
       right: readCellFromBox(rightBox),
       ...(rowLeader ? { leader: rowLeader } : {}),
       ...(ingredients ? { ingredients } : {}),
@@ -1066,9 +1133,33 @@ export function updateMenuLineColumnContent(
   const box = getMenuLineColumn(group, key, rowIndex);
   if (!box) return;
   if (key === 'center') {
-    setLayerObjectData(box, { menuLineLeader: 'custom' });
+    const unit = normalizeLeaderUnit(content);
+    setLayerObjectData(box, {
+      menuLineLeader: 'custom',
+      menuLineLeaderUnit: unit,
+    });
+    // El layout rellena el texto repetido a partir del símbolo.
+    layoutMenuLineGroup(group);
+    return;
   }
   box.set({ text: content });
+  layoutMenuLineGroup(group);
+}
+
+/** Cambia solo el símbolo del separador personalizado (se repite solo). */
+export function updateMenuLineLeaderUnit(
+  group: Group,
+  unit: string,
+  rowIndex: number | 'all' = 0,
+): void {
+  const count = getMenuLineRowCount(group);
+  const indices =
+    rowIndex === 'all'
+      ? Array.from({ length: count }, (_, i) => i)
+      : [rowIndex];
+  for (const i of indices) {
+    setMenuLineLeaderUnit(group, i, unit);
+  }
   layoutMenuLineGroup(group);
 }
 
@@ -1151,11 +1242,41 @@ export function updateMenuLineLeader(
     for (let r = 0; r < count; r++) {
       const center = getMenuLineColumn(group, 'center', r);
       if (!center) continue;
-      setLayerObjectData(center, { menuLineLeader: leader });
+      if (leader === 'custom') {
+        const data = getLayerObjectData(center);
+        const unit =
+          data.menuLineLeader === 'custom' &&
+          typeof data.menuLineLeaderUnit === 'string' &&
+          data.menuLineLeaderUnit.length > 0
+            ? normalizeLeaderUnit(data.menuLineLeaderUnit)
+            : '·';
+        setLayerObjectData(center, {
+          menuLineLeader: leader,
+          menuLineLeaderUnit: unit,
+        });
+      } else {
+        setLayerObjectData(center, { menuLineLeader: leader });
+      }
     }
   } else {
     const center = getMenuLineColumn(group, 'center', rowIndex);
-    if (center) setLayerObjectData(center, { menuLineLeader: leader });
+    if (center) {
+      if (leader === 'custom') {
+        const data = getLayerObjectData(center);
+        const unit =
+          data.menuLineLeader === 'custom' &&
+          typeof data.menuLineLeaderUnit === 'string' &&
+          data.menuLineLeaderUnit.length > 0
+            ? normalizeLeaderUnit(data.menuLineLeaderUnit)
+            : '·';
+        setLayerObjectData(center, {
+          menuLineLeader: leader,
+          menuLineLeaderUnit: unit,
+        });
+      } else {
+        setLayerObjectData(center, { menuLineLeader: leader });
+      }
+    }
   }
   layoutMenuLineGroup(group);
 }

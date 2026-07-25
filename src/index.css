@@ -1008,6 +1008,177 @@ textarea {
   padding: 2rem 1.5rem;
 }
 
+.docs-main {
+  max-width: 820px;
+  margin: 0 auto;
+  padding: 2rem 1.5rem 4rem;
+}
+
+.docs-header {
+  margin-bottom: 1.75rem;
+}
+
+.docs-kicker {
+  margin: 0 0 0.5rem;
+  font-size: 0.85rem;
+  color: var(--color-muted);
+}
+
+.docs-kicker a {
+  color: var(--color-primary);
+  text-decoration: none;
+}
+
+.docs-kicker a:hover {
+  text-decoration: underline;
+}
+
+.docs-header h1 {
+  margin: 0 0 0.5rem;
+  font-size: 1.85rem;
+}
+
+.docs-lead {
+  margin: 0;
+  color: var(--color-muted);
+  line-height: 1.5;
+  font-size: 1.05rem;
+}
+
+.docs-toc {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  padding: 1rem 1.25rem;
+  margin-bottom: 2rem;
+}
+
+.docs-toc h2 {
+  margin: 0 0 0.65rem;
+  font-size: 0.95rem;
+}
+
+.docs-toc ol {
+  margin: 0;
+  padding-left: 1.25rem;
+  line-height: 1.7;
+}
+
+.docs-toc a {
+  color: var(--color-primary);
+  text-decoration: none;
+}
+
+.docs-toc a:hover {
+  text-decoration: underline;
+}
+
+.docs-section {
+  margin-bottom: 2.25rem;
+  scroll-margin-top: 1.25rem;
+}
+
+.docs-section h2 {
+  margin: 0 0 0.75rem;
+  font-size: 1.35rem;
+  padding-bottom: 0.4rem;
+  border-bottom: 1px solid var(--color-border);
+}
+
+.docs-section h3 {
+  margin: 1.25rem 0 0.5rem;
+  font-size: 1.05rem;
+}
+
+.docs-section p,
+.docs-section li,
+.docs-section dd {
+  line-height: 1.55;
+  color: var(--color-text);
+}
+
+.docs-section ul,
+.docs-section ol {
+  padding-left: 1.25rem;
+}
+
+.docs-section code,
+.docs-example {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 0.86rem;
+}
+
+.docs-section code {
+  background: #f3f4f6;
+  padding: 0.1rem 0.35rem;
+  border-radius: 3px;
+}
+
+.docs-example {
+  display: block;
+  margin: 1rem 0;
+  padding: 1rem 1.1rem;
+  background: #f8fafc;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  white-space: pre-wrap;
+  line-height: 1.45;
+  overflow-x: auto;
+}
+
+.docs-table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 1rem 0;
+  font-size: 0.95rem;
+}
+
+.docs-table th,
+.docs-table td {
+  border: 1px solid var(--color-border);
+  padding: 0.55rem 0.7rem;
+  text-align: left;
+  vertical-align: top;
+}
+
+.docs-table th {
+  background: #f3f4f6;
+  font-weight: 600;
+}
+
+.docs-callout {
+  background: #eff6ff;
+  border: 1px solid #bfdbfe;
+  border-radius: var(--radius);
+  padding: 0.85rem 1rem;
+}
+
+.docs-faq dt {
+  margin-top: 0.85rem;
+  font-weight: 600;
+}
+
+.docs-faq dd {
+  margin: 0.25rem 0 0;
+  color: var(--color-muted);
+}
+
+.docs-section--end .btn-primary {
+  display: inline-block;
+  margin-top: 1rem;
+  text-decoration: none;
+}
+
+.docs-section kbd {
+  display: inline-block;
+  padding: 0.05rem 0.35rem;
+  border: 1px solid var(--color-border);
+  border-radius: 3px;
+  background: #f9fafb;
+  font-size: 0.8rem;
+  font-family: inherit;
+}
+
 .dashboard-header {
   display: flex;
   justify-content: space-between;
@@ -1372,12 +1543,6 @@ textarea {
   border-color: var(--color-primary);
   color: var(--color-primary);
   background: #eff6ff;
-}
-
-.editor-canvas-area--eyedropper,
-.editor-canvas-area--eyedropper .editor-canvas-wrap,
-.editor-canvas-area--eyedropper canvas {
-  cursor: crosshair !important;
 }
 
 .public-menu-status {
@@ -2777,6 +2942,35 @@ textarea {
   padding: 1rem 0;
 }
 
+.app-toast {
+  position: fixed;
+  left: 50%;
+  bottom: 1.5rem;
+  z-index: 1200;
+  transform: translateX(-50%);
+  max-width: min(90vw, 22rem);
+  padding: 0.7rem 1.15rem;
+  border-radius: var(--radius);
+  background: #1a1a1a;
+  color: #fff;
+  font-size: 0.9rem;
+  font-weight: 500;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.25);
+  pointer-events: none;
+  animation: app-toast-in 0.22s ease-out;
+}
+
+@keyframes app-toast-in {
+  from {
+    opacity: 0;
+    transform: translateX(-50%) translateY(0.6rem);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(-50%) translateY(0);
+  }
+}
+
 .danger-btn {
   padding: 0.5rem 1rem;
   border-radius: var(--radius);
@@ -3184,6 +3378,10 @@ textarea {
   .dashboard-main,
   .templates-main {
     padding: 1.25rem 1rem;
+  }
+
+  .docs-main {
+    padding: 1.25rem 1rem 3rem;
   }
 
   .menu-grid,

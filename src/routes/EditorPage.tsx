@@ -67,11 +67,6 @@ import {
   applyVisionMenuImportToCanvas,
   prepareImageForVisionOcr,
 } from '@/lib/vision-menu-import';
-import {
-  pickColorWithEyeDropper,
-  sampleColorFromFabricCanvas,
-  supportsNativeEyeDropper,
-} from '@/lib/eyedropper';
 import { exportMenuDocumentJson, exportPagesToPdf, parseMenuJsonFile } from '@/lib/export';
 import { preloadCommonEditorFonts } from '@/lib/google-fonts';
 import { ensureUniqueLayerIds, isLayerLocked, setLayerObjectData } from '@/lib/layer-utils';
@@ -116,7 +111,6 @@ export function EditorPage() {
   const [publicSlug, setPublicSlug] = useState<string | null>(null);
   const [editorError, setEditorError] = useState('');
   const [backgroundColor, setBackgroundColor] = useState('#FAF6F0');
-  const [backgroundPickActive, setBackgroundPickActive] = useState(false);
   const [uploadProgress, setUploadProgress] = useState<UploadProgressState | null>(null);
   const uploadInFlightRef = useRef(false);
   const [mobilePanel, setMobilePanel] = useState<'canvas' | 'layers' | 'props'>('canvas');
@@ -542,47 +536,6 @@ export function EditorPage() {
     }, 400);
     scheduleSave();
   }, [refreshObjects, scheduleSave, recordHistoryForPage]);
-
-  useEffect(() => {
-    if (!backgroundPickActive) return;
-
-    const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') {
-        setBackgroundPickActive(false);
-      }
-    };
-
-    const onPointerDown = (event: PointerEvent) => {
-      const target = event.target as HTMLElement | null;
-      if (!target?.closest('.editor-canvas-wrap')) return;
-
-      const canvas = getActiveCanvas();
-      if (!canvas) return;
-
-      event.preventDefault();
-      event.stopPropagation();
-      const hex = sampleColorFromFabricCanvas(canvas, event.clientX, event.clientY);
-      if (!hex) {
-        setEditorError(
-          'No se pudo leer el color (la imagen puede bloquear el muestreo). Prueba Chrome o Edge con el cuentagotas nativo.',
-        );
-        setBackgroundPickActive(false);
-        return;
-      }
-      canvas.backgroundColor = hex;
-      canvas.requestRenderAll();
-      setBackgroundColor(hex);
-      setBackgroundPickActive(false);
-      handleChange();
-    };
-
-    window.addEventListener('keydown', onKeyDown);
-    window.addEventListener('pointerdown', onPointerDown, true);
-    return () => {
-      window.removeEventListener('keydown', onKeyDown);
-      window.removeEventListener('pointerdown', onPointerDown, true);
-    };
-  }, [backgroundPickActive, getActiveCanvas, handleChange]);
 
   const handleCopyLayers = useCallback((): boolean => {
     const canvas = getActiveCanvas();
@@ -1336,18 +1289,7 @@ export function EditorPage() {
     canvas.backgroundColor = color;
     canvas.requestRenderAll();
     setBackgroundColor(color);
-    setBackgroundPickActive(false);
     handleChange();
-  }
-
-  async function handlePickBackgroundColor() {
-    setEditorError('');
-    if (supportsNativeEyeDropper()) {
-      const hex = await pickColorWithEyeDropper();
-      if (hex) handleChangeBackground(hex);
-      return;
-    }
-    setBackgroundPickActive((prev) => !prev);
   }
 
   function handleExportPng() {
@@ -1677,10 +1619,6 @@ export function EditorPage() {
         onConvertTextToMenuLine={handleConvertTextToMenuLine}
         canConvertTextToMenuLine={canConvertTextToMenuLine(getActiveCanvas())}
         onChangeBackground={handleChangeBackground}
-        onPickBackgroundColor={() => {
-          void handlePickBackgroundColor();
-        }}
-        backgroundPickActive={backgroundPickActive}
         onExportPng={handleExportPng}
         onExportPdf={handleExportPdf}
         onExportJson={handleExportJson}
@@ -1724,9 +1662,7 @@ export function EditorPage() {
         </aside>
 
         <main
-          className={`editor-canvas-area editor-canvas-area--${interactionMode}${
-            backgroundPickActive ? ' editor-canvas-area--eyedropper' : ''
-          }`}
+          className={`editor-canvas-area editor-canvas-area--${interactionMode}`}
           ref={canvasAreaRef}
           onPointerDown={(e) => {
             if (interactionMode === 'scroll') return;

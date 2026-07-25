@@ -3,6 +3,9 @@ import {
   type ConverterCharStyles,
   type ConverterImageLayer,
   type ConverterLayer,
+  type ConverterMenuLineCell,
+  type ConverterMenuLineLayer,
+  type ConverterMenuLineRow,
   type ConverterPage,
   type ConverterShapeLayer,
   type ConverterTextLayer,
@@ -15,6 +18,9 @@ import {
   type MenuDocumentDividerElement,
   type MenuDocumentElement,
   type MenuDocumentImageElement,
+  type MenuDocumentMenuLineCell,
+  type MenuDocumentMenuLineElement,
+  type MenuDocumentMenuLineRow,
   type MenuDocumentMeta,
   type MenuDocumentPage,
   type MenuDocumentShapeElement,
@@ -194,6 +200,96 @@ function convertShapeLayer(
   };
 }
 
+function convertMenuLineCell(
+  cell: ConverterMenuLineCell,
+  canvasW: number,
+): MenuDocumentMenuLineCell {
+  return {
+    content: typeof cell.content === 'string' ? cell.content : '',
+    style: {
+      fontFamily: cell.style?.fontFamily || 'Arial',
+      fontSize: toPercent(Math.max(cell.style?.fontSize ?? 16, 4), canvasW),
+      color: cell.style?.color || '#333333',
+      align: cell.style?.align === 'center' || cell.style?.align === 'right' ? cell.style.align : 'left',
+      fontWeight: cell.style?.fontWeight,
+      fontStyle: cell.style?.fontStyle,
+    },
+  };
+}
+
+function convertMenuLineRow(
+  row: ConverterMenuLineRow,
+  canvasW: number,
+): MenuDocumentMenuLineRow {
+  const out: MenuDocumentMenuLineRow = {
+    left: convertMenuLineCell(row.left, canvasW),
+    center: convertMenuLineCell(row.center, canvasW),
+    right: convertMenuLineCell(row.right, canvasW),
+  };
+  if (row.ingredients && typeof row.ingredients === 'object') {
+    out.ingredients = convertMenuLineCell(row.ingredients, canvasW);
+  }
+  if (
+    typeof row.blankLinesAfter === 'number' &&
+    Number.isFinite(row.blankLinesAfter) &&
+    row.blankLinesAfter > 0
+  ) {
+    out.blankLinesAfter = Math.round(row.blankLinesAfter);
+  }
+  if (
+    row.leader === 'dots' ||
+    row.leader === 'dashes' ||
+    row.leader === 'spaces' ||
+    row.leader === 'custom'
+  ) {
+    out.leader = row.leader;
+  }
+  return out;
+}
+
+function convertMenuLineLayer(
+  layer: ConverterMenuLineLayer,
+  canvasW: number,
+  canvasH: number,
+): MenuDocumentMenuLineElement | null {
+  const rows = Array.isArray(layer.rows) ? layer.rows : [];
+  if (rows.length === 0) return null;
+
+  const blockW = Math.max(layer.width, 1);
+  const leftWidth =
+    typeof layer.leftWidth === 'number' && layer.leftWidth > 0
+      ? layer.leftWidth
+      : layer.columnRatios?.left
+        ? layer.columnRatios.left * blockW
+        : blockW * 0.48;
+
+  return {
+    id: layer.id,
+    type: 'menuLine',
+    ...(typeof layer.name === 'string' && layer.name.trim()
+      ? { name: layer.name.trim() }
+      : {}),
+    leader:
+      layer.leader === 'dashes' ||
+      layer.leader === 'spaces' ||
+      layer.leader === 'custom'
+        ? layer.leader
+        : 'dots',
+    leftWidthRatio: toPercent(leftWidth, blockW),
+    ...(typeof layer.rowGap === 'number' && layer.rowGap >= 0
+      ? { rowGap: toPercent(layer.rowGap, canvasH) }
+      : {}),
+    x: toPercent(layer.x, canvasW),
+    y: toPercent(layer.y, canvasH),
+    width: toPercent(layer.width, canvasW),
+    height: toPercent(layer.height, canvasH),
+    rotation: layer.rotation,
+    opacity: layer.opacity,
+    zIndex: layer.zIndex,
+    rows: rows.map((row) => convertMenuLineRow(row, canvasW)),
+  };
+}
+
 function convertLayer(
   layer: ConverterLayer,
   canvasW: number,
@@ -209,6 +305,9 @@ function convertLayer(
   }
   if (layer.type === 'shape') {
     return convertShapeLayer(layer, canvasW, canvasH);
+  }
+  if (layer.type === 'menuLine') {
+    return convertMenuLineLayer(layer, canvasW, canvasH);
   }
   return null;
 }
@@ -390,7 +489,106 @@ function elementToLayer(
     };
   }
 
+  if (el.type === 'menuLine') {
+    return menuLineElementToLayer(el, canvasW, canvasH, base);
+  }
+
   return null;
+}
+
+function menuLineCellFromDocument(
+  cell: MenuDocumentMenuLineCell,
+  canvasW: number,
+): ConverterMenuLineCell {
+  return {
+    content: typeof cell.content === 'string' ? cell.content : '',
+    style: {
+      fontFamily: cell.style?.fontFamily || 'Arial',
+      fontSize: Math.max(fromPercent(cell.style?.fontSize ?? 2.5, canvasW), 8),
+      color: cell.style?.color || '#333333',
+      align:
+        cell.style?.align === 'center' || cell.style?.align === 'right'
+          ? cell.style.align
+          : 'left',
+      fontWeight: cell.style?.fontWeight,
+      fontStyle: cell.style?.fontStyle,
+    },
+  };
+}
+
+function menuLineElementToLayer(
+  el: MenuDocumentMenuLineElement,
+  canvasW: number,
+  canvasH: number,
+  base: {
+    id: string;
+    x: number;
+    y: number;
+    width: number;
+    height: number;
+    rotation: number;
+    zIndex: number;
+    opacity?: number;
+  },
+): ConverterMenuLineLayer | null {
+  const rowsIn = Array.isArray(el.rows) ? el.rows : [];
+  if (rowsIn.length === 0) return null;
+
+  const blockW = Math.max(base.width, 1);
+  const leftRatio =
+    typeof el.leftWidthRatio === 'number' && Number.isFinite(el.leftWidthRatio)
+      ? Math.min(Math.max(el.leftWidthRatio, 5), 90) / 100
+      : 0.48;
+  const leftWidth = Math.round(blockW * leftRatio);
+  const rowGap =
+    typeof el.rowGap === 'number' && Number.isFinite(el.rowGap)
+      ? Math.max(0, fromPercent(el.rowGap, canvasH))
+      : 6;
+
+  const rows: ConverterMenuLineRow[] = rowsIn.map((row) => {
+    const out: ConverterMenuLineRow = {
+      left: menuLineCellFromDocument(row.left, canvasW),
+      center: menuLineCellFromDocument(row.center, canvasW),
+      right: menuLineCellFromDocument(row.right, canvasW),
+    };
+    if (row.ingredients) {
+      out.ingredients = menuLineCellFromDocument(row.ingredients, canvasW);
+    }
+    if (
+      typeof row.blankLinesAfter === 'number' &&
+      Number.isFinite(row.blankLinesAfter) &&
+      row.blankLinesAfter > 0
+    ) {
+      out.blankLinesAfter = Math.round(row.blankLinesAfter);
+    }
+    if (
+      row.leader === 'dots' ||
+      row.leader === 'dashes' ||
+      row.leader === 'spaces' ||
+      row.leader === 'custom'
+    ) {
+      out.leader = row.leader;
+    }
+    return out;
+  });
+
+  return {
+    ...base,
+    type: 'menuLine',
+    ...(typeof el.name === 'string' && el.name.trim() ? { name: el.name.trim() } : {}),
+    leader:
+      el.leader === 'dashes' || el.leader === 'spaces' || el.leader === 'custom'
+        ? el.leader
+        : 'dots',
+    leftWidth,
+    columnRatios: {
+      left: leftRatio,
+      center: Math.max(0.1, (1 - leftRatio) * 0.55),
+      right: Math.max(0.1, (1 - leftRatio) * 0.45),
+    },
+    rows,
+    rowGap,
+  };
 }
 
 /** Convierte un MenuDocument exportado de vuelta a CanvasData del editor. */

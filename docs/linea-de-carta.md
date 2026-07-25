@@ -163,7 +163,8 @@ En el panel **Línea de carta**:
 - Pestañas **Plato / Separador / Precio**.
 - Campo **Ingredientes** por fila (crear, editar o vaciar).
 - **Saltos después de esta fila**: líneas en blanco extra tras el plato (y sus ingredientes).
-- Separador: puntos, guiones, espacios o personalizado.
+- Separador: puntos, guiones, espacios o **personalizado** (un solo símbolo que se
+  repite solo hasta llenar el hueco).
 - Espacio entre filas (base global); ancho de columna plato (slider).
 
 Al guardar el menú, el grupo se serializa a `MenuLineLayer` (`menuLineGroupToLayer`) e incluye `ingredients` y `blankLinesAfter` cuando aplica.
@@ -198,6 +199,7 @@ En Fabric, cada celda es un `Textbox` hijo con `menuLineRole` (`left` | `center`
 2. **Títulos de sección** (p. ej. “Pizzes”) en una caja de texto aparte, o como fila sin precio si quieres que queden dentro del bloque.
 3. Tras convertir, revisa filas en propiedades: un falso positivo de ingredientes es raro si no hay ` - ` entre palabras. Ajusta **Saltos después** si hace falta más aire.
 4. Cartas ya publicadas con versiones antiguas de layout pueden necesitar **guardar y republicar** para verse bien en `/p/...`.
+5. **Exportar / importar JSON** incluye las líneas de carta (filas, precios, ingredientes, formato y saltos) en el `menu.json`.
 
 ---
 

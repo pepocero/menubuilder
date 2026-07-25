@@ -94,11 +94,52 @@ export interface MenuDocumentDividerElement extends MenuDocumentBox {
   thickness: Percent;
 }
 
+/** Estilo de celda de línea de carta (fontSize como % del ancho del lienzo). */
+export interface MenuDocumentMenuLineCellStyle {
+  fontFamily: string;
+  fontSize: Percent;
+  color: string;
+  align: 'left' | 'center' | 'right';
+  fontWeight?: string;
+  fontStyle?: string;
+}
+
+export interface MenuDocumentMenuLineCell {
+  content: string;
+  style: MenuDocumentMenuLineCellStyle;
+}
+
+export interface MenuDocumentMenuLineRow {
+  left: MenuDocumentMenuLineCell;
+  center: MenuDocumentMenuLineCell;
+  right: MenuDocumentMenuLineCell;
+  ingredients?: MenuDocumentMenuLineCell;
+  blankLinesAfter?: number;
+  leader?: 'dots' | 'dashes' | 'spaces' | 'custom';
+}
+
+/**
+ * Bloque de carta: filas plato ··· precio (+ ingredientes).
+ * Coordenadas del bloque en % del lienzo; leftWidthRatio en % del ancho del bloque.
+ */
+export interface MenuDocumentMenuLineElement extends MenuDocumentBox {
+  id: string;
+  type: 'menuLine';
+  name?: string;
+  leader: 'dots' | 'dashes' | 'spaces' | 'custom';
+  /** Ancho de la columna plato como % del ancho del bloque (0–100). */
+  leftWidthRatio: Percent;
+  /** Espacio entre filas como % de la altura del lienzo. */
+  rowGap?: Percent;
+  rows: MenuDocumentMenuLineRow[];
+}
+
 export type MenuDocumentElement =
   | MenuDocumentTextElement
   | MenuDocumentImageElement
   | MenuDocumentShapeElement
-  | MenuDocumentDividerElement;
+  | MenuDocumentDividerElement
+  | MenuDocumentMenuLineElement;
 
 export interface MenuDocumentPage {
   id: string;

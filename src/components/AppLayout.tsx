@@ -36,6 +36,9 @@ export function AppLayout() {
           <Link to="/qrs" onClick={() => setMenuOpen(false)}>
             Mis QR
           </Link>
+          <Link to="/documentacion" onClick={() => setMenuOpen(false)}>
+            Documentación
+          </Link>
           {isSystemAdmin && (
             <Link to="/admin/users" onClick={() => setMenuOpen(false)} className="app-nav-admin">
               Administración

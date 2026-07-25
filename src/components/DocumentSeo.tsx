@@ -72,6 +72,16 @@ export function DocumentSeo() {
       return;
     }
 
+    if (pathname.startsWith('/documentacion')) {
+      applyPageSeo({
+        title: 'Documentación',
+        description: `Guía de uso de ${SITE_NAME}: textos, líneas de carta, imágenes, publicación QR y exportación.`,
+        path: pathname,
+        index: false,
+      });
+      return;
+    }
+
     if (pathname.startsWith('/editor')) {
       applyPageSeo({
         title: 'Editor',

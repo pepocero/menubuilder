@@ -8,6 +8,7 @@ import {
 } from '@/components/ProtectedRoute';
 import { AdminUsersPage } from '@/routes/AdminUsersPage';
 import { DashboardPage } from '@/routes/DashboardPage';
+import { DocsPage } from '@/routes/DocsPage';
 import { EditorPage } from '@/routes/EditorPage';
 import { LandingPage } from '@/routes/LandingPage';
 import { LoginPage } from '@/routes/LoginPage';
@@ -33,6 +34,7 @@ export default function App() {
             <Route path="/dashboard" element={<DashboardPage />} />
             <Route path="/templates" element={<TemplatesPage />} />
             <Route path="/qrs" element={<QrsPage />} />
+            <Route path="/documentacion" element={<DocsPage />} />
             <Route path="/editor/:menuId" element={<EditorPage />} />
           </Route>
 

@@ -67,7 +67,44 @@ export interface ConverterImageLayer extends ConverterLayerBase {
   src: string;
 }
 
-export type ConverterLayer = ConverterTextLayer | ConverterShapeLayer | ConverterImageLayer;
+export interface ConverterMenuLineCellStyle {
+  fontFamily: string;
+  fontSize: number;
+  color: string;
+  align: 'left' | 'center' | 'right';
+  fontWeight?: string;
+  fontStyle?: string;
+}
+
+export interface ConverterMenuLineCell {
+  content: string;
+  style: ConverterMenuLineCellStyle;
+}
+
+export interface ConverterMenuLineRow {
+  left: ConverterMenuLineCell;
+  center: ConverterMenuLineCell;
+  right: ConverterMenuLineCell;
+  ingredients?: ConverterMenuLineCell;
+  blankLinesAfter?: number;
+  leader?: 'dots' | 'dashes' | 'spaces' | 'custom';
+}
+
+export interface ConverterMenuLineLayer extends ConverterLayerBase {
+  type: 'menuLine';
+  name?: string;
+  leader: 'dots' | 'dashes' | 'spaces' | 'custom';
+  leftWidth?: number;
+  columnRatios?: { left: number; center: number; right: number };
+  rows: ConverterMenuLineRow[];
+  rowGap?: number;
+}
+
+export type ConverterLayer =
+  | ConverterTextLayer
+  | ConverterShapeLayer
+  | ConverterImageLayer
+  | ConverterMenuLineLayer;
 
 export interface ConverterPage {
   id: string;

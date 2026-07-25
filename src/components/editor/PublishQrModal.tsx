@@ -32,14 +32,22 @@ export function PublishQrModal({
   const [busy, setBusy] = useState(false);
   const [downloading, setDownloading] = useState(false);
   const [error, setError] = useState('');
+  const [toast, setToast] = useState<string | null>(null);
 
   useEffect(() => {
     if (open) {
       setSlug(initialSlug);
       setIsPublic(initialPublic);
       setError('');
+      setToast(null);
     }
   }, [open, initialSlug, initialPublic]);
+
+  useEffect(() => {
+    if (!toast) return;
+    const timer = window.setTimeout(() => setToast(null), 2500);
+    return () => window.clearTimeout(timer);
+  }, [toast]);
 
   if (!open) return null;
 
@@ -112,7 +120,12 @@ export function PublishQrModal({
 
   async function copyLink() {
     if (!publicUrl) return;
-    await navigator.clipboard.writeText(publicUrl);
+    try {
+      await navigator.clipboard.writeText(publicUrl);
+      setToast('Enlace copiado');
+    } catch {
+      setError('No se pudo copiar el enlace');
+    }
   }
 
   return (
@@ -189,6 +202,11 @@ export function PublishQrModal({
           )}
         </div>
       </div>
+      {toast && (
+        <div className="app-toast" role="status" aria-live="polite">
+          {toast}
+        </div>
+      )}
     </div>
   );
 }
