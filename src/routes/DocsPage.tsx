@@ -348,8 +348,10 @@ Bacó - Pernil dolç - Xorxíço - Xampinyons`}
               </li>
             </ol>
             <p>
-              En <Link to="/qrs">Mis QR</Link> ves todas tus cartas publicadas. Si despublicas, el
-              enlace y el QR dejan de funcionar; al publicar de nuevo se genera un enlace nuevo.
+              En <Link to="/qrs">Mis QR</Link> ves tus cartas con enlace (activas o inactivas).{' '}
+              <strong>Despublicar</strong> deja el enlace inactivo pero conserva el QR; al publicar
+              de nuevo se reutiliza el mismo enlace. <strong>Eliminar</strong> borra el enlace y la
+              imagen asociada; al publicar después se crea un enlace nuevo.
             </p>
           </section>
 

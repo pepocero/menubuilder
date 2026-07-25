@@ -1,5 +1,4 @@
 import { getMenuById, unpublishMenu } from '../../../lib/db';
-import { deleteMenuExportPng } from '../../../lib/menu-export';
 import { errorResponse, jsonResponse } from '../../../lib/types';
 
 export const onRequestPost: PagesFunction<Env> = async (context) => {
@@ -11,17 +10,19 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
     return errorResponse('Menú no encontrado', 404);
   }
 
+  if (!menu.public_slug) {
+    return errorResponse('Esta carta no tiene enlace público', 400);
+  }
+
   const unpublished = await unpublishMenu(context.env.DB, menuId, userId);
   if (!unpublished) {
     return errorResponse('No se pudo despublicar', 500);
   }
 
-  // Invalidar PNG público cacheado; al republicar se regenera con el canvas actual.
-  try {
-    await deleteMenuExportPng(context.env.MEDIA, userId, menuId);
-  } catch {
-    /* best-effort */
-  }
-
-  return jsonResponse({ ok: true, is_public: false, public_slug: null });
+  // Conserva public_slug y export_png_url: el QR impreso sigue siendo válido al republicar.
+  return jsonResponse({
+    ok: true,
+    is_public: false,
+    public_slug: menu.public_slug,
+  });
 };

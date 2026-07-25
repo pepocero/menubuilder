@@ -308,12 +308,29 @@ export async function duplicateMenu(id: string): Promise<{ menu: { id: string; t
   return api.post(`/api/menus/${id}/duplicate`);
 }
 
-export async function publishMenu(id: string): Promise<{ public_slug: string; public_url: string }> {
+export async function publishMenu(id: string): Promise<{
+  public_slug: string;
+  public_url: string;
+  reused_slug?: boolean;
+}> {
   return api.post(`/api/menus/${id}/publish`);
 }
 
-export async function unpublishMenu(id: string): Promise<{ ok: boolean }> {
+export async function unpublishMenu(id: string): Promise<{
+  ok: boolean;
+  is_public: boolean;
+  public_slug: string | null;
+}> {
   return api.post(`/api/menus/${id}/unpublish`);
+}
+
+/** Borra enlace público, slug y PNG de exportación cacheado. */
+export async function removeMenuPublic(id: string): Promise<{
+  ok: boolean;
+  is_public: boolean;
+  public_slug: null;
+}> {
+  return api.post(`/api/menus/${id}/remove-public`);
 }
 
 export interface PublishedQr {
@@ -321,6 +338,7 @@ export interface PublishedQr {
   title: string;
   public_slug: string;
   public_url: string;
+  is_public: boolean;
   thumbnail_url: string | null;
   updated_at: string;
 }

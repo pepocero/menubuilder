@@ -11,6 +11,7 @@ export const onRequestGet: PagesFunction<Env> = async (context) => {
       title: m.title,
       public_slug: m.public_slug,
       public_url: `/p/${m.public_slug}`,
+      is_public: m.is_public === 1,
       thumbnail_url: m.thumbnail_url,
       updated_at: m.updated_at,
     })),

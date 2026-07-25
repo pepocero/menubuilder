@@ -1,6 +1,11 @@
 import { useEffect, useState } from 'react';
 import { QRCodeSVG } from 'qrcode.react';
-import { ApiError, publishMenu, unpublishMenu } from '@/lib/api';
+import {
+  ApiError,
+  publishMenu,
+  removeMenuPublic,
+  unpublishMenu,
+} from '@/lib/api';
 import {
   downloadQrPng,
   downloadQrSvg,
@@ -54,6 +59,7 @@ export function PublishQrModal({
   const publicPath = slug ? `/p/${slug}` : null;
   const publicUrl = publicPath ? `${window.location.origin}${publicPath}` : null;
   const filenameBase = `qr-${slug || menuId}`;
+  const hasLink = Boolean(publicUrl);
 
   async function handlePublish() {
     setBusy(true);
@@ -63,6 +69,9 @@ export function PublishQrModal({
       setSlug(result.public_slug);
       setIsPublic(true);
       onStatusChange(true, result.public_slug);
+      if (result.reused_slug) {
+        setToast('Enlace reactivado (mismo QR)');
+      }
     } catch (err) {
       setError(err instanceof ApiError ? err.message : 'No se pudo publicar');
     } finally {
@@ -73,7 +82,7 @@ export function PublishQrModal({
   async function handleUnpublish() {
     if (
       !confirm(
-        '¿Despublicar esta carta?\n\nEl enlace y el QR actuales dejarán de funcionar. Al volver a publicar se creará un enlace nuevo.',
+        '¿Despublicar esta carta?\n\nEl enlace quedará inactivo (quien escanee el QR no verá la carta), pero se conservan el enlace y el QR. Al publicar de nuevo se reutiliza el mismo enlace.',
       )
     ) {
       return;
@@ -81,12 +90,34 @@ export function PublishQrModal({
     setBusy(true);
     setError('');
     try {
-      await unpublishMenu(menuId);
+      const result = await unpublishMenu(menuId);
+      setIsPublic(false);
+      setSlug(result.public_slug);
+      onStatusChange(false, result.public_slug);
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : 'No se pudo despublicar');
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function handleRemovePublic() {
+    if (
+      !confirm(
+        '¿Eliminar el enlace y el QR?\n\nSe borrará el enlace público y la imagen asociada. Los QR impresos dejarán de servir aunque vuelvas a publicar (se creará un enlace nuevo).',
+      )
+    ) {
+      return;
+    }
+    setBusy(true);
+    setError('');
+    try {
+      await removeMenuPublic(menuId);
       setIsPublic(false);
       setSlug(null);
       onStatusChange(false, null);
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : 'No se pudo despublicar');
+      setError(err instanceof ApiError ? err.message : 'No se pudo eliminar la publicación');
     } finally {
       setBusy(false);
     }
@@ -141,7 +172,7 @@ export function PublishQrModal({
         <div className="qr-modal-body">
           {error && <div className="error-banner">{error}</div>}
 
-          {!isPublic || !publicUrl ? (
+          {!hasLink ? (
             <div className="qr-empty">
               <p>
                 Publica esta carta para generar un enlace y un código QR. Cualquiera que lo escanee
@@ -153,10 +184,16 @@ export function PublishQrModal({
             </div>
           ) : (
             <>
-              <div className="qr-preview">
+              {!isPublic && (
+                <div className="qr-status-banner qr-status-banner--inactive" role="status">
+                  Enlace inactivo — el QR se conserva. Publícala de nuevo para reactivar el mismo
+                  enlace.
+                </div>
+              )}
+              <div className={`qr-preview${isPublic ? '' : ' qr-preview--inactive'}`}>
                 <QRCodeSVG
                   id="menu-qr-svg"
-                  value={publicUrl}
+                  value={publicUrl!}
                   size={QR_PREVIEW_SIZE}
                   level={QR_ERROR_LEVEL}
                   includeMargin
@@ -168,6 +205,16 @@ export function PublishQrModal({
                 </a>
               </p>
               <div className="qr-actions">
+                {!isPublic ? (
+                  <button
+                    type="button"
+                    className="btn-primary"
+                    disabled={busy}
+                    onClick={handlePublish}
+                  >
+                    {busy ? 'Publicando...' : 'Publicar (mismo enlace)'}
+                  </button>
+                ) : null}
                 <button type="button" className="btn-secondary" onClick={copyLink}>
                   Copiar enlace
                 </button>
@@ -189,14 +236,30 @@ export function PublishQrModal({
                 >
                   Descargar SVG
                 </button>
-                <button type="button" className="danger-btn" disabled={busy} onClick={handleUnpublish}>
-                  Despublicar
+                {isPublic ? (
+                  <button
+                    type="button"
+                    className="btn-secondary"
+                    disabled={busy}
+                    onClick={handleUnpublish}
+                  >
+                    Despublicar
+                  </button>
+                ) : null}
+                <button
+                  type="button"
+                  className="danger-btn"
+                  disabled={busy}
+                  onClick={handleRemovePublic}
+                >
+                  Eliminar
                 </button>
               </div>
               <p className="panel-hint">
-                Para imprimir usa <strong>Descargar PNG (alta calidad)</strong> (1024×1024). La
-                miniatura del modal es solo vista previa. El enlace del QR no cambia mientras la
-                carta siga publicada.
+                <strong>Despublicar</strong> deja el enlace inactivo pero conserva el QR.{' '}
+                <strong>Eliminar</strong> borra el enlace y la imagen asociada; al publicar de
+                nuevo se crea un enlace distinto. Para imprimir usa{' '}
+                <strong>Descargar PNG (alta calidad)</strong> (1024×1024).
               </p>
             </>
           )}

@@ -1,7 +1,14 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { QRCodeSVG } from 'qrcode.react';
-import { ApiError, listMyQrs, unpublishMenu, type PublishedQr } from '@/lib/api';
+import {
+  ApiError,
+  listMyQrs,
+  publishMenu,
+  removeMenuPublic,
+  unpublishMenu,
+  type PublishedQr,
+} from '@/lib/api';
 import { AppLayout } from '@/components/AppLayout';
 import {
   downloadQrPng,
@@ -13,6 +20,7 @@ export function QrsPage() {
   const [menus, setMenus] = useState<PublishedQr[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [busyId, setBusyId] = useState<string | null>(null);
   const [downloadingId, setDownloadingId] = useState<string | null>(null);
 
   const load = useCallback(async () => {
@@ -32,16 +40,57 @@ export function QrsPage() {
     load();
   }, [load]);
 
+  async function handlePublish(id: string) {
+    setBusyId(id);
+    setError('');
+    try {
+      await publishMenu(id);
+      await load();
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : 'No se pudo publicar');
+    } finally {
+      setBusyId(null);
+    }
+  }
+
   async function handleUnpublish(id: string) {
     if (
       !confirm(
-        '¿Despublicar esta carta?\n\nEl enlace y el QR actuales dejarán de funcionar. Al volver a publicar se creará un enlace nuevo.',
+        '¿Despublicar esta carta?\n\nEl enlace quedará inactivo, pero se conservan el enlace y el QR. Al publicar de nuevo se reutiliza el mismo enlace.',
       )
     ) {
       return;
     }
-    await unpublishMenu(id);
-    await load();
+    setBusyId(id);
+    setError('');
+    try {
+      await unpublishMenu(id);
+      await load();
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : 'No se pudo despublicar');
+    } finally {
+      setBusyId(null);
+    }
+  }
+
+  async function handleRemovePublic(id: string) {
+    if (
+      !confirm(
+        '¿Eliminar el enlace y el QR?\n\nSe borrará el enlace público y la imagen asociada. Los QR impresos dejarán de servir; al publicar de nuevo se creará un enlace nuevo.',
+      )
+    ) {
+      return;
+    }
+    setBusyId(id);
+    setError('');
+    try {
+      await removeMenuPublic(id);
+      await load();
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : 'No se pudo eliminar la publicación');
+    } finally {
+      setBusyId(null);
+    }
   }
 
   function absoluteUrl(path: string): string {
@@ -67,8 +116,9 @@ export function QrsPage() {
       <main className="templates-main">
         <h1>Mis códigos QR</h1>
         <p>
-          Solo ves las cartas que tú has publicado. Nadie más puede gestionar tus QR. Para imprimir,
-          descarga el PNG de alta calidad.
+          Solo ves las cartas que tú has publicado (activas o despublicadas). Nadie más puede
+          gestionar tus QR. <strong>Despublicar</strong> desactiva el enlace sin borrar el QR;{' '}
+          <strong>Eliminar</strong> borra enlace e imagen.
         </p>
 
         {loading && <p>Cargando...</p>}
@@ -77,7 +127,7 @@ export function QrsPage() {
         {!loading && menus.length === 0 && (
           <div className="empty-state">
             <p>
-              Aún no tienes cartas publicadas. Abre un menú en el editor y usa{' '}
+              Aún no tienes cartas con QR. Abre un menú en el editor y usa{' '}
               <strong>QR / Publicar</strong>.
             </p>
             <Link to="/dashboard" className="btn-primary">
@@ -89,8 +139,12 @@ export function QrsPage() {
         <div className="qr-grid">
           {menus.map((menu) => {
             const url = absoluteUrl(menu.public_url);
+            const busy = busyId === menu.id;
             return (
-              <article key={menu.id} className="qr-card">
+              <article
+                key={menu.id}
+                className={`qr-card${menu.is_public ? '' : ' qr-card--inactive'}`}
+              >
                 <div className="qr-card-code">
                   <QRCodeSVG
                     value={url}
@@ -99,11 +153,32 @@ export function QrsPage() {
                     includeMargin
                   />
                 </div>
-                <h3>{menu.title}</h3>
+                <div className="qr-card-header">
+                  <h3>{menu.title}</h3>
+                  <span
+                    className={
+                      menu.is_public
+                        ? 'qr-status-pill qr-status-pill--active'
+                        : 'qr-status-pill qr-status-pill--inactive'
+                    }
+                  >
+                    {menu.is_public ? 'Activo' : 'Inactivo'}
+                  </span>
+                </div>
                 <a href={menu.public_url} target="_blank" rel="noreferrer" className="qr-card-link">
                   {url}
                 </a>
                 <div className="qr-card-actions">
+                  {!menu.is_public ? (
+                    <button
+                      type="button"
+                      className="btn-primary"
+                      disabled={busy}
+                      onClick={() => void handlePublish(menu.id)}
+                    >
+                      {busy ? '…' : 'Publicar'}
+                    </button>
+                  ) : null}
                   <button
                     type="button"
                     className="btn-primary"
@@ -115,11 +190,33 @@ export function QrsPage() {
                   <Link to={`/editor/${menu.id}`} className="btn-secondary">
                     Editar
                   </Link>
-                  <a href={menu.public_url} target="_blank" rel="noreferrer" className="btn-secondary">
-                    Ver pública
-                  </a>
-                  <button type="button" className="danger-btn" onClick={() => handleUnpublish(menu.id)}>
-                    Despublicar
+                  {menu.is_public ? (
+                    <a
+                      href={menu.public_url}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="btn-secondary"
+                    >
+                      Ver pública
+                    </a>
+                  ) : null}
+                  {menu.is_public ? (
+                    <button
+                      type="button"
+                      className="btn-secondary"
+                      disabled={busy}
+                      onClick={() => void handleUnpublish(menu.id)}
+                    >
+                      Despublicar
+                    </button>
+                  ) : null}
+                  <button
+                    type="button"
+                    className="danger-btn"
+                    disabled={busy}
+                    onClick={() => void handleRemovePublic(menu.id)}
+                  >
+                    Eliminar
                   </button>
                 </div>
               </article>

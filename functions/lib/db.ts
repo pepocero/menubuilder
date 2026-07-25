@@ -168,7 +168,24 @@ export async function publishMenu(
   return (result.meta.changes ?? 0) > 0;
 }
 
+/** Desactiva el enlace público sin borrar slug ni PNG de exportación. */
 export async function unpublishMenu(
+  db: D1Database,
+  id: string,
+  userId: string,
+): Promise<boolean> {
+  const result = await db
+    .prepare(
+      `UPDATE menus SET is_public = 0, updated_at = datetime('now')
+       WHERE id = ? AND user_id = ?`,
+    )
+    .bind(id, userId)
+    .run();
+  return (result.meta.changes ?? 0) > 0;
+}
+
+/** Elimina por completo la publicación: slug, PNG público e is_public. */
+export async function removeMenuPublication(
   db: D1Database,
   id: string,
   userId: string,
@@ -193,11 +210,12 @@ export async function getPublicMenuBySlug(db: D1Database, slug: string): Promise
     .first<MenuRow>();
 }
 
+/** Cartas con enlace/QR asignado (activas o despublicadas). */
 export async function listPublishedMenusByUser(db: D1Database, userId: string): Promise<MenuRow[]> {
   const result = await db
     .prepare(
       `SELECT id, user_id, title, template_id, canvas_data, thumbnail_url, menu_document, export_png_url, is_public, public_slug, created_at, updated_at
-       FROM menus WHERE user_id = ? AND is_public = 1 AND public_slug IS NOT NULL
+       FROM menus WHERE user_id = ? AND public_slug IS NOT NULL
        ORDER BY updated_at DESC`,
     )
     .bind(userId)

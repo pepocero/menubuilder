@@ -1482,6 +1482,21 @@ textarea {
   cursor: pointer;
 }
 
+/* Mismo aspecto que .toolbar button (p. ej. Importar JSON / Subir). */
+.toolbar .btn-file {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0.35rem 0.6rem;
+  border: 1px solid var(--color-border);
+  border-radius: 4px;
+  background: var(--color-surface);
+  color: var(--color-text);
+  font-weight: inherit;
+  cursor: pointer;
+  box-sizing: border-box;
+}
+
 .toolbar button.toolbar-icon-btn {
   display: inline-flex;
   align-items: center;
@@ -2938,6 +2953,26 @@ textarea {
   margin: 1rem 0;
 }
 
+.qr-status-banner {
+  margin: 0 0 0.85rem;
+  padding: 0.65rem 0.85rem;
+  border-radius: var(--radius);
+  font-size: 0.88rem;
+  line-height: 1.35;
+  text-align: left;
+}
+
+.qr-status-banner--inactive {
+  background: #fff4e5;
+  color: #7a4a00;
+  border: 1px solid #f0c98a;
+}
+
+.qr-preview--inactive {
+  opacity: 0.72;
+  filter: grayscale(0.25);
+}
+
 .qr-empty {
   padding: 1rem 0;
 }
@@ -2995,6 +3030,44 @@ textarea {
   padding: 1.25rem;
   box-shadow: var(--shadow);
   text-align: center;
+}
+
+.qr-card--inactive {
+  opacity: 0.92;
+  border-style: dashed;
+}
+
+.qr-card-header {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+  margin-bottom: 0.35rem;
+}
+
+.qr-card-header h3 {
+  margin: 0;
+}
+
+.qr-status-pill {
+  display: inline-block;
+  padding: 0.15rem 0.55rem;
+  border-radius: 999px;
+  font-size: 0.72rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+}
+
+.qr-status-pill--active {
+  background: #e7f6ec;
+  color: #1b6b3a;
+}
+
+.qr-status-pill--inactive {
+  background: #fff4e5;
+  color: #7a4a00;
 }
 
 .qr-card-code {
