@@ -13,6 +13,8 @@ export interface LayerObjectData {
   menuLineWidthRatio?: number;
   menuLineRowIndex?: number;
   menuLineRowGap?: number;
+  /** Ancho fijo columna plato (px). */
+  menuLineLeftWidth?: number;
   menuLineRatioLeft?: number;
   menuLineRatioCenter?: number;
   menuLineRatioRight?: number;

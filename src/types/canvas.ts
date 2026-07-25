@@ -102,7 +102,7 @@ export interface MenuLineRow {
   leader?: MenuLineLeader;
 }
 
-/** Proporciones compartidas por todas las filas (suman ~1). */
+/** Proporciones (compat / snapshot). El layout real usa leftWidth + precio al contenido. */
 export interface MenuLineColumnRatios {
   left: number;
   center: number;
@@ -119,13 +119,22 @@ export interface MenuLineColumn {
 }
 
 /**
- * Bloque de carta: N filas × 3 columnas, con anchos compartidos.
- * En el lienzo se representa como un Group de Textbox.
+ * Bloque de carta: N filas × 3 columnas.
+ * - Ancho total = contenedor (asas del grupo).
+ * - Columna izquierda (plato): ancho fijo en px de diseño (`leftWidth`).
+ * - Columna derecha (precio): al contenido.
+ * - Columna central: rellena el resto.
  */
 export interface MenuLineLayer extends LayerBase {
   type: 'menuLine';
   /** Separador por defecto (filas sin override). */
   leader: MenuLineLeader;
+  /**
+   * Ancho de la columna plato en px de diseño.
+   * Si falta, se deriva de `columnRatios.left * width`.
+   */
+  leftWidth?: number;
+  /** Snapshot de proporciones (compat / depuración). */
   columnRatios: MenuLineColumnRatios;
   rows: MenuLineRow[];
   /** Espacio vertical entre filas (px de diseño). */

@@ -5,9 +5,9 @@ import { FontFamilyPicker } from '@/components/editor/FontFamilyPicker';
 import { getLayerObjectData } from '@/lib/layer-utils';
 import {
   addMenuLineRow,
-  getGroupColumnRatios,
   getMenuLineColumn,
   getMenuLineLeader,
+  getMenuLineLeftWidth,
   getMenuLineRowCount,
   getMenuLineRowGap,
   MENU_LINE_COLUMN_KEYS,
@@ -64,8 +64,12 @@ export function MenuLineProperties({ group, onUpdate }: MenuLinePropertiesProps)
   const styleTarget: number | 'all' = applyAll ? 'all' : rowIndex;
 
   const previewBox = getMenuLineColumn(group, activeColumn, rowIndex);
-  const ratios = getGroupColumnRatios(group);
-  const ratio = Math.round(ratios[activeColumn] * 100);
+  const leftWidth = getMenuLineLeftWidth(group);
+  const totalWidth = Math.max(
+    1,
+    (group.width ?? 0) * (group.scaleX ?? 1),
+  );
+  const leftPercent = Math.round((leftWidth / totalWidth) * 100);
   const rowGap = getMenuLineRowGap(group);
 
   if (!previewBox) {
@@ -137,8 +141,9 @@ export function MenuLineProperties({ group, onUpdate }: MenuLinePropertiesProps)
   return (
     <div className="menu-line-properties">
       <p className="panel-hint">
-        Varias filas con las mismas proporciones. Elige «Todas» para cambiar el formato de una
-        columna (p. ej. todos los precios) de una vez.
+        El ancho del bloque se cambia con las asas del lienzo (solo el contenedor). Plato: ancho
+        fijo. Precio: al contenido. Separador: rellena el resto. «Todas» aplica formato a una
+        columna en todas las filas.
       </p>
 
       <div className="menu-line-row-controls">
@@ -267,20 +272,28 @@ export function MenuLineProperties({ group, onUpdate }: MenuLinePropertiesProps)
         />
       </label>
 
-      <label>
-        Ancho de columna ({ratio}%) — todas las filas
-        <input
-          type="range"
-          min={10}
-          max={70}
-          step={1}
-          value={ratio}
-          onChange={(e) => {
-            updateMenuLineColumnRatio(group, activeColumn, Number(e.target.value) / 100);
-            refresh();
-          }}
-        />
-      </label>
+      {activeColumn === 'left' ? (
+        <label>
+          Ancho columna plato ({leftPercent}%)
+          <input
+            type="range"
+            min={15}
+            max={75}
+            step={1}
+            value={leftPercent}
+            onChange={(e) => {
+              updateMenuLineColumnRatio(group, 'left', Number(e.target.value) / 100);
+              refresh();
+            }}
+          />
+        </label>
+      ) : (
+        <p className="panel-hint">
+          {activeColumn === 'right'
+            ? 'El ancho del precio se ajusta solo al texto.'
+            : 'El separador ocupa el espacio que queda entre plato y precio.'}
+        </p>
+      )}
 
       <label>
         Fuente

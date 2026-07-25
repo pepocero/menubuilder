@@ -1,4 +1,4 @@
-import { Group, Textbox, type Canvas, type FabricObject } from 'fabric';
+import { Group, Textbox, LayoutManager, FixedLayout, type Canvas, type FabricObject } from 'fabric';
 import type {
   MenuLineCell,
   MenuLineColumn,
@@ -13,6 +13,9 @@ import { setLayerObjectData, getLayerObjectData } from '@/lib/layer-utils';
 
 export const MENU_LINE_COLUMN_KEYS: MenuLineColumnKey[] = ['left', 'center', 'right'];
 export const MENU_LINE_DEFAULT_ROW_GAP = 6;
+export const MENU_LINE_MIN_CENTER = 12;
+export const MENU_LINE_MIN_LEFT = 40;
+export const MENU_LINE_MIN_TOTAL = 80;
 
 export const MENU_LINE_LEADER_OPTIONS: ReadonlyArray<{
   value: MenuLineLeader;
@@ -169,7 +172,7 @@ function cloneRowAsTemplate(row: MenuLineRow): MenuLineRow {
   };
 }
 
-/** Normaliza capa (legacy `columns` → `rows` + `columnRatios`). */
+/** Normaliza capa (legacy `columns` → `rows` + `leftWidth`). */
 export function normalizeMenuLineLayerData(
   layer: MenuLineLayer,
 ): Omit<MenuLineLayer, 'columns'> & { columns?: undefined } {
@@ -189,10 +192,20 @@ export function normalizeMenuLineLayerData(
     rows = [template];
   }
 
+  const totalWidth = Math.max(MENU_LINE_MIN_TOTAL, layer.width || 500);
+  const ratios = normalizeColumnRatios(layer.columnRatios, layer.columns);
+  const leftWidth =
+    typeof layer.leftWidth === 'number' &&
+    Number.isFinite(layer.leftWidth) &&
+    layer.leftWidth > 0
+      ? Math.round(layer.leftWidth)
+      : Math.round(ratios.left * totalWidth);
+
   return {
     ...layer,
     leader: normalizeLeader(layer.leader),
-    columnRatios: normalizeColumnRatios(layer.columnRatios, layer.columns),
+    leftWidth,
+    columnRatios: ratios,
     rows,
     rowGap:
       typeof layer.rowGap === 'number' && Number.isFinite(layer.rowGap) && layer.rowGap >= 0
@@ -222,18 +235,25 @@ export function normalizeMenuLineRatios(columns: {
 
 export function createMenuLineLayer(x = 48, y = 120, totalWidth = 500): MenuLineLayer {
   const row = defaultRowTemplate();
+  const width = Math.max(MENU_LINE_MIN_TOTAL, totalWidth);
+  const leftWidth = Math.round(width * 0.48);
   return {
     id: `layer_${crypto.randomUUID().slice(0, 8)}`,
     type: 'menuLine',
     name: 'Línea de carta',
     x,
     y,
-    width: totalWidth,
+    width,
     height: 28,
     rotation: 0,
     zIndex: 1,
     leader: 'dots',
-    columnRatios: { left: 0.48, center: 0.32, right: 0.2 },
+    leftWidth,
+    columnRatios: {
+      left: leftWidth / width,
+      center: 0.32,
+      right: 0.2,
+    },
     rows: [row],
     rowGap: MENU_LINE_DEFAULT_ROW_GAP,
   };
@@ -433,6 +453,98 @@ function setGroupColumnRatios(group: Group, ratios: MenuLineColumnRatios): void 
   });
 }
 
+export function getMenuLineLeftWidth(group: Group): number {
+  const data = getLayerObjectData(group);
+  if (typeof data.menuLineLeftWidth === 'number' && data.menuLineLeftWidth > 0) {
+    return data.menuLineLeftWidth;
+  }
+  const total = Math.max(MENU_LINE_MIN_TOTAL, (group.width ?? 0) * (group.scaleX ?? 1));
+  return Math.round(getGroupColumnRatios(group).left * total);
+}
+
+export function setMenuLineLeftWidth(group: Group, leftWidth: number): void {
+  setLayerObjectData(group, {
+    menuLineLeftWidth: Math.max(MENU_LINE_MIN_LEFT, Math.round(leftWidth)),
+  });
+}
+
+function styleFromBox(box: Textbox): MenuLineColumnStyle {
+  return {
+    fontFamily: box.fontFamily ?? 'Arial',
+    fontSize: box.fontSize ?? 18,
+    color: typeof box.fill === 'string' ? box.fill : '#333333',
+    align: (box.textAlign as MenuLineColumnStyle['align']) ?? 'left',
+    fontWeight: String(box.fontWeight ?? 'normal'),
+    fontStyle: (box.fontStyle as string) || 'normal',
+  };
+}
+
+/** Mide el ancho intrínseco del texto (sin forzar wrap). */
+export function measureTextContentWidth(
+  text: string,
+  style: MenuLineColumnStyle,
+): number {
+  const sample = text.length > 0 ? text : '0';
+  const probe = new Textbox(sample, {
+    fontFamily: style.fontFamily,
+    fontSize: style.fontSize,
+    fontWeight: style.fontWeight ?? 'normal',
+    fontStyle:
+      style.fontStyle === 'italic' || style.fontStyle === 'oblique'
+        ? style.fontStyle
+        : 'normal',
+    width: 20_000,
+  });
+  probe.initDimensions();
+  return Math.max(8, Math.ceil(probe.calcTextWidth()) + 2);
+}
+
+export interface MenuLineComputedWidths {
+  total: number;
+  left: number;
+  center: number;
+  right: number;
+}
+
+/** Precio al contenido; plato con ancho preferido; centro = resto. */
+export function computeMenuLineWidths(
+  totalWidth: number,
+  preferredLeftWidth: number,
+  rightContentWidth: number,
+): MenuLineComputedWidths {
+  const total = Math.max(MENU_LINE_MIN_TOTAL, totalWidth);
+  const right = Math.min(
+    Math.max(8, Math.ceil(rightContentWidth)),
+    Math.max(8, total - MENU_LINE_MIN_LEFT - MENU_LINE_MIN_CENTER),
+  );
+  const maxLeft = Math.max(MENU_LINE_MIN_LEFT, total - right - MENU_LINE_MIN_CENTER);
+  const left = Math.min(
+    Math.max(MENU_LINE_MIN_LEFT, Math.round(preferredLeftWidth)),
+    maxLeft,
+  );
+  const center = Math.max(MENU_LINE_MIN_CENTER, total - left - right);
+  return { total, left, center, right };
+}
+
+function measureMaxRightWidthFromGroup(group: Group): number {
+  const rowCount = getMenuLineRowCount(group);
+  let maxW = 8;
+  for (let r = 0; r < rowCount; r++) {
+    const rightBox = getMenuLineColumn(group, 'right', r);
+    if (!rightBox) continue;
+    maxW = Math.max(maxW, measureTextContentWidth(rightBox.text ?? '', styleFromBox(rightBox)));
+  }
+  return maxW;
+}
+
+function measureMaxRightWidthFromRows(rows: MenuLineRow[]): number {
+  let maxW = 8;
+  for (const row of rows) {
+    maxW = Math.max(maxW, measureTextContentWidth(row.right.content, row.right.style));
+  }
+  return maxW;
+}
+
 function getRowLeader(group: Group, rowIndex: number): MenuLineLeader {
   const center = getMenuLineColumn(group, 'center', rowIndex);
   if (center) {
@@ -442,22 +554,35 @@ function getRowLeader(group: Group, rowIndex: number): MenuLineLeader {
   return getMenuLineLeader(group);
 }
 
+function applyFixedLayout(group: Group): void {
+  try {
+    group.layoutManager = new LayoutManager(new FixedLayout());
+  } catch {
+    /* ignore */
+  }
+}
+
 /**
- * Recoloca todas las filas con proporciones compartidas y regenera separadores.
+ * Contenedor W (sin escalar tipografía): plato fijo, precio al texto, centro rellena.
  */
 export function layoutMenuLineGroup(group: Group): void {
   if (!isMenuLineGroup(group)) return;
 
   const scaleX = group.scaleX ?? 1;
-  const totalWidth = Math.max(40, (group.width ?? 0) * scaleX);
-  const ratios = getGroupColumnRatios(group);
-  setGroupColumnRatios(group, ratios);
+  const totalWidth = Math.max(MENU_LINE_MIN_TOTAL, (group.width ?? 0) * scaleX);
+  const preferredLeft = getMenuLineLeftWidth(group);
+  const widths = computeMenuLineWidths(
+    totalWidth,
+    preferredLeft,
+    measureMaxRightWidthFromGroup(group),
+  );
 
-  const widths = {
-    left: totalWidth * ratios.left,
-    center: totalWidth * ratios.center,
-    right: totalWidth * ratios.right,
-  };
+  setMenuLineLeftWidth(group, widths.left);
+  setGroupColumnRatios(group, {
+    left: widths.left / widths.total,
+    center: widths.center / widths.total,
+    right: widths.right / widths.total,
+  });
 
   const rowCount = getMenuLineRowCount(group);
   const rowGap = getMenuLineRowGap(group);
@@ -474,14 +599,7 @@ export function layoutMenuLineGroup(group: Group): void {
 
     const leader = getRowLeader(group, r);
     if (leader !== 'custom') {
-      const style: MenuLineColumnStyle = {
-        fontFamily: centerBox.fontFamily ?? 'Arial',
-        fontSize: centerBox.fontSize ?? 16,
-        color: typeof centerBox.fill === 'string' ? centerBox.fill : '#888888',
-        align: (centerBox.textAlign as MenuLineColumnStyle['align']) ?? 'center',
-        fontWeight: String(centerBox.fontWeight ?? 'normal'),
-        fontStyle: (centerBox.fontStyle as string) || 'normal',
-      };
+      const style = styleFromBox(centerBox);
       centerBox.set({
         text: buildLeaderContent(leader, widths.center, style, centerBox.text ?? ''),
       });
@@ -514,9 +632,9 @@ export function layoutMenuLineGroup(group: Group): void {
     const rowH = rowHeights[r] ?? 1;
     const top = yCursor;
 
-    leftBox.set({ left: -totalWidth / 2, top });
-    centerBox.set({ left: -totalWidth / 2 + widths.left, top });
-    rightBox.set({ left: -totalWidth / 2 + widths.left + widths.center, top });
+    leftBox.set({ left: -widths.total / 2, top });
+    centerBox.set({ left: -widths.total / 2 + widths.left, top });
+    rightBox.set({ left: -widths.total / 2 + widths.left + widths.center, top });
 
     for (const box of [leftBox, centerBox, rightBox]) {
       const h = box.height ?? rowH;
@@ -527,15 +645,24 @@ export function layoutMenuLineGroup(group: Group): void {
     yCursor += rowH + rowGap;
   }
 
+  const left = group.left ?? 0;
+  const topPos = group.top ?? 0;
+
+  applyFixedLayout(group);
   group.set({
     scaleX: 1,
     scaleY: 1,
-    width: totalWidth,
+    width: widths.total,
     height: Math.max(1, totalHeight),
+    left,
+    top: topPos,
     perPixelTargetFind: false,
     subTargetCheck: false,
     interactive: false,
-    padding: 4,
+    lockScalingY: true,
+    lockSkewingX: true,
+    lockSkewingY: true,
+    padding: 2,
   });
   syncMenuLineChildInteraction(group);
   group.setCoords();
@@ -546,12 +673,11 @@ function createBoxesForLayer(
   layer: ReturnType<typeof normalizeMenuLineLayerData>,
   totalWidth: number,
 ): Textbox[] {
-  const ratios = layer.columnRatios;
-  const widths = {
-    left: totalWidth * ratios.left,
-    center: totalWidth * ratios.center,
-    right: totalWidth * ratios.right,
-  };
+  const widths = computeMenuLineWidths(
+    totalWidth,
+    layer.leftWidth ?? totalWidth * 0.48,
+    measureMaxRightWidthFromRows(layer.rows),
+  );
   const boxes: Textbox[] = [];
 
   layer.rows.forEach((row, rowIndex) => {
@@ -580,7 +706,7 @@ function createBoxesForLayer(
 
 export function menuLineLayerToGroup(layer: MenuLineLayer): Group {
   const normalized = normalizeMenuLineLayerData(layer);
-  const totalWidth = Math.max(40, layer.width || 500);
+  const totalWidth = Math.max(MENU_LINE_MIN_TOTAL, layer.width || 500);
   const boxes = createBoxesForLayer(normalized, totalWidth);
 
   const group = new Group(boxes, {
@@ -588,17 +714,21 @@ export function menuLineLayerToGroup(layer: MenuLineLayer): Group {
     originY: 'top',
     left: layer.x,
     top: layer.y,
+    width: totalWidth,
     angle: layer.rotation ?? 0,
     opacity: layer.opacity ?? 1,
     visible: layer.visible !== false,
     selectable: layer.locked !== true,
     evented: layer.locked !== true,
-    // Sin sub-targets: un clic en cualquier zona del bloque selecciona el grupo.
     subTargetCheck: false,
     interactive: false,
     objectCaching: false,
     perPixelTargetFind: false,
-    padding: 4,
+    lockScalingY: true,
+    lockSkewingX: true,
+    lockSkewingY: true,
+    padding: 2,
+    layoutManager: new LayoutManager(new FixedLayout()),
   });
 
   setLayerObjectData(group, {
@@ -608,22 +738,30 @@ export function menuLineLayerToGroup(layer: MenuLineLayer): Group {
     locked: layer.locked === true,
     menuLineLeader: normalized.leader,
     menuLineRowGap: normalized.rowGap ?? MENU_LINE_DEFAULT_ROW_GAP,
+    menuLineLeftWidth: normalized.leftWidth,
     menuLineRatioLeft: normalized.columnRatios.left,
     menuLineRatioCenter: normalized.columnRatios.center,
     menuLineRatioRight: normalized.columnRatios.right,
   });
 
   layoutMenuLineGroup(group);
-  group.set({ left: layer.x, top: layer.y });
+  group.set({ left: layer.x, top: layer.y, width: totalWidth });
   group.setCoords();
   return group;
 }
 
 export function menuLineGroupToLayer(group: Group, zIndex: number): MenuLineLayer | null {
   if (!isMenuLineGroup(group)) return null;
+
+  // Consolida scale→ancho si el usuario acaba de estirar el contenedor.
+  if ((group.scaleX ?? 1) !== 1 || (group.scaleY ?? 1) !== 1) {
+    layoutMenuLineGroup(group);
+  }
+
   const data = getLayerObjectData(group);
   const rowCount = getMenuLineRowCount(group);
   const ratios = getGroupColumnRatios(group);
+  const leftWidth = getMenuLineLeftWidth(group);
   const rows: MenuLineRow[] = [];
 
   for (let r = 0; r < rowCount; r++) {
@@ -647,8 +785,8 @@ export function menuLineGroupToLayer(group: Group, zIndex: number): MenuLineLaye
 
   if (rows.length === 0) return null;
 
-  const scaleX = group.scaleX ?? 1;
-  const scaleY = group.scaleY ?? 1;
+  const width = Math.max(MENU_LINE_MIN_TOTAL, (group.width ?? 0) * (group.scaleX ?? 1));
+  const height = Math.max(1, (group.height ?? 0) * (group.scaleY ?? 1));
 
   return {
     id: data.layerId ?? `layer_${crypto.randomUUID().slice(0, 8)}`,
@@ -656,14 +794,15 @@ export function menuLineGroupToLayer(group: Group, zIndex: number): MenuLineLaye
     name: data.layerName?.trim() || 'Línea de carta',
     x: group.left ?? 0,
     y: group.top ?? 0,
-    width: Math.max(40, (group.width ?? 0) * scaleX),
-    height: Math.max(1, (group.height ?? 0) * scaleY),
+    width,
+    height,
     rotation: group.angle ?? 0,
     zIndex,
     visible: group.visible !== false,
     locked: typeof data.locked === 'boolean' ? data.locked : group.selectable === false,
     opacity: group.opacity ?? 1,
     leader: getMenuLineLeader(group),
+    leftWidth,
     columnRatios: ratios,
     rows,
     rowGap: getMenuLineRowGap(group),
@@ -691,11 +830,13 @@ function rebuildGroupFromLayer(group: Group, layer: MenuLineLayer): void {
     locked: layer.locked === true,
     menuLineLeader: normalized.leader,
     menuLineRowGap: normalized.rowGap ?? MENU_LINE_DEFAULT_ROW_GAP,
+    menuLineLeftWidth: normalized.leftWidth,
     menuLineRatioLeft: normalized.columnRatios.left,
     menuLineRatioCenter: normalized.columnRatios.center,
     menuLineRatioRight: normalized.columnRatios.right,
   });
 
+  applyFixedLayout(group);
   group.set({ left, top, angle, opacity, scaleX: 1, scaleY: 1, width: totalWidth });
   layoutMenuLineGroup(group);
   group.set({ left, top });
@@ -788,12 +929,17 @@ export function updateMenuLineColumnRatio(
   key: MenuLineColumnKey,
   ratio: number,
 ): void {
-  const current = getGroupColumnRatios(group);
-  const next = normalizeColumnRatios({
-    ...current,
-    [key]: normalizeRatio(ratio, current[key]),
-  });
-  setGroupColumnRatios(group, next);
+  // Solo la columna plato es configurable; precio y centro son automáticos.
+  if (key !== 'left') return;
+  const total = Math.max(MENU_LINE_MIN_TOTAL, (group.width ?? 0) * (group.scaleX ?? 1));
+  const leftWidth = Math.round(normalizeRatio(ratio, 0.48) * total);
+  setMenuLineLeftWidth(group, leftWidth);
+  layoutMenuLineGroup(group);
+}
+
+/** Ajusta el ancho de la columna plato en px de diseño. */
+export function updateMenuLineLeftWidth(group: Group, leftWidthPx: number): void {
+  setMenuLineLeftWidth(group, leftWidthPx);
   layoutMenuLineGroup(group);
 }
 
@@ -814,10 +960,10 @@ export function findMenuLineCellAtPoint(
   const bounds = group.getBoundingRect();
   const relX = sceneX - bounds.left;
   const relY = sceneY - bounds.top;
-  const ratios = getGroupColumnRatios(group);
-  const w = Math.max(1, bounds.width);
-  const leftW = w * ratios.left;
-  const centerW = w * ratios.center;
+  const total = Math.max(1, bounds.width);
+  const leftW = (getMenuLineColumn(group, 'left', 0)?.width ?? total * 0.48) * (group.scaleX ?? 1);
+  const centerW =
+    (getMenuLineColumn(group, 'center', 0)?.width ?? total * 0.3) * (group.scaleX ?? 1);
 
   let key: MenuLineColumnKey = 'right';
   if (relX < leftW) key = 'left';
@@ -827,13 +973,13 @@ export function findMenuLineCellAtPoint(
   const rowGap = getMenuLineRowGap(group);
   let y = 0;
   for (let r = 0; r < rowCount; r++) {
-    const leftBox = getMenuLineColumn(group, 'left', r);
-    const h = Math.max(
-      leftBox?.height ?? 0,
-      getMenuLineColumn(group, 'center', r)?.height ?? 0,
-      getMenuLineColumn(group, 'right', r)?.height ?? 0,
-      1,
-    ) * (group.scaleY ?? 1);
+    const h =
+      Math.max(
+        getMenuLineColumn(group, 'left', r)?.height ?? 0,
+        getMenuLineColumn(group, 'center', r)?.height ?? 0,
+        getMenuLineColumn(group, 'right', r)?.height ?? 0,
+        1,
+      ) * (group.scaleY ?? 1);
     if (relY >= y && relY <= y + h + (r < rowCount - 1 ? rowGap : 0)) {
       return { rowIndex: r, key };
     }
