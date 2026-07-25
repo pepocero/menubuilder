@@ -178,12 +178,13 @@ export function parseMenuTextBlocks(raw: string): PairedMenuTextRow[] {
 
     let ingredients: string | undefined;
     // Ingredientes solo si la siguiente línea de contenido es inmediata (sin blancos).
+    const nextToken = tokens[i];
     if (
       current.hasPrice &&
-      i < tokens.length &&
-      tokens[i].kind === 'content'
+      nextToken &&
+      nextToken.kind === 'content'
     ) {
-      const next = tokens[i].line;
+      const next = nextToken.line;
       if (!next.hasPrice && looksLikeIngredients(next.left)) {
         ingredients = next.left.replace(/,+\s*$/, '').trim();
         i += 1;
