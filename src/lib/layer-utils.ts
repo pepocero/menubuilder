@@ -13,6 +13,8 @@ export interface LayerObjectData {
   menuLineWidthRatio?: number;
   menuLineRowIndex?: number;
   menuLineRowGap?: number;
+  /** Saltos de línea extra tras esta fila (en la celda left). */
+  menuLineBlankLinesAfter?: number;
   /** Ancho fijo columna plato (px). */
   menuLineLeftWidth?: number;
   menuLineRatioLeft?: number;

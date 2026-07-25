@@ -5,6 +5,7 @@ import { FontFamilyPicker } from '@/components/editor/FontFamilyPicker';
 import { getLayerObjectData } from '@/lib/layer-utils';
 import {
   addMenuLineRow,
+  getMenuLineBlankLinesAfter,
   getMenuLineColumn,
   getMenuLineLeader,
   getMenuLineLeftWidth,
@@ -12,8 +13,10 @@ import {
   getMenuLineRowGap,
   MENU_LINE_COLUMN_KEYS,
   MENU_LINE_LEADER_OPTIONS,
+  MENU_LINE_MAX_BLANK_LINES,
   menuLineColumnLabel,
   removeMenuLineRow,
+  updateMenuLineBlankLinesAfter,
   updateMenuLineColumnContent,
   updateMenuLineColumnRatio,
   updateMenuLineColumnStyle,
@@ -142,13 +145,21 @@ export function MenuLineProperties({ group, onUpdate }: MenuLinePropertiesProps)
     ? null
     : getMenuLineColumn(group, 'ingredients', rowIndex);
   const ingredientsText = ingredientsBox?.text ?? '';
+  const blankLinesInfo = sharedStyleValue(
+    Array.from({ length: rowCount }, (_, i) => getMenuLineBlankLinesAfter(group, i)),
+    0,
+  );
+  const blankLinesAfter = applyAll
+    ? blankLinesInfo.value
+    : getMenuLineBlankLinesAfter(group, rowIndex);
 
   return (
     <div className="menu-line-properties">
       <p className="panel-hint">
         El ancho del bloque se cambia con las asas del lienzo (solo el contenedor). Plato: ancho
         fijo. Precio: al contenido. Separador: rellena el resto. Ingredientes (opcional) debajo a
-        ancho completo. «Todas» aplica formato a una columna en todas las filas.
+        ancho completo. Los saltos de línea van después del plato (y de sus ingredientes). «Todas»
+        aplica formato a una columna en todas las filas.
       </p>
 
       <div className="menu-line-row-controls">
@@ -290,6 +301,35 @@ export function MenuLineProperties({ group, onUpdate }: MenuLinePropertiesProps)
             }}
           />
         </label>
+      )}
+
+      <label>
+        Saltos después {applyAll ? '(todas las filas)' : `de la fila ${rowIndex + 1}`}
+        {applyAll && blankLinesInfo.mixed ? ' (varios)' : ''}
+        <input
+          type="number"
+          min={0}
+          max={MENU_LINE_MAX_BLANK_LINES}
+          step={1}
+          value={blankLinesAfter}
+          title="Líneas en blanco tras el plato (y sus ingredientes), antes del siguiente"
+          onChange={(e) => {
+            const next = Number(e.target.value);
+            if (!Number.isFinite(next)) return;
+            updateMenuLineBlankLinesAfter(
+              group,
+              applyAll ? 'all' : rowIndex,
+              next,
+            );
+            refresh();
+          }}
+        />
+      </label>
+      {applyAll && blankLinesInfo.mixed && (
+        <p className="panel-hint">
+          Había saltos distintos por fila; el valor mostrado es el de la primera. Al cambiarlo se
+          aplica a todas.
+        </p>
       )}
 
       {activeColumn === 'left' ? (

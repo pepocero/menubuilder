@@ -3,6 +3,7 @@ import { isTextObject } from '@/lib/canvas-serializer';
 import { getLayerObjectData, setLayerObjectData } from '@/lib/layer-utils';
 import {
   MENU_LINE_DEFAULT_ROW_GAP,
+  MENU_LINE_MAX_BLANK_LINES,
   MENU_LINE_MIN_TOTAL,
   measureTextContentWidth,
   menuLineLayerToGroup,
@@ -138,6 +139,73 @@ export function pairMenuTextLines(
   return out;
 }
 
+type MenuTextToken =
+  | { kind: 'blank' }
+  | { kind: 'content'; line: ParsedMenuTextLine };
+
+export type PairedMenuTextRow = ParsedMenuTextLine & {
+  ingredients?: string;
+  /** Líneas en blanco tras el plato (e ingredientes), antes del siguiente. */
+  blankLinesAfter: number;
+};
+
+/**
+ * Parsea el texto completo conservando líneas en blanco entre platos.
+ * Los saltos van después del bloque plato (+ ingredientes si están pegados debajo).
+ */
+export function parseMenuTextBlocks(raw: string): PairedMenuTextRow[] {
+  const lines = raw.replace(/\r\n/g, '\n').replace(/\r/g, '\n').split('\n');
+  const tokens: MenuTextToken[] = lines.map((rawLine) => {
+    if (!rawLine.replace(/\u00a0/g, ' ').trim()) return { kind: 'blank' };
+    const line = parseMenuTextLine(rawLine);
+    if (!line) return { kind: 'blank' };
+    return { kind: 'content', line };
+  });
+
+  const out: PairedMenuTextRow[] = [];
+  let i = 0;
+  while (i < tokens.length && tokens[i].kind === 'blank') i += 1;
+
+  while (i < tokens.length) {
+    const token = tokens[i];
+    if (token.kind === 'blank') {
+      i += 1;
+      continue;
+    }
+
+    const current = token.line;
+    i += 1;
+
+    let ingredients: string | undefined;
+    // Ingredientes solo si la siguiente línea de contenido es inmediata (sin blancos).
+    if (
+      current.hasPrice &&
+      i < tokens.length &&
+      tokens[i].kind === 'content'
+    ) {
+      const next = tokens[i].line;
+      if (!next.hasPrice && looksLikeIngredients(next.left)) {
+        ingredients = next.left.replace(/,+\s*$/, '').trim();
+        i += 1;
+      }
+    }
+
+    let blankLinesAfter = 0;
+    while (i < tokens.length && tokens[i].kind === 'blank') {
+      blankLinesAfter += 1;
+      i += 1;
+    }
+
+    out.push({
+      ...current,
+      ...(ingredients ? { ingredients } : {}),
+      blankLinesAfter: Math.min(MENU_LINE_MAX_BLANK_LINES, blankLinesAfter),
+    });
+  }
+
+  return out;
+}
+
 /** ¿La selección activa es un único texto convertible? */
 export function canConvertTextToMenuLine(canvas: Canvas | null): boolean {
   if (!canvas) return false;
@@ -155,14 +223,9 @@ export function canConvertTextToMenuLine(canvas: Canvas | null): boolean {
  */
 export function buildMenuLineLayerFromTextbox(text: Textbox): MenuLineLayer | null {
   const raw = (text.text ?? '').replace(/\r\n/g, '\n').replace(/\r/g, '\n');
-  const lines = raw.split('\n');
-  const parsed = lines
-    .map((line) => parseMenuTextLine(line))
-    .filter((p): p is ParsedMenuTextLine => !!p);
+  const paired = parseMenuTextBlocks(raw);
 
-  if (parsed.length === 0) return null;
-
-  const paired = pairMenuTextLines(parsed);
+  if (paired.length === 0) return null;
 
   const base = styleFromTextbox(text);
   const leftStyle: MenuLineColumnStyle = { ...base, align: 'left' };
@@ -200,6 +263,9 @@ export function buildMenuLineLayerFromTextbox(text: Textbox): MenuLineLayer | nu
         content: p.ingredients,
         style: { ...ingredientsStyle },
       };
+    }
+    if (p.blankLinesAfter > 0) {
+      row.blankLinesAfter = p.blankLinesAfter;
     }
     return row;
   });

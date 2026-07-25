@@ -477,7 +477,7 @@ export function EditorPage() {
       event.preventDefault();
       setZoom((current) => {
         const delta = event.deltaY > 0 ? -10 : 10;
-        return Math.min(200, Math.max(25, current + delta));
+        return Math.min(250, Math.max(25, current + delta));
       });
     };
 
@@ -1489,7 +1489,7 @@ export function EditorPage() {
   }
 
   function handleZoomIn() {
-    setZoom((z) => Math.min(200, z + 10));
+    setZoom((z) => Math.min(250, z + 10));
   }
 
   function handleZoomOut() {
@@ -1507,7 +1507,7 @@ export function EditorPage() {
       return;
     }
     const available = area.clientWidth - 48;
-    const fit = Math.min(200, Math.max(25, Math.round((available / 595) * 100)));
+    const fit = Math.min(250, Math.max(25, Math.round((available / 595) * 100)));
     setZoom(fit);
   }
 

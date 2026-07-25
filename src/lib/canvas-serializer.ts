@@ -653,7 +653,7 @@ export function applyCanvasZoom(
   const height = pageHeight && pageHeight > 0 ? pageHeight : logical.height;
   setCanvasLogicalSize(canvas, width, height);
 
-  const zoom = Math.max(0.25, Math.min(2, zoomPercent / 100));
+  const zoom = Math.max(0.25, Math.min(2.5, zoomPercent / 100));
   canvas.setZoom(zoom);
   canvas.setDimensions({
     width: width * zoom,

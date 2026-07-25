@@ -1,4 +1,5 @@
 import type { CanvasInteractionMode } from '@/components/editor/EditorZoomControls';
+import { MenuLineConvertIcon } from '@/components/editor/MenuLineToolIcons';
 
 export interface UploadProgressState {
   phase: 'compress' | 'upload' | 'place' | 'ocr' | 'import';
@@ -180,8 +181,21 @@ export function Toolbar({
         <button type="button" onClick={onAddText} title="Texto">
           T
         </button>
-        <button type="button" onClick={onAddMenuLine} title="Línea de carta (plato ··· precio)">
-          ··€
+        <button
+          type="button"
+          className="toolbar-icon-btn toolbar-icon-btn--menu-line"
+          onClick={onAddMenuLine}
+          title="Línea de carta (plato ··· precio)"
+          aria-label="Añadir línea de carta"
+        >
+          <img
+            src="/menuico.png"
+            alt=""
+            className="toolbar-menu-line-icon"
+            width={24}
+            height={24}
+            draggable={false}
+          />
         </button>
         <button type="button" onClick={onAddRect} title="Rectángulo">
           ▭
@@ -202,11 +216,13 @@ export function Toolbar({
         </button>
         <button
           type="button"
+          className="toolbar-icon-btn"
           onClick={onConvertTextToMenuLine}
           disabled={!canConvertTextToMenuLine}
           title="Convertir el texto seleccionado en línea de carta (plato ··· precio por cada fila)"
+          aria-label="Convertir texto a línea de carta"
         >
-          →··€
+          <MenuLineConvertIcon />
         </button>
       </div>
 

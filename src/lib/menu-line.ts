@@ -16,6 +16,8 @@ export const MENU_LINE_DEFAULT_ROW_GAP = 6;
 export const MENU_LINE_MIN_CENTER = 12;
 export const MENU_LINE_MIN_LEFT = 40;
 export const MENU_LINE_MIN_TOTAL = 80;
+/** Máximo de saltos de línea extra entre filas. */
+export const MENU_LINE_MAX_BLANK_LINES = 12;
 
 export const MENU_LINE_LEADER_OPTIONS: ReadonlyArray<{
   value: MenuLineLeader;
@@ -200,6 +202,8 @@ export function normalizeMenuLineLayerData(
         const ing = normalizeCell(row.ingredients, ingFallback);
         if (ing.content.trim()) base.ingredients = ing;
       }
+      const blanks = normalizeBlankLinesAfter(row?.blankLinesAfter);
+      if (blanks > 0) base.blankLinesAfter = blanks;
       return base;
     });
   } else if (layer.columns) {
@@ -384,6 +388,33 @@ function readCellFromBox(box: Textbox): MenuLineCell {
   };
 }
 
+function normalizeBlankLinesAfter(value: unknown): number {
+  if (typeof value !== 'number' || !Number.isFinite(value)) return 0;
+  return Math.max(0, Math.min(MENU_LINE_MAX_BLANK_LINES, Math.round(value)));
+}
+
+/** Altura aproximada de un salto de línea (según tipografía del plato). */
+function blankLineHeightPx(fontSize: number): number {
+  return Math.max(8, Math.round(Math.max(8, fontSize) * 1.25));
+}
+
+export function getMenuLineBlankLinesAfter(group: Group, rowIndex: number): number {
+  const left = getMenuLineColumn(group, 'left', rowIndex);
+  if (!left) return 0;
+  return normalizeBlankLinesAfter(getLayerObjectData(left).menuLineBlankLinesAfter);
+}
+
+export function setMenuLineBlankLinesAfter(
+  group: Group,
+  rowIndex: number,
+  blankLines: number,
+): void {
+  const left = getMenuLineColumn(group, 'left', rowIndex);
+  if (!left) return;
+  const next = normalizeBlankLinesAfter(blankLines);
+  setLayerObjectData(left, { menuLineBlankLinesAfter: next });
+}
+
 function createCellTextbox(
   key: MenuLineColumnKey,
   rowIndex: number,
@@ -391,6 +422,7 @@ function createCellTextbox(
   width: number,
   content: string,
   rowLeader?: MenuLineLeader,
+  blankLinesAfter = 0,
 ): Textbox {
   const box = new Textbox(content, {
     originX: 'left',
@@ -420,6 +452,9 @@ function createCellTextbox(
     menuLineRole: key,
     menuLineRowIndex: rowIndex,
     ...(key === 'center' && rowLeader ? { menuLineLeader: rowLeader } : {}),
+    ...(key === 'left'
+      ? { menuLineBlankLinesAfter: normalizeBlankLinesAfter(blankLinesAfter) }
+      : {}),
   });
   return box;
 }
@@ -698,7 +733,11 @@ export function layoutMenuLineGroup(group: Group): void {
     totalHeight += dishHeights[r] ?? 0;
     const ingH = ingredientHeights[r] ?? 0;
     if (ingH > 0) totalHeight += MENU_LINE_INGREDIENTS_GAP + ingH;
-    if (r < rowCount - 1) totalHeight += rowGap;
+    const leftBox = getMenuLineColumn(group, 'left', r);
+    const blanks = getMenuLineBlankLinesAfter(group, r);
+    const blankPx = blanks * blankLineHeightPx(leftBox?.fontSize ?? 18);
+    if (r < rowCount - 1) totalHeight += rowGap + blankPx;
+    else totalHeight += blankPx;
   }
   let yCursor = -totalHeight / 2;
 
@@ -743,7 +782,10 @@ export function layoutMenuLineGroup(group: Group): void {
       ingredientsBox.setCoords();
     }
 
-    if (r < rowCount - 1) yCursor += rowGap;
+    const blanks = getMenuLineBlankLinesAfter(group, r);
+    const blankPx = blanks * blankLineHeightPx(leftBox.fontSize ?? 18);
+    if (r < rowCount - 1) yCursor += rowGap + blankPx;
+    else yCursor += blankPx;
   }
 
   const left = group.left ?? 0;
@@ -789,7 +831,15 @@ function createBoxesForLayer(
         : buildLeaderContent(rowLeader, widths.center, row.center.style, row.center.content);
 
     boxes.push(
-      createCellTextbox('left', rowIndex, row.left, widths.left, row.left.content),
+      createCellTextbox(
+        'left',
+        rowIndex,
+        row.left,
+        widths.left,
+        row.left.content,
+        undefined,
+        row.blankLinesAfter ?? 0,
+      ),
       createCellTextbox(
         'center',
         rowIndex,
@@ -889,12 +939,15 @@ export function menuLineGroupToLayer(group: Group, zIndex: number): MenuLineLaye
         ? readCellFromBox(ingredientsBox)
         : undefined;
 
+    const blankLinesAfter = getMenuLineBlankLinesAfter(group, r);
+
     rows.push({
       left: readCellFromBox(leftBox),
       center: readCellFromBox(centerBox),
       right: readCellFromBox(rightBox),
       ...(rowLeader ? { leader: rowLeader } : {}),
       ...(ingredients ? { ingredients } : {}),
+      ...(blankLinesAfter > 0 ? { blankLinesAfter } : {}),
     });
   }
 
@@ -1131,6 +1184,23 @@ export function updateMenuLineRowGap(group: Group, gap: number): void {
   layoutMenuLineGroup(group);
 }
 
+/** Saltos de línea extra tras una fila (después de ingredientes si existen). */
+export function updateMenuLineBlankLinesAfter(
+  group: Group,
+  rowIndex: number | 'all',
+  blankLines: number,
+): void {
+  if (rowIndex === 'all') {
+    const count = getMenuLineRowCount(group);
+    for (let r = 0; r < count; r++) {
+      setMenuLineBlankLinesAfter(group, r, blankLines);
+    }
+  } else {
+    setMenuLineBlankLinesAfter(group, rowIndex, blankLines);
+  }
+  layoutMenuLineGroup(group);
+}
+
 export function finalizeMenuLineTransform(group: Group): void {
   layoutMenuLineGroup(group);
 }
@@ -1156,9 +1226,10 @@ export function findMenuLineCellAtPoint(
   const rowGap = getMenuLineRowGap(group);
   let y = 0;
   for (let r = 0; r < rowCount; r++) {
+    const leftBox = getMenuLineColumn(group, 'left', r);
     const dishH =
       Math.max(
-        getMenuLineColumn(group, 'left', r)?.height ?? 0,
+        leftBox?.height ?? 0,
         getMenuLineColumn(group, 'center', r)?.height ?? 0,
         getMenuLineColumn(group, 'right', r)?.height ?? 0,
         1,
@@ -1169,12 +1240,14 @@ export function findMenuLineCellAtPoint(
       ingBox && ingText && ingBox.visible !== false
         ? (ingBox.height ?? 0) * (group.scaleY ?? 1) + MENU_LINE_INGREDIENTS_GAP
         : 0;
-    const blockH = dishH + ingH;
-    const gapAfter = r < rowCount - 1 ? rowGap : 0;
-    if (relY >= y && relY <= y + blockH + gapAfter) {
+    const blanks = getMenuLineBlankLinesAfter(group, r);
+    const blankPx =
+      blanks * blankLineHeightPx(leftBox?.fontSize ?? 18) * (group.scaleY ?? 1);
+    const blockH = dishH + ingH + blankPx + (r < rowCount - 1 ? rowGap : 0);
+    if (relY >= y && relY <= y + blockH) {
       return { rowIndex: r, key };
     }
-    y += blockH + gapAfter;
+    y += blockH;
   }
 
   if (rowCount > 0) return { rowIndex: rowCount - 1, key };

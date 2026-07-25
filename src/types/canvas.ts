@@ -103,6 +103,11 @@ export interface MenuLineRow {
    * No ocupa columna de precio; se muestra a ancho completo bajo la fila.
    */
   ingredients?: MenuLineCell;
+  /**
+   * Saltos de línea extra después de esta fila (tras ingredientes si hay).
+   * Útil para separar platos o alargar el bloque hacia abajo.
+   */
+  blankLinesAfter?: number;
   /** Si falta, usa el leader del bloque. */
   leader?: MenuLineLeader;
 }
