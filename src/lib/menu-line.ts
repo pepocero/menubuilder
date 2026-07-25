@@ -349,12 +349,16 @@ export function normalizeLeaderUnit(raw: string | undefined | null): string {
   return chars[chars.length - 1] ?? '·';
 }
 
-function repeatLeaderUnit(
-  unitRaw: string,
+/**
+ * Repite un carácter (ya resuelto) hasta llenar el ancho de columna.
+ * No aplica normalización de símbolo personalizado.
+ */
+function repeatLeaderChar(
+  ch: string,
   columnWidth: number,
   style: MenuLineColumnStyle,
 ): string {
-  const ch = normalizeLeaderUnit(unitRaw);
+  if (!ch) return '';
   const probe = new Textbox(ch.repeat(20), {
     fontFamily: style.fontFamily,
     fontSize: style.fontSize,
@@ -378,10 +382,12 @@ export function buildLeaderContent(
   style: MenuLineColumnStyle,
   customContent = '',
 ): string {
+  // Personalizado: normalizeLeaderUnit (vacío → ·). Predeterminados: carácter fijo
+  // sin esa normalización — si no, «Espacios» (NBSP) se convertía en ·.
   if (leader === 'custom') {
-    return repeatLeaderUnit(customContent, columnWidth, style);
+    return repeatLeaderChar(normalizeLeaderUnit(customContent), columnWidth, style);
   }
-  return repeatLeaderUnit(leaderChar(leader), columnWidth, style);
+  return repeatLeaderChar(leaderChar(leader), columnWidth, style);
 }
 
 export function getMenuLineLeaderUnit(group: Group, rowIndex = 0): string {
@@ -1255,7 +1261,11 @@ export function updateMenuLineLeader(
           menuLineLeaderUnit: unit,
         });
       } else {
-        setLayerObjectData(center, { menuLineLeader: leader });
+        // Predeterminados no usan menuLineLeaderUnit; limpiarlo evita interferencias.
+        setLayerObjectData(center, {
+          menuLineLeader: leader,
+          menuLineLeaderUnit: undefined,
+        });
       }
     }
   } else {
@@ -1274,7 +1284,10 @@ export function updateMenuLineLeader(
           menuLineLeaderUnit: unit,
         });
       } else {
-        setLayerObjectData(center, { menuLineLeader: leader });
+        setLayerObjectData(center, {
+          menuLineLeader: leader,
+          menuLineLeaderUnit: undefined,
+        });
       }
     }
   }
