@@ -16,6 +16,7 @@ import {
   isMenuLineGroup,
   findMenuLineCellAtPoint,
   beginMenuLineColumnEditing,
+  endMenuLineColumnEditing,
   layoutMenuLineGroup,
 } from '@/lib/menu-line';
 import { hydrateDesign } from '@/lib/canvas/render-design';
@@ -378,7 +379,7 @@ export const CanvasEditor = forwardRef<CanvasEditorHandle, CanvasEditorProps>(
           if (role === 'center') {
             setLayerObjectData(target, { menuLineLeader: 'custom' });
           }
-          layoutMenuLineGroup(parent);
+          endMenuLineColumnEditing(parent);
           emitChange();
           return;
         }

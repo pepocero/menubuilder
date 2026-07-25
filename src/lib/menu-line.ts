@@ -367,8 +367,11 @@ function createCellTextbox(
         : 'normal',
     editable: true,
     selectable: false,
-    evented: true,
+    // El grupo recibe los clics; si las celdas son evented, solo el glifo “cuenta”
+    // y hay que acertar el texto para seleccionar la línea.
+    evented: false,
     objectCaching: false,
+    perPixelTargetFind: false,
   });
   box.initDimensions();
   setLayerObjectData(box, {
@@ -377,6 +380,19 @@ function createCellTextbox(
     ...(key === 'center' && rowLeader ? { menuLineLeader: rowLeader } : {}),
   });
   return box;
+}
+
+/** Celdas no interceptan el ratón: se selecciona/mueve el bloque entero. */
+export function syncMenuLineChildInteraction(group: Group): void {
+  for (const child of group.getObjects()) {
+    if (!(child instanceof Textbox)) continue;
+    const editing = !!(child as Textbox & { isEditing?: boolean }).isEditing;
+    child.set({
+      selectable: false,
+      evented: editing,
+      perPixelTargetFind: false,
+    });
+  }
 }
 
 export function getMenuLineLeader(group: Group): MenuLineLeader {
@@ -516,7 +532,12 @@ export function layoutMenuLineGroup(group: Group): void {
     scaleY: 1,
     width: totalWidth,
     height: Math.max(1, totalHeight),
+    perPixelTargetFind: false,
+    subTargetCheck: false,
+    interactive: false,
+    padding: 4,
   });
+  syncMenuLineChildInteraction(group);
   group.setCoords();
   group.canvas?.requestRenderAll();
 }
@@ -572,9 +593,12 @@ export function menuLineLayerToGroup(layer: MenuLineLayer): Group {
     visible: layer.visible !== false,
     selectable: layer.locked !== true,
     evented: layer.locked !== true,
-    subTargetCheck: true,
-    interactive: true,
+    // Sin sub-targets: un clic en cualquier zona del bloque selecciona el grupo.
+    subTargetCheck: false,
+    interactive: false,
     objectCaching: false,
+    perPixelTargetFind: false,
+    padding: 4,
   });
 
   setLayerObjectData(group, {
@@ -839,15 +863,22 @@ export function beginMenuLineColumnEditing(
   if (!box) return false;
   try {
     canvas.setActiveObject(group);
-    box.set({ selectable: true, evented: true });
+    box.set({ selectable: false, evented: true, editable: true });
     if (typeof (box as Textbox & { enterEditing?: () => void }).enterEditing === 'function') {
       box.enterEditing();
       box.selectAll();
       canvas.requestRenderAll();
       return true;
     }
+    syncMenuLineChildInteraction(group);
   } catch {
-    /* panel como fallback */
+    syncMenuLineChildInteraction(group);
   }
   return false;
+}
+
+/** Tras salir de edición de una celda, vuelve a dejar el hit-test en el grupo. */
+export function endMenuLineColumnEditing(group: Group): void {
+  syncMenuLineChildInteraction(group);
+  layoutMenuLineGroup(group);
 }
