@@ -1407,6 +1407,17 @@ export function EditorPage() {
     scheduleSave();
   }
 
+  function handleReorderLayer(obj: FabricObject, fabricIndex: number) {
+    const canvas = getActiveCanvas();
+    if (!canvas) return;
+    const max = Math.max(0, canvas.getObjects().length - 1);
+    const index = Math.max(0, Math.min(max, fabricIndex));
+    canvas.moveObjectTo(obj, index);
+    canvas.requestRenderAll();
+    refreshObjects();
+    scheduleSave();
+  }
+
   function handleToggleVisibility(obj: FabricObject) {
     obj.set('visible', obj.visible === false);
     obj.canvas?.requestRenderAll();
@@ -1653,6 +1664,7 @@ export function EditorPage() {
             onMoveUp={handleMoveUp}
             onMoveDown={handleMoveDown}
             onSendToBack={handleSendToBack}
+            onReorder={handleReorderLayer}
             onToggleVisibility={handleToggleVisibility}
             onToggleLock={handleToggleLock}
             onRenameLayer={handleRenameLayer}

@@ -1938,7 +1938,7 @@ textarea {
   margin-bottom: 0.5rem;
   overflow: hidden;
   background: var(--color-surface);
-  transition: background 0.15s ease, border-color 0.15s ease;
+  transition: background 0.15s ease, border-color 0.15s ease, opacity 0.15s ease, box-shadow 0.15s ease;
 }
 
 .layer-item.active {
@@ -1957,15 +1957,66 @@ textarea {
   background: #f0f9ff;
 }
 
+.layer-item.is-dragging {
+  opacity: 0.45;
+}
+
+.layer-item.is-drop-target {
+  box-shadow: inset 0 2px 0 0 var(--color-primary);
+}
+
+.layer-item-main {
+  display: flex;
+  align-items: stretch;
+  gap: 0;
+}
+
+.layer-drag-handle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  width: 1.75rem;
+  padding: 0;
+  border: none;
+  border-right: 1px solid var(--color-border);
+  background: #f4f4f5;
+  color: #71717a;
+  cursor: grab;
+  touch-action: none;
+}
+
+.layer-drag-handle:active {
+  cursor: grabbing;
+}
+
+.layer-drag-handle:hover,
+.layer-item.active .layer-drag-handle {
+  color: #3f3f46;
+  background: #e4e4e7;
+}
+
+.layer-item.active .layer-drag-handle {
+  border-right-color: #bae6fd;
+  background: #e0f2fe;
+  color: #0369a1;
+}
+
 .layer-name {
   display: block;
-  width: 100%;
+  flex: 1;
+  min-width: 0;
   text-align: left;
   padding: 0.5rem;
   border: none;
   background: transparent;
   cursor: pointer;
   font-size: 0.85rem;
+}
+
+.layer-item-main .layer-rename-input {
+  flex: 1;
+  min-width: 0;
 }
 
 .layer-actions {

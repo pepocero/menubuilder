@@ -98,7 +98,7 @@ export function DocsPage() {
             <p>
               Cada elemento del lienzo es una capa. En el panel izquierdo puedes seleccionar,
               renombrar, bloquear, duplicar o eliminar. El orden de la lista controla qué queda
-              delante o detrás.
+              delante o detrás: arrastra el asa (⋮⋮) o usa ↑ / ↓.
             </p>
             <h3>Deshacer</h3>
             <p>
