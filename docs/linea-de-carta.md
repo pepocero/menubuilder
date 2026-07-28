@@ -90,7 +90,8 @@ El contenido del `Textbox` se normaliza (`\r\n` → `\n`) y se procesa **línea 
 
 `parseMenuTextLine` busca un **precio al final** de la línea:
 
-- Formatos reconocidos (ejemplos): `10,00 €`, `€10,00`, `$12.50`, `12€`.
+- Formatos reconocidos (ejemplos): `10,00 €`, `€10,00`, `$12.50`, `12€`, `12,50`.
+- **No** se considera precio un entero suelto sin moneda ni decimales (así `Ingrediente 3` no se confunde con un precio).
 - Separación entre nombre y precio:
   - espacios múltiples,
   - puntos / puntos líderes (`····`, `.....`),
@@ -121,14 +122,39 @@ Tras parsear, `parseMenuTextBlocks` aplica:
 3. Las **líneas en blanco** que siguen al bloque (plato ± ingredientes) → `blankLinesAfter`
    (espacio vertical extra antes del siguiente plato o al final del bloque).
 
-Una línea “parece ingredientes” si tiene **al menos dos** trozos separados por ` - `, ` – ` o ` — ` (guión con espacios):
+Una línea “parece ingredientes” si:
+
+- tiene **al menos dos** trozos en la **misma línea** separados por ` - ` / ` – ` / ` — `, comas `,` o punto y coma `;`, **o**
+- el OCR deja **varios ítems en líneas seguidas** (p. ej. `Pollo,` / `Nueces,` / `Legumbres`), sin línea en blanco hasta el siguiente plato.
+
+Al convertir, los ítems se **unen en una sola cadena** con el separador de la herramienta (` - `) y van **solo** al campo editable **Ingredientes** de esa fila. El nombre del plato queda en la columna **Plato**; los ingredientes **no** crean filas nuevas.
+
+Si el OCR inserta líneas en blanco entre el plato y cada ítem, también se emparejan (no hace falta que vayan pegados sin huecos).
 
 ```text
 Mozzarella - Tomàquet - Albérrega
 Bacó - Pernil dolç - Xorxíço - Xampinyons
+Ingrediente 1, Ingrediente 2, Ingrediente 3
+Tomate; Cebolla; Pimiento
 ```
 
-Ejemplo con separación entre platos:
+Ejemplo OCR multilínea:
+
+```text
+Pollo Tandori .............. 3,00 €
+Pollo,
+Nueces,
+Legumbres
+
+Gambas Tandori .............. 3,00 €
+Gamba,
+Ajo,
+Perejil
+```
+
+Resultado: **2 filas** de carta; ingredientes `Pollo - Nueces - Legumbres` y `Gamba - Ajo - Perejil` en el textbox **Ingredientes** de cada fila.
+
+Ejemplo con separación entre platos (una sola línea de ingredientes):
 
 ```text
 Margarida ................................................................ 10,00 €
@@ -195,9 +221,9 @@ En Fabric, cada celda es un `Textbox` hijo con `menuLineRole` (`left` | `center`
 
 ## Consejos prácticos
 
-1. **Pegar desde una carta:** mantén una línea por plato (nombre + puntos + precio) y la lista de ingredientes en la línea siguiente, con guiones entre ítems. Líneas vacías entre platos = más espacio vertical al convertir.
+1. **Pegar desde una carta:** mantén una línea por plato (nombre + puntos + precio). Los ingredientes pueden ir en la línea siguiente (guiones/comas/punto y coma) o en varias líneas OCR seguidas (`Pollo,` / `Nueces,`…). Al convertir se unifican con ` - `. Líneas vacías entre platos = más espacio vertical.
 2. **Títulos de sección** (p. ej. “Pizzes”) en una caja de texto aparte, o como fila sin precio si quieres que queden dentro del bloque.
-3. Tras convertir, revisa filas en propiedades: un falso positivo de ingredientes es raro si no hay ` - ` entre palabras. Ajusta **Saltos después** si hace falta más aire.
+3. Tras convertir, revisa el campo **Ingredientes** de cada fila: debe mostrar la lista editable en una sola línea. Ajusta **Saltos después** si hace falta más aire.
 4. Cartas ya publicadas con versiones antiguas de layout pueden necesitar **guardar y republicar** para verse bien en `/p/...`.
 5. **Exportar / importar JSON** incluye las líneas de carta (filas, precios, ingredientes, formato y saltos) en el `menu.json`.
 

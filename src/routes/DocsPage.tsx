@@ -218,10 +218,15 @@ Bacó - Pernil dolç - Xorxíço - Xampinyons`}
                 Precios reconocidos: <code>10,00 €</code>, <code>12€</code>, <code>$9.50</code>, etc.
               </li>
               <li>
-                <strong>Ingredientes</strong> (opcional) en la línea siguiente, separados por{' '}
-                <code> - </code>:
+                <strong>Ingredientes</strong> (opcional) justo debajo del plato+precio: en una
+                sola línea separados por <code> - </code>, comas o punto y coma, o en{' '}
+                <strong>varias líneas</strong> (OCR: <code>Pollo,</code> / <code>Nueces,</code>…).
+                Al convertir se unen en una línea con <code> - </code> y quedan en el campo
+                editable <strong>Ingredientes</strong>.
                 <br />
                 <code>Carn de pollastre - Ceba - Xampinyons - Mozzarella</code>
+                <br />
+                <code>Ingrediente 1, Ingrediente 2, Ingrediente 3</code>
               </li>
               <li>
                 <strong>Líneas en blanco</strong> entre platos se conservan como espacio extra
@@ -229,8 +234,9 @@ Bacó - Pernil dolç - Xorxíço - Xampinyons`}
               </li>
             </ul>
             <p className="docs-callout">
-              No hace falta marcar a mano qué son ingredientes: si la línea bajo un plato+precio
-              tiene varios ítems separados por guiones, se empareja sola.
+              No hace falta marcar a mano qué son ingredientes: si bajo un plato+precio hay una
+              lista (misma línea o varias líneas OCR con comas), se empareja sola y queda editable
+              en el campo Ingredientes.
             </p>
           </section>
 
@@ -384,10 +390,18 @@ Bacó - Pernil dolç - Xorxíço - Xampinyons`}
                 Debe haber exactamente una caja de texto seleccionada (no varias capas ni una celda
                 interna).
               </dd>
-              <dt>¿Los ingredientes no se detectan?</dt>
+              <dt>¿Los ingredientes salen en «Texto (Plato)» en vez de en «Ingredientes»?</dt>
               <dd>
-                Deben ir en la línea justo debajo del plato+precio, con ítems separados por{' '}
-                <code> - </code> (guión con espacios).
+                Vuelve a convertir el texto a línea de carta. El nombre del plato debe quedar en{' '}
+                <strong>Texto (Plato)</strong> y la lista en <strong>Ingredientes</strong> (una sola
+                línea con <code> - </code>). Si el OCR dejó blancos entre ítems, también se
+                emparejan.
+              </dd>
+              <dt>¿Los ingredientes no se detectan o salen en filas sueltas?</dt>
+              <dd>
+                Deben ir bajo el plato+precio. Vale una línea con <code> - </code>, comas o{' '}
+                <code>;</code>, o varias líneas tipo OCR. Tras convertir, edítalos en el campo{' '}
+                <strong>Ingredientes</strong> de esa fila (no en Plato).
               </dd>
               <dt>¿Quiero más aire entre platos?</dt>
               <dd>

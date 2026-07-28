@@ -15,14 +15,41 @@ import type {
   MenuLineRow,
 } from '@/types/canvas';
 
-/** Precio al final de línea (€ / $ / número con decimales). */
-const PRICE_AT_END =
-  /^(.*?)(?:\s{2,}|\s*[·.•…]+\s*|\s*[-–—.]{2,}\s*|\s+)((?:€\s*)?\d{1,6}(?:[.,]\d{1,2})?\s*€?|\$\s*\d{1,6}(?:[.,]\d{1,2})?)\s*$/u;
+/**
+ * Precio al final de línea.
+ * Exige €/$ o decimales (3,00 / 3.00) para no confundir «Ingrediente 3» con un precio.
+ */
+const PRICE_AMOUNT =
+  '(?:' +
+  // 3,00 € | 3.00€ | €3,00 | 3,00
+  '(?:€\\s*)?\\d{1,6}[.,]\\d{1,2}\\s*€?' +
+  '|' +
+  // 12 € | €12 (entero solo si lleva símbolo)
+  '€\\s*\\d{1,6}(?:[.,]\\d{1,2})?' +
+  '|' +
+  '\\d{1,6}(?:[.,]\\d{1,2})?\\s*€' +
+  '|' +
+  // $12.50 | 12.50$ | $12
+  '\\$\\s*\\d{1,6}(?:[.,]\\d{1,2})?' +
+  '|' +
+  '\\d{1,6}(?:[.,]\\d{1,2})?\\s*\\$' +
+  ')';
 
-const TRAILING_FILLER = /[\s·.•…\-–—.]{2,}$/u;
+const PRICE_AT_END = new RegExp(
+  `^(.*?)(?:\\s{2,}|\\s*[·.•…]+\\s*|\\s*[-–—.−‒‑]{2,}\\s*|\\s*[-–—.−‒‑]\\s*|\\s+)(${PRICE_AMOUNT})\\s*$`,
+  'u',
+);
 
-/** Separador típico entre ingredientes: "Mozzarella - Tomàquet - …". */
-const INGREDIENT_SEP = /\s+[-–—]\s+/;
+const TRAILING_FILLER = /[\s·.•…\-–—.−‒‑]{1,}$/u;
+
+/** Separador clásico: "Mozzarella - Tomàquet - …". */
+const INGREDIENT_SEP_DASH = /\s+[-–—]\s+/;
+/** Separadores frecuentes en OCR / cartas: comas o punto y coma. */
+const INGREDIENT_SEP_COMMA_SEMI = /\s*[,;]\s*/;
+const TRAILING_INGREDIENT_PUNCT = /[,;]+\s*$/;
+
+/** Separador canónico del campo «Ingredientes» en la herramienta. */
+export const INGREDIENTS_DISPLAY_SEP = ' - ';
 
 export interface ParsedMenuTextLine {
   left: string;
@@ -59,17 +86,183 @@ export function parseMenuTextLine(rawLine: string): ParsedMenuTextLine | null {
   };
 }
 
+/** Normaliza puntuación final típica de listas OCR. */
+export function normalizeIngredientsText(text: string): string {
+  return text.replace(/\u00a0/g, ' ').trim().replace(TRAILING_INGREDIENT_PUNCT, '').trim();
+}
+
 /**
- * Detecta líneas de ingredientes bajo un plato (sin precio, ítems separados por guiones).
- * No hace falta marcarlas a mano: se emparejan con la fila de plato+precio anterior.
+ * Trocea una línea de ingredientes por guiones, comas o punto y coma.
+ * Prioriza guiones con espacios; si no hay ≥2 trozos, prueba `,` / `;`.
+ */
+export function splitIngredientParts(text: string): string[] {
+  const t = normalizeIngredientsText(text);
+  if (!t) return [];
+
+  const dashParts = t.split(INGREDIENT_SEP_DASH).map((p) => p.trim()).filter(Boolean);
+  if (dashParts.length >= 2) return dashParts;
+
+  const commaParts = t.split(INGREDIENT_SEP_COMMA_SEMI).map((p) => p.trim()).filter(Boolean);
+  if (commaParts.length >= 2) return commaParts;
+
+  return [t];
+}
+
+/** Une ítems con el separador preestablecido de la herramienta (` - `). */
+export function formatIngredientsList(parts: string[]): string {
+  return parts
+    .map((p) => p.replace(/\u00a0/g, ' ').trim())
+    .filter(Boolean)
+    .join(INGREDIENTS_DISPLAY_SEP);
+}
+
+export function hasTrailingListPunct(text: string): boolean {
+  return /[,;]\s*$/.test(text.replace(/\u00a0/g, ' ').trim());
+}
+
+/**
+ * Detecta líneas de ingredientes en una sola línea (sin precio; ≥2 ítems
+ * separados por guiones, comas o punto y coma).
  */
 export function looksLikeIngredients(text: string): boolean {
-  const t = text.replace(/\u00a0/g, ' ').trim().replace(/,+\s*$/, '');
+  const t = normalizeIngredientsText(text);
   if (!t) return false;
-  // Si parece una línea con precio, no es lista de ingredientes.
   if (PRICE_AT_END.test(t)) return false;
-  const parts = t.split(INGREDIENT_SEP).map((p) => p.trim()).filter(Boolean);
-  return parts.length >= 2;
+  return splitIngredientParts(t).length >= 2;
+}
+
+/**
+ * Una línea puede formar parte de una lista de ingredientes (incl. ítems OCR
+ * sueltos con coma final, o el último ítem sin coma).
+ */
+export function isPlausibleIngredientLine(text: string): boolean {
+  const raw = text.replace(/\u00a0/g, ' ').trim();
+  if (!raw) return false;
+  if (PRICE_AT_END.test(raw)) return false;
+  if (looksLikeIngredients(raw)) return true;
+  if (hasTrailingListPunct(raw)) {
+    return normalizeIngredientsText(raw).length > 0;
+  }
+  const t = normalizeIngredientsText(raw);
+  if (!t || t.length > 60) return false;
+  // Evitar líneas con líderes tipográficos (parece plato, no ingrediente).
+  if (/[·•…]{2,}|\.{3,}/.test(t)) return false;
+  return true;
+}
+
+/** Título de sección típico (p. ej. ENTRANTES): no es lista de ingredientes. */
+export function looksLikeSectionTitle(text: string): boolean {
+  const t = text.replace(/\u00a0/g, ' ').trim();
+  if (!t || t.length > 40) return false;
+  if (hasTrailingListPunct(t) || looksLikeIngredients(t)) return false;
+  if (PRICE_AT_END.test(t)) return false;
+  if (/[·•…]{2,}|\.{3,}/.test(t)) return false;
+  const letters = t.replace(/[^A-Za-zÁÉÍÓÚÜÑáéíóúüñ]/gu, '');
+  if (letters.length < 3) return false;
+  const upper = letters.replace(/[^A-ZÁÉÍÓÚÜÑ]/gu, '').length;
+  return upper / letters.length >= 0.85;
+}
+
+type MenuTextToken =
+  | { kind: 'blank' }
+  | { kind: 'content'; line: ParsedMenuTextLine };
+
+function skipBlanks(tokens: MenuTextToken[], startIndex: number): number {
+  let i = startIndex;
+  while (i < tokens.length && tokens[i].kind === 'blank') i += 1;
+  return i;
+}
+
+/**
+ * Tras un plato+precio, recoge una o varias líneas de ingredientes
+ * (permite blancos típicos del OCR entre ítems) y las normaliza a una sola
+ * cadena con ` - ` para el campo «Ingredientes» — no como filas Plato.
+ */
+export function collectIngredientsFromTokens(
+  tokens: MenuTextToken[],
+  startIndex: number,
+): { ingredients?: string; nextIndex: number } {
+  // El OCR suele insertar una línea en blanco entre plato e ingredientes.
+  const contentStart = skipBlanks(tokens, startIndex);
+  if (contentStart >= tokens.length) return { nextIndex: startIndex };
+  const firstTok = tokens[contentStart];
+  if (firstTok.kind !== 'content' || firstTok.line.hasPrice) {
+    return { nextIndex: startIndex };
+  }
+
+  const firstText = firstTok.line.left;
+  if (looksLikeSectionTitle(firstText) && !looksLikeIngredients(firstText)) {
+    return { nextIndex: startIndex };
+  }
+
+  // Arrancar si: lista en una línea, coma/punto y coma final, o bloque de
+  // ≥2 líneas sin precio (patrón OCR “Pollo / Nueces / Legumbres”).
+  const secondContent = skipBlanks(tokens, contentStart + 1);
+  const hasFollowingNonPrice =
+    secondContent < tokens.length &&
+    tokens[secondContent].kind === 'content' &&
+    !tokens[secondContent].line.hasPrice &&
+    !looksLikeSectionTitle(tokens[secondContent].line.left);
+
+  const canStart =
+    looksLikeIngredients(firstText) ||
+    hasTrailingListPunct(firstText) ||
+    (hasFollowingNonPrice && isPlausibleIngredientLine(firstText));
+
+  if (!canStart) return { nextIndex: startIndex };
+
+  const collected: string[] = [];
+  let i = contentStart;
+
+  while (i < tokens.length) {
+    if (tokens[i].kind === 'blank') {
+      const nextContent = skipBlanks(tokens, i);
+      if (nextContent >= tokens.length) break;
+      const nextTok = tokens[nextContent];
+      if (nextTok.kind !== 'content' || nextTok.line.hasPrice) break;
+      if (looksLikeSectionTitle(nextTok.line.left) && !looksLikeIngredients(nextTok.line.left)) {
+        break;
+      }
+      if (!isPlausibleIngredientLine(nextTok.line.left)) break;
+      i = nextContent;
+      continue;
+    }
+
+    const line = tokens[i].line;
+    if (line.hasPrice) break;
+    const text = line.left;
+
+    if (collected.length === 0) {
+      if (looksLikeSectionTitle(text) && !looksLikeIngredients(text)) break;
+      collected.push(text);
+      i += 1;
+      continue;
+    }
+
+    if (looksLikeSectionTitle(text) && !looksLikeIngredients(text)) break;
+    if (!isPlausibleIngredientLine(text)) break;
+
+    collected.push(text);
+    i += 1;
+  }
+
+  const parts = collected.flatMap((line) => splitIngredientParts(line));
+  if (parts.length === 0) return { nextIndex: startIndex };
+
+  // Una sola línea / un solo ítem sin señales de lista → no consumir.
+  if (
+    parts.length < 2 &&
+    collected.length < 2 &&
+    !hasTrailingListPunct(collected[0] ?? '') &&
+    !looksLikeIngredients(collected[0] ?? '')
+  ) {
+    return { nextIndex: startIndex };
+  }
+
+  return {
+    ingredients: formatIngredientsList(parts),
+    nextIndex: i,
+  };
 }
 
 function detectLeaderFromFiller(filler: string): MenuLineLeader {
@@ -113,24 +306,23 @@ function defaultIngredientsStyle(base: MenuLineColumnStyle): MenuLineColumnStyle
 }
 
 /**
- * Empareja plato+precio con la línea de ingredientes siguiente (si aplica).
+ * Empareja plato+precio con la(s) línea(s) de ingredientes siguientes (si aplica).
  */
 export function pairMenuTextLines(
   parsed: ParsedMenuTextLine[],
 ): Array<ParsedMenuTextLine & { ingredients?: string }> {
+  const tokens: MenuTextToken[] = parsed.map((line) => ({ kind: 'content', line }));
   const out: Array<ParsedMenuTextLine & { ingredients?: string }> = [];
   let i = 0;
   while (i < parsed.length) {
     const current = parsed[i];
-    const next = parsed[i + 1];
-    if (
-      current.hasPrice &&
-      next &&
-      !next.hasPrice &&
-      looksLikeIngredients(next.left)
-    ) {
-      out.push({ ...current, ingredients: next.left.replace(/,+\s*$/, '').trim() });
-      i += 2;
+    if (current.hasPrice) {
+      const collected = collectIngredientsFromTokens(tokens, i + 1);
+      out.push({
+        ...current,
+        ...(collected.ingredients ? { ingredients: collected.ingredients } : {}),
+      });
+      i = collected.ingredients ? collected.nextIndex : i + 1;
       continue;
     }
     out.push({ ...current });
@@ -138,10 +330,6 @@ export function pairMenuTextLines(
   }
   return out;
 }
-
-type MenuTextToken =
-  | { kind: 'blank' }
-  | { kind: 'content'; line: ParsedMenuTextLine };
 
 export type PairedMenuTextRow = ParsedMenuTextLine & {
   ingredients?: string;
@@ -177,17 +365,12 @@ export function parseMenuTextBlocks(raw: string): PairedMenuTextRow[] {
     i += 1;
 
     let ingredients: string | undefined;
-    // Ingredientes solo si la siguiente línea de contenido es inmediata (sin blancos).
-    const nextToken = tokens[i];
-    if (
-      current.hasPrice &&
-      nextToken &&
-      nextToken.kind === 'content'
-    ) {
-      const next = nextToken.line;
-      if (!next.hasPrice && looksLikeIngredients(next.left)) {
-        ingredients = next.left.replace(/,+\s*$/, '').trim();
-        i += 1;
+    // Ingredientes inmediatos (misma línea multi-ítem o varias líneas OCR).
+    if (current.hasPrice) {
+      const collected = collectIngredientsFromTokens(tokens, i);
+      if (collected.ingredients) {
+        ingredients = collected.ingredients;
+        i = collected.nextIndex;
       }
     }
 
