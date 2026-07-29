@@ -125,6 +125,30 @@ function AllergenIcon() {
   );
 }
 
+function SectionBackgroundImage({
+  image,
+}: {
+  image?: {
+    src: string;
+    align: 'left' | 'center' | 'right';
+    stretch: boolean;
+  };
+}) {
+  const src = image?.src?.trim();
+  if (!src) return null;
+  const align = image?.align === 'left' || image?.align === 'right' ? image.align : 'center';
+  return (
+    <img
+      className={`mobile-section-bg align-${align}${image?.stretch !== false ? ' is-stretch' : ''}`}
+      src={src}
+      alt=""
+      draggable={false}
+      decoding="async"
+      aria-hidden="true"
+    />
+  );
+}
+
 function renderComponent(
   component: MobileComponent,
   onAction?: (action: MobileInteractionAction) => void,
@@ -132,27 +156,34 @@ function renderComponent(
   onAllergensOpen?: (payload: { dishTitle: string; allergens: string[] }) => void,
 ) {
   switch (component.type) {
-    case 'section':
+    case 'section': {
+      const hasBg = !!component.backgroundImage?.src?.trim();
+      const sectionClass = `mobile-block mobile-block-section${hasBg ? ' has-bg-image' : ''}`;
+      const sectionStyle = {
+        backgroundColor: component.backgroundColor,
+        padding: `${component.padding}px`,
+      };
+      const title = <h3 style={typographyStyle(component)}>{component.title}</h3>;
       if (onAction) {
         return (
           <button
             type="button"
-            className="mobile-block mobile-block-section mobile-block-hit"
-            style={{ backgroundColor: component.backgroundColor, padding: `${component.padding}px` }}
+            className={`${sectionClass} mobile-block-hit`}
+            style={sectionStyle}
             onClick={() => onAction(component.action ?? { type: 'none' })}
           >
-            <h3 style={typographyStyle(component)}>{component.title}</h3>
+            <SectionBackgroundImage image={component.backgroundImage} />
+            {title}
           </button>
         );
       }
       return (
-        <section
-          className="mobile-block mobile-block-section"
-          style={{ backgroundColor: component.backgroundColor, padding: `${component.padding}px` }}
-        >
-          <h3 style={typographyStyle(component)}>{component.title}</h3>
+        <section className={sectionClass} style={sectionStyle}>
+          <SectionBackgroundImage image={component.backgroundImage} />
+          {title}
         </section>
       );
+    }
     case 'heading':
       return (
         <h2
@@ -227,25 +258,31 @@ function renderComponent(
                 {component.ingredients}
               </small>
             )}
-            {allergenItems.length > 0 && (
-              <button
-                type="button"
-                className="mobile-menu-allergens-btn"
-                title="Ver alérgenos"
-                aria-label={`Alérgenos de ${component.title || 'este plato'}`}
-                onPointerDown={(e) => e.stopPropagation()}
-                onClick={(e) => {
-                  e.stopPropagation();
-                  onAllergensOpen?.({
-                    dishTitle: component.title || 'Plato',
-                    allergens: allergenItems,
-                  });
-                }}
-              >
-                <AllergenIcon />
-                <span>Alérgenos</span>
-              </button>
-            )}
+            {allergenItems.length > 0 &&
+              (onAllergensOpen ? (
+                <button
+                  type="button"
+                  className="mobile-menu-allergens-btn"
+                  title="Ver alérgenos"
+                  aria-label={`Alérgenos de ${component.title || 'este plato'}`}
+                  onPointerDown={(e) => e.stopPropagation()}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onAllergensOpen({
+                      dishTitle: component.title || 'Plato',
+                      allergens: allergenItems,
+                    });
+                  }}
+                >
+                  <AllergenIcon />
+                  <span>Alérgenos</span>
+                </button>
+              ) : (
+                <span className="mobile-menu-allergens-btn" aria-hidden="true">
+                  <AllergenIcon />
+                  <span>Alérgenos</span>
+                </span>
+              ))}
           </div>
         </article>
       );
@@ -262,14 +299,14 @@ function renderComponent(
           </button>
         );
       }
+      // En el editor: elemento inerte para poder seleccionar/reordenar sin ejecutar la acción.
       return (
-        <a
+        <div
           className="mobile-block mobile-block-button"
-          href={component.href || '#'}
           style={{ backgroundColor: component.backgroundColor, color: component.textColor, ...typographyStyle(component) }}
         >
           {component.label}
-        </a>
+        </div>
       );
     case 'divider':
       return (
@@ -815,7 +852,7 @@ export function MobileRuntimeRenderer({
             component,
             !editable ? (action) => runAction(action) : undefined,
             !editable ? (src) => setLightboxSrc(src) : undefined,
-            (payload) => setAllergensModal(payload),
+            !editable ? (payload) => setAllergensModal(payload) : undefined,
           )}
         </div>
       ))}

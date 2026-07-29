@@ -112,6 +112,11 @@ export function createDefaultMobileComponent(type: MobileComponent['type']): Mob
         title: 'Nueva seccion',
         backgroundColor: '#ffffff',
         padding: 16,
+        backgroundImage: {
+          src: '',
+          align: 'center',
+          stretch: true,
+        },
         action: defaultSectionAction(),
         animation: defaultAnimation(),
         effect: defaultEffect(),

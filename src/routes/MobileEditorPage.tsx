@@ -248,7 +248,7 @@ export function MobileEditorPage() {
   const [qrOpen, setQrOpen] = useState(false);
   const [isPublic, setIsPublic] = useState(false);
   const [publicSlug, setPublicSlug] = useState<string | null>(null);
-  const [imagePickerTarget, setImagePickerTarget] = useState<'image' | 'menuImage' | null>(null);
+  const [imagePickerTarget, setImagePickerTarget] = useState<'image' | 'menuImage' | 'sectionBg' | null>(null);
   const [stockModalOpen, setStockModalOpen] = useState(false);
   const [assetModalOpen, setAssetModalOpen] = useState(false);
   const [uploading, setUploading] = useState(false);
@@ -378,12 +378,14 @@ export function MobileEditorPage() {
   function applyPickedImageUrl(url: string) {
     if (imagePickerTarget === 'menuImage') {
       updateSelectedMenuItemImage({ src: url });
+    } else if (imagePickerTarget === 'sectionBg') {
+      updateSelectedSectionBackground({ src: url });
     } else if (imagePickerTarget === 'image') {
       updateSelectedField('src', url);
     }
   }
 
-  function openImagePicker(target: 'image' | 'menuImage', mode: 'stock' | 'assets' | 'upload') {
+  function openImagePicker(target: 'image' | 'menuImage' | 'sectionBg', mode: 'stock' | 'assets' | 'upload') {
     setImagePickerTarget(target);
     if (mode === 'stock') {
       setStockModalOpen(true);
@@ -696,6 +698,34 @@ export function MobileEditorPage() {
           radius: Math.max(0, Math.min(28, Math.round((patch.radius ?? base.radius) || 10))),
         };
         return { ...component, menuImage: next };
+      }),
+    }));
+  }
+
+  function updateSelectedSectionBackground(
+    patch: Partial<{
+      src: string;
+      align: 'left' | 'center' | 'right';
+      stretch: boolean;
+    }>,
+  ) {
+    if (!selectedId) return;
+    updateDoc((current) => ({
+      ...current,
+      components: current.components.map((component) => {
+        if (component.id !== selectedId || component.type !== 'section') return component;
+        const base = component.backgroundImage ?? {
+          src: '',
+          align: 'center' as const,
+          stretch: true,
+        };
+        return {
+          ...component,
+          backgroundImage: {
+            ...base,
+            ...patch,
+          },
+        };
       }),
     }));
   }
@@ -1022,6 +1052,133 @@ export function MobileEditorPage() {
                           }
                         />
                       </label>
+                    </>
+                  )}
+                  {selected.type === 'section' && (
+                    <>
+                      <h4>Imagen de fondo</h4>
+                      <div className="image-picker-field">
+                        {selected.backgroundImage?.src ? (
+                          <div className="image-picker-preview">
+                            <img src={selected.backgroundImage.src} alt="" />
+                            <button
+                              type="button"
+                              className="image-picker-remove"
+                              title="Quitar imagen"
+                              onClick={() => updateSelectedSectionBackground({ src: '' })}
+                            >
+                              ✕
+                            </button>
+                          </div>
+                        ) : (
+                          <div className="image-picker-empty">Sin imagen</div>
+                        )}
+                        <div className="image-picker-actions">
+                          <button
+                            type="button"
+                            className="btn-secondary"
+                            disabled={uploading}
+                            onClick={() => openImagePicker('sectionBg', 'assets')}
+                          >
+                            Mis archivos
+                          </button>
+                          <button
+                            type="button"
+                            className="btn-secondary"
+                            disabled={uploading}
+                            onClick={() => openImagePicker('sectionBg', 'stock')}
+                          >
+                            Stock
+                          </button>
+                          <button
+                            type="button"
+                            className="btn-secondary"
+                            disabled={uploading}
+                            onClick={() => openImagePicker('sectionBg', 'upload')}
+                          >
+                            {uploading && imagePickerTarget === 'sectionBg' ? 'Subiendo…' : 'Subir'}
+                          </button>
+                        </div>
+                      </div>
+                      {selected.backgroundImage?.src ? (
+                        <>
+                          <label>
+                            Alineación
+                            <div className="wysiwyg-align-group" role="group" aria-label="Alineación de imagen de fondo">
+                              <button
+                                type="button"
+                                className={
+                                  (selected.backgroundImage.align ?? 'center') === 'left'
+                                    ? 'is-active'
+                                    : undefined
+                                }
+                                onClick={() => updateSelectedSectionBackground({ align: 'left' })}
+                                aria-pressed={(selected.backgroundImage.align ?? 'center') === 'left'}
+                                title="Alinear a la izquierda"
+                                aria-label="Alinear a la izquierda"
+                              >
+                                <AlignLeftIcon />
+                              </button>
+                              <button
+                                type="button"
+                                className={
+                                  (selected.backgroundImage.align ?? 'center') === 'center'
+                                    ? 'is-active'
+                                    : undefined
+                                }
+                                onClick={() => updateSelectedSectionBackground({ align: 'center' })}
+                                aria-pressed={(selected.backgroundImage.align ?? 'center') === 'center'}
+                                title="Centrar"
+                                aria-label="Centrar"
+                              >
+                                <AlignCenterIcon />
+                              </button>
+                              <button
+                                type="button"
+                                className={
+                                  (selected.backgroundImage.align ?? 'center') === 'right'
+                                    ? 'is-active'
+                                    : undefined
+                                }
+                                onClick={() => updateSelectedSectionBackground({ align: 'right' })}
+                                aria-pressed={(selected.backgroundImage.align ?? 'center') === 'right'}
+                                title="Alinear a la derecha"
+                                aria-label="Alinear a la derecha"
+                              >
+                                <AlignRightIcon />
+                              </button>
+                            </div>
+                          </label>
+                          <label>
+                            Ajuste
+                            <div className="wysiwyg-align-group" role="group" aria-label="Ajuste de imagen de fondo">
+                              <button
+                                type="button"
+                                className={selected.backgroundImage.stretch !== false ? 'is-active' : undefined}
+                                onClick={() =>
+                                  updateSelectedSectionBackground({
+                                    stretch: selected.backgroundImage?.stretch === false,
+                                  })
+                                }
+                                aria-pressed={selected.backgroundImage.stretch !== false}
+                                title="Estirar para ocupar todo el componente"
+                                aria-label="Estirar para ocupar todo el componente"
+                              >
+                                <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true">
+                                  <path
+                                    fill="currentColor"
+                                    d="M7 14H5v5h5v-2H7v-3zm-2-4h2V7h3V5H5v5zm12 7h-3v2h5v-5h-2v3zM14 5v2h3v3h2V5h-5z"
+                                  />
+                                </svg>
+                              </button>
+                            </div>
+                            <small className="panel-hint">
+                              Activo: la imagen cubre toda la sección. Desactivado: se adapta sin recortar.
+                            </small>
+                          </label>
+                        </>
+                      ) : null}
+                      {assetsError && <small className="error-text">{assetsError}</small>}
                     </>
                   )}
                   {selected.type === 'spacer' && (

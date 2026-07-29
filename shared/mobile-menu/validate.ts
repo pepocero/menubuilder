@@ -128,6 +128,18 @@ function parseMenuItemImage(value: unknown) {
   };
 }
 
+function parseSectionBackgroundImage(value: unknown) {
+  if (!isObject(value)) return undefined;
+  if (!isString(value.src)) return undefined;
+  const align =
+    value.align === 'left' || value.align === 'right' ? value.align : 'center';
+  return {
+    src: value.src.trim().slice(0, 4096),
+    align,
+    stretch: value.stretch !== false,
+  };
+}
+
 function parseModalPayload(value: unknown) {
   if (!isObject(value)) return undefined;
   if (!isString(value.title) || !isString(value.body) || !isString(value.closeLabel)) return undefined;
@@ -178,6 +190,7 @@ function parseComponent(value: unknown): MobileComponent | null {
       title: value.title,
       backgroundColor: value.backgroundColor,
       padding: value.padding,
+      backgroundImage: parseSectionBackgroundImage(value.backgroundImage),
       action: parseInteractionAction(value.action),
       animation: parseAnimation(value.animation),
       effect: parseEffect(value.effect),

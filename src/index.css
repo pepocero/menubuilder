@@ -4259,6 +4259,51 @@ textarea {
   line-height: 1.2;
 }
 
+.mobile-block-section {
+  position: relative;
+  overflow: hidden;
+  display: block;
+  width: 100%;
+  border: 0;
+  text-align: inherit;
+  font: inherit;
+  color: inherit;
+  cursor: inherit;
+}
+
+.mobile-block-section.has-bg-image > h3 {
+  position: relative;
+  z-index: 1;
+}
+
+.mobile-section-bg {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  object-position: center center;
+  pointer-events: none;
+  user-select: none;
+  z-index: 0;
+}
+
+.mobile-section-bg.align-left {
+  object-position: left center;
+}
+
+.mobile-section-bg.align-center {
+  object-position: center center;
+}
+
+.mobile-section-bg.align-right {
+  object-position: right center;
+}
+
+.mobile-section-bg.is-stretch {
+  object-fit: cover;
+}
+
 .mobile-block-text {
   margin: 0;
   line-height: 1.45;

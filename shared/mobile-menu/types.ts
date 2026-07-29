@@ -96,6 +96,13 @@ export interface MobileSectionComponent extends MobileComponentBase {
   title: string;
   backgroundColor: string;
   padding: number;
+  /** Imagen de fondo opcional de la sección. */
+  backgroundImage?: {
+    src: string;
+    align: 'left' | 'center' | 'right';
+    /** Si es true, la imagen cubre todo el componente. */
+    stretch: boolean;
+  };
   action?: MobileInteractionAction;
 }
 
