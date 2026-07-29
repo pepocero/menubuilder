@@ -1,3 +1,4 @@
+import { useEffect, useRef, useState } from 'react';
 import type { CanvasData, CanvasLayer } from '@/types/canvas';
 import { normalizeCanvasData } from '@/types/canvas';
 import { textBorderToCss } from '@/lib/text-border';
@@ -78,34 +79,67 @@ function layerPreviewStyle(layer: CanvasLayer, scale: number): React.CSSProperti
 }
 
 export function TemplatePreview({ canvasData, name }: TemplatePreviewProps) {
+  const containerRef = useRef<HTMLDivElement>(null);
+  const [box, setBox] = useState({ width: 0, height: 0 });
   const doc = normalizeCanvasData(canvasData);
   const page = doc.pages[0];
+
+  useEffect(() => {
+    const el = containerRef.current;
+    if (!el) return;
+
+    const update = () => {
+      const rect = el.getBoundingClientRect();
+      setBox({ width: rect.width, height: rect.height });
+    };
+
+    update();
+    const observer = new ResizeObserver(update);
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, []);
+
   if (!page) return null;
 
-  const scale = 200 / doc.width;
-  const height = doc.height * scale;
+  const scale =
+    box.width > 0 && box.height > 0
+      ? Math.min(box.width / doc.width, box.height / doc.height)
+      : 0;
+  const previewW = doc.width * scale;
+  const previewH = doc.height * scale;
   const bg = page.background.type === 'color' ? page.background.value : '#f4f4f5';
   const layers = [...page.layers].sort((a, b) => a.zIndex - b.zIndex);
   const extraPages = doc.pages.length > 1 ? doc.pages.length - 1 : 0;
 
   return (
     <div
+      ref={containerRef}
       className="template-preview-canvas"
-      style={{ height, background: bg }}
       title={name}
       aria-label={`Vista previa de ${name}`}
     >
-      {layers.map((layer) =>
-        layer.type === 'text' ? (
-          <div key={layer.id} style={layerPreviewStyle(layer, scale)}>
-            {layer.content}
-          </div>
-        ) : (
-          <div key={layer.id} style={layerPreviewStyle(layer, scale)} />
-        ),
-      )}
-      {extraPages > 0 && (
-        <span className="template-pages-badge">+{extraPages} pág.</span>
+      {scale > 0 && (
+        <div
+          className="template-preview-stage"
+          style={{
+            width: previewW,
+            height: previewH,
+            background: bg,
+          }}
+        >
+          {layers.map((layer) =>
+            layer.type === 'text' ? (
+              <div key={layer.id} style={layerPreviewStyle(layer, scale)}>
+                {layer.content}
+              </div>
+            ) : (
+              <div key={layer.id} style={layerPreviewStyle(layer, scale)} />
+            ),
+          )}
+          {extraPages > 0 && (
+            <span className="template-pages-badge">+{extraPages} pág.</span>
+          )}
+        </div>
       )}
     </div>
   );

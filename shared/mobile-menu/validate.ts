@@ -1,0 +1,345 @@
+import { MOBILE_DEVICE_PRESETS, createDefaultMobileMenuDocument } from './defaults';
+import type { MobileComponent, MobileMenuDocument } from './types';
+import { MOBILE_MENU_VERSION } from './types';
+
+function isObject(value: unknown): value is Record<string, unknown> {
+  return !!value && typeof value === 'object';
+}
+
+function isString(value: unknown): value is string {
+  return typeof value === 'string';
+}
+
+function isNumber(value: unknown): value is number {
+  return typeof value === 'number' && Number.isFinite(value);
+}
+
+function parseAnimation(value: unknown): MobileComponent['animation'] {
+  if (!isObject(value)) return undefined;
+  const preset = value.preset;
+  const trigger = value.trigger;
+  if (
+    (preset !== 'none' && preset !== 'reveal' && preset !== 'tap' && preset !== 'parallax' && preset !== 'lottie') ||
+    (trigger !== 'on_view' && trigger !== 'on_load' && trigger !== 'on_tap')
+  ) {
+    return undefined;
+  }
+  if (!isNumber(value.durationMs) || !isNumber(value.delayMs) || !isNumber(value.intensity)) {
+    return undefined;
+  }
+  return {
+    preset,
+    trigger,
+    durationMs: Math.max(0, Math.min(5000, Math.round(value.durationMs))),
+    delayMs: Math.max(0, Math.min(5000, Math.round(value.delayMs))),
+    intensity: Math.max(0.1, Math.min(3, value.intensity)),
+  };
+}
+
+const VALID_EFFECT_TYPES = new Set(['none','pulse','shake','bounce','glow','shimmer','heartbeat','swing','rubberBand','flash']);
+const VALID_EFFECT_REPEATS = new Set(['once','loop']);
+const VALID_EFFECT_TRIGGERS = new Set(['on_view','on_load','always']);
+
+function parseEffect(value: unknown): MobileComponent['effect'] {
+  if (!isObject(value)) return undefined;
+  const type = value.type;
+  const repeat = value.repeat;
+  const trigger = value.trigger;
+  if (!isString(type) || !VALID_EFFECT_TYPES.has(type)) return undefined;
+  if (!isString(repeat) || !VALID_EFFECT_REPEATS.has(repeat)) return undefined;
+  if (!isString(trigger) || !VALID_EFFECT_TRIGGERS.has(trigger)) return undefined;
+  if (!isNumber(value.durationMs) || !isNumber(value.delayMs)) return undefined;
+  return {
+    type: type as MobileComponent['effect'] extends undefined ? never : NonNullable<MobileComponent['effect']>['type'],
+    repeat: repeat as 'once' | 'loop',
+    trigger: trigger as 'on_view' | 'on_load' | 'always',
+    durationMs: Math.max(100, Math.min(5000, Math.round(value.durationMs))),
+    delayMs: Math.max(0, Math.min(5000, Math.round(value.delayMs))),
+  };
+}
+
+function parseTypography(value: unknown): MobileComponent['typography'] {
+  if (!isObject(value)) return undefined;
+  const fontFamily = value.fontFamily;
+  const fontStyle = value.fontStyle;
+  const textDecoration = value.textDecoration;
+  const textTransform = value.textTransform;
+  const textAlign = value.textAlign;
+  if (
+    !isString(fontFamily) ||
+    !isNumber(value.fontSize) ||
+    !isNumber(value.fontWeight) ||
+    !isNumber(value.lineHeight) ||
+    !isNumber(value.letterSpacing) ||
+    !isString(value.color) ||
+    (fontStyle !== 'normal' && fontStyle !== 'italic') ||
+    (textDecoration !== 'none' && textDecoration !== 'underline' && textDecoration !== 'line-through') ||
+    (textTransform !== 'none' &&
+      textTransform !== 'uppercase' &&
+      textTransform !== 'lowercase' &&
+      textTransform !== 'capitalize') ||
+    (textAlign !== 'left' && textAlign !== 'center' && textAlign !== 'right')
+  ) {
+    return undefined;
+  }
+  return {
+    fontFamily,
+    fontSize: Math.max(8, Math.min(96, Math.round(value.fontSize))),
+    fontWeight: Math.max(100, Math.min(900, Math.round(value.fontWeight))),
+    fontStyle,
+    textDecoration,
+    textTransform,
+    textAlign,
+    lineHeight: Math.max(1, Math.min(3, value.lineHeight)),
+    letterSpacing: Math.max(-2, Math.min(12, value.letterSpacing)),
+    color: value.color,
+  };
+}
+
+function parseMenuTypography(value: unknown):
+  | { title?: MobileComponent['typography']; description?: MobileComponent['typography']; price?: MobileComponent['typography']; ingredients?: MobileComponent['typography'] }
+  | undefined {
+  if (!isObject(value)) return undefined;
+  const title = parseTypography(value.title);
+  const description = parseTypography(value.description);
+  const price = parseTypography(value.price);
+  const ingredients = parseTypography(value.ingredients);
+  if (!title && !description && !price && !ingredients) return undefined;
+  return {
+    ...(title ? { title } : {}),
+    ...(description ? { description } : {}),
+    ...(price ? { price } : {}),
+    ...(ingredients ? { ingredients } : {}),
+  };
+}
+
+function parseMenuItemImage(value: unknown) {
+  if (!isObject(value)) return undefined;
+  if (!isString(value.src) || !isString(value.alt)) return undefined;
+  const position = value.position === 'right' ? 'right' : 'left';
+  const width = isNumber(value.width) ? Math.max(56, Math.min(180, Math.round(value.width))) : 92;
+  const radius = isNumber(value.radius) ? Math.max(0, Math.min(28, Math.round(value.radius))) : 10;
+  return {
+    src: value.src.trim().slice(0, 4096),
+    alt: value.alt.trim().slice(0, 160),
+    position,
+    width,
+    radius,
+  };
+}
+
+function parseModalPayload(value: unknown) {
+  if (!isObject(value)) return undefined;
+  if (!isString(value.title) || !isString(value.body) || !isString(value.closeLabel)) return undefined;
+  return {
+    title: value.title.trim().slice(0, 120),
+    body: value.body.trim().slice(0, 1500),
+    closeLabel: (value.closeLabel.trim() || 'Cerrar').slice(0, 40),
+  };
+}
+
+function parseInteractionAction(value: unknown, fallbackUrl?: string) {
+  if (!isObject(value) || !isString(value.type)) {
+    if (fallbackUrl) {
+      return {
+        type: 'url' as const,
+        url: fallbackUrl,
+      };
+    }
+    return undefined;
+  }
+  if (value.type === 'none') {
+    return { type: 'none' as const };
+  }
+  if (value.type === 'url') {
+    const url = isString(value.url) ? value.url : fallbackUrl;
+    if (!url) return { type: 'none' as const };
+    return { type: 'url' as const, url: url.trim().slice(0, 2048) };
+  }
+  if (value.type === 'section') {
+    if (!isString(value.sectionId)) return { type: 'none' as const };
+    return { type: 'section' as const, sectionId: value.sectionId };
+  }
+  if (value.type === 'modal') {
+    const modal = parseModalPayload(value.modal);
+    if (!modal) return { type: 'none' as const };
+    return { type: 'modal' as const, modal };
+  }
+  return fallbackUrl ? { type: 'url' as const, url: fallbackUrl } : undefined;
+}
+
+function parseComponent(value: unknown): MobileComponent | null {
+  if (!isObject(value) || !isString(value.id) || !isString(value.type)) return null;
+  const type = value.type;
+  if (type === 'section' && isString(value.title) && isString(value.backgroundColor) && isNumber(value.padding)) {
+    return {
+      id: value.id,
+      type,
+      title: value.title,
+      backgroundColor: value.backgroundColor,
+      padding: value.padding,
+      action: parseInteractionAction(value.action),
+      animation: parseAnimation(value.animation),
+      effect: parseEffect(value.effect),
+      typography: parseTypography(value.typography),
+    };
+  }
+  if (type === 'heading' && isString(value.text)) {
+    const legacyColor = isString(value.color) ? value.color : '#111827';
+    const legacySize = isNumber(value.fontSize) ? value.fontSize : 28;
+    const legacyWeight = isNumber(value.fontWeight) ? value.fontWeight : 700;
+    const legacyAlign = value.align === 'center' || value.align === 'right' ? value.align : 'left';
+    return {
+      id: value.id,
+      type,
+      text: value.text,
+      animation: parseAnimation(value.animation),
+      effect: parseEffect(value.effect),
+      typography:
+        parseTypography(value.typography) ?? {
+          fontFamily: 'Inter, system-ui, Arial, sans-serif',
+          fontSize: Math.max(8, Math.min(96, Math.round(legacySize))),
+          fontWeight: Math.max(100, Math.min(900, Math.round(legacyWeight))),
+          fontStyle: 'normal',
+          textDecoration: 'none',
+          textTransform: 'none',
+          textAlign: legacyAlign,
+          lineHeight: 1.2,
+          letterSpacing: 0,
+          color: legacyColor,
+        },
+    };
+  }
+  if (type === 'text' && isString(value.text)) {
+    const legacyColor = isString(value.color) ? value.color : '#374151';
+    const legacySize = isNumber(value.fontSize) ? value.fontSize : 16;
+    const legacyAlign = value.align === 'center' || value.align === 'right' ? value.align : 'left';
+    return {
+      id: value.id,
+      type,
+      text: value.text,
+      animation: parseAnimation(value.animation),
+      effect: parseEffect(value.effect),
+      typography:
+        parseTypography(value.typography) ?? {
+          fontFamily: 'Inter, system-ui, Arial, sans-serif',
+          fontSize: Math.max(8, Math.min(96, Math.round(legacySize))),
+          fontWeight: 400,
+          fontStyle: 'normal',
+          textDecoration: 'none',
+          textTransform: 'none',
+          textAlign: legacyAlign,
+          lineHeight: 1.45,
+          letterSpacing: 0,
+          color: legacyColor,
+        },
+    };
+  }
+  if (type === 'image' && isString(value.src) && isString(value.alt) && isNumber(value.radius)) {
+    return {
+      id: value.id,
+      type,
+      src: value.src,
+      alt: value.alt,
+      radius: value.radius,
+      animation: parseAnimation(value.animation),
+      effect: parseEffect(value.effect),
+      typography: parseTypography(value.typography),
+    };
+  }
+  if (type === 'menuItem' && isString(value.title) && isString(value.description) && isString(value.price) && isString(value.ingredients)) {
+    return {
+      id: value.id,
+      type,
+      title: value.title,
+      description: value.description,
+      price: value.price,
+      ingredients: value.ingredients,
+      allergens: isString(value.allergens) ? value.allergens : '',
+      menuImage: parseMenuItemImage(value.menuImage),
+      animation: parseAnimation(value.animation),
+      effect: parseEffect(value.effect),
+      typography: parseTypography(value.typography),
+      menuTypography: parseMenuTypography(value.menuTypography),
+    };
+  }
+  if (type === 'button' && isString(value.label) && isString(value.href) && isString(value.backgroundColor) && isString(value.textColor)) {
+    return {
+      id: value.id,
+      type,
+      label: value.label,
+      href: value.href,
+      action: parseInteractionAction(value.action, value.href),
+      backgroundColor: value.backgroundColor,
+      textColor: value.textColor,
+      animation: parseAnimation(value.animation),
+      effect: parseEffect(value.effect),
+      typography: parseTypography(value.typography),
+    };
+  }
+  if (type === 'divider' && isString(value.color) && isNumber(value.thickness)) {
+    return {
+      id: value.id,
+      type,
+      color: value.color,
+      thickness: value.thickness,
+      animation: parseAnimation(value.animation),
+      effect: parseEffect(value.effect),
+      typography: parseTypography(value.typography),
+    };
+  }
+  if (type === 'spacer' && isNumber(value.height)) {
+    return {
+      id: value.id,
+      type,
+      height: value.height,
+      animation: parseAnimation(value.animation),
+      effect: parseEffect(value.effect),
+      typography: parseTypography(value.typography),
+    };
+  }
+  return null;
+}
+
+export function parseMobileMenuDocument(value: unknown): MobileMenuDocument | null {
+  if (!isObject(value)) return null;
+  if (!isObject(value.viewport) || !isObject(value.theme) || !Array.isArray(value.components)) return null;
+  const version = value.version;
+  if (version !== MOBILE_MENU_VERSION) return null;
+
+  const presetId = isString(value.viewport.presetId) ? value.viewport.presetId : null;
+  if (!presetId || !MOBILE_DEVICE_PRESETS.some((p) => p.id === presetId)) return null;
+  if (!isNumber(value.viewport.width) || !isNumber(value.viewport.height)) return null;
+
+  const theme = value.theme;
+  if (!isString(theme.backgroundColor) || !isString(theme.textColor) || !isString(theme.accentColor) || !isString(theme.fontFamily)) {
+    return null;
+  }
+
+  const components: MobileComponent[] = [];
+  for (const item of value.components) {
+    const parsed = parseComponent(item);
+    if (!parsed) return null;
+    components.push(parsed);
+  }
+
+  return {
+    version: MOBILE_MENU_VERSION,
+    viewport: {
+      width: value.viewport.width,
+      height: value.viewport.height,
+      presetId: presetId as MobileMenuDocument['viewport']['presetId'],
+    },
+    theme: {
+      backgroundColor: theme.backgroundColor,
+      textColor: theme.textColor,
+      accentColor: theme.accentColor,
+      fontFamily: theme.fontFamily,
+    },
+    components,
+  };
+}
+
+export function normalizeMobileMenuDocument(value: unknown): MobileMenuDocument {
+  return parseMobileMenuDocument(value) ?? createDefaultMobileMenuDocument();
+}

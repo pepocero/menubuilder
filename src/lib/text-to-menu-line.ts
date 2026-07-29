@@ -228,7 +228,9 @@ export function collectIngredientsFromTokens(
       continue;
     }
 
-    const line = tokens[i].line;
+    const currentTok = tokens[i];
+    if (currentTok.kind !== 'content') break;
+    const line = currentTok.line;
     if (line.hasPrice) break;
     const text = line.left;
 

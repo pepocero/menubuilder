@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useParams } from 'react-router-dom';
 import { HtmlRenderer } from '@/components/html-renderer';
+import { MobilePublicView } from '@/components/mobile-public/MobilePublicView';
 import { PublicPageView } from '@/components/public/PublicPageView';
 import { ApiError } from '@/lib/api';
 import { SITE_NAME, applyPageSeo } from '@/lib/seo';
@@ -11,10 +12,13 @@ import {
   validateCanvasData,
 } from '@/types/canvas';
 import { parseMenuDocument, type MenuDocument } from '@shared/menu-document';
+import { parseMobileMenuDocument, type MobileMenuDocument } from '@shared/mobile-menu';
 
 interface PublicMenuPayload {
   title: string;
+  editor_kind: 'canvas' | 'mobile';
   canvas_data: unknown;
+  mobile_document: unknown;
   menu_document: unknown;
   export_png_url: string | null;
   thumbnail_url: string | null;
@@ -52,6 +56,7 @@ function isHttpUrl(value: string | null | undefined): value is string {
 export function PublicMenuPage() {
   const { slug } = useParams<{ slug: string }>();
   const [menuDocument, setMenuDocument] = useState<MenuDocument | null>(null);
+  const [mobileDocument, setMobileDocument] = useState<MobileMenuDocument | null>(null);
   const [pages, setPages] = useState<MenuPage[]>([]);
   const [pageScroll, setPageScroll] = useState<PageScrollDirection>('vertical');
   const [pageGap, setPageGap] = useState<PageGap>(0);
@@ -80,6 +85,19 @@ export function PublicMenuPage() {
 
         setExportPngUrl(isHttpUrl(menu.export_png_url) ? menu.export_png_url : null);
 
+        if (menu.editor_kind === 'mobile') {
+          const mobileDoc = parseMobileMenuDocument(menu.mobile_document);
+          if (mobileDoc) {
+            setMobileDocument(mobileDoc);
+            setMenuDocument(null);
+            setPages([]);
+            setPageScroll('vertical');
+            setPageGap(0);
+            setLoading(false);
+            return;
+          }
+        }
+
         // Misma fuente de verdad que el editor.
         if (validateCanvasData(menu.canvas_data)) {
           const canvasDoc = normalizeCanvasData(menu.canvas_data);
@@ -87,6 +105,7 @@ export function PublicMenuPage() {
           setPageScroll(canvasDoc.pageScroll ?? 'vertical');
           setPageGap(normalizePageGap(canvasDoc.pageGap));
           setMenuDocument(null);
+          setMobileDocument(null);
           setLoading(false);
           return;
         }
@@ -94,6 +113,7 @@ export function PublicMenuPage() {
         const storedDoc = parseMenuDocument(menu.menu_document);
         if (storedDoc) {
           setMenuDocument(storedDoc);
+          setMobileDocument(null);
           setPages([]);
           setPageScroll('vertical');
           setPageGap(0);
@@ -102,6 +122,7 @@ export function PublicMenuPage() {
         }
 
         setMenuDocument(null);
+        setMobileDocument(null);
         setPages([]);
         setPageScroll('vertical');
         setPageGap(0);
@@ -120,8 +141,9 @@ export function PublicMenuPage() {
   }, [slug]);
 
   const showPages = pages.length > 0;
-  const showDocument = !showPages && !!menuDocument;
-  const showPng = !showPages && !showDocument && !!exportPngUrl;
+  const showMobile = !!mobileDocument;
+  const showDocument = !showMobile && !showPages && !!menuDocument;
+  const showPng = !showMobile && !showPages && !showDocument && !!exportPngUrl;
 
   return (
     <div
@@ -154,6 +176,8 @@ export function PublicMenuPage() {
             ))}
           </div>
         )}
+
+        {!loading && !error && showMobile && <MobilePublicView document={mobileDocument!} />}
 
         {!loading && !error && showDocument && (
           <HtmlRenderer document={menuDocument!} showTitle={false} />

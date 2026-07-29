@@ -263,6 +263,7 @@ export interface MenuSummary {
   title: string;
   template_id: string | null;
   thumbnail_url: string | null;
+  editor_kind: 'canvas' | 'mobile';
   is_public: boolean;
   public_slug: string | null;
   created_at: string;
@@ -271,6 +272,7 @@ export interface MenuSummary {
 
 export interface MenuDetail extends Omit<MenuSummary, 'canvas_data'> {
   canvas_data: import('@/types/canvas').CanvasData;
+  mobile_document: import('@shared/mobile-menu').MobileMenuDocument | null;
 }
 
 export async function listMenus(): Promise<{ menus: MenuSummary[] }> {
@@ -285,7 +287,17 @@ export async function createMenu(data: {
   title?: string;
   template_id?: string;
   canvas_data?: import('@/types/canvas').CanvasData;
-}): Promise<{ menu: { id: string; title: string; canvas_data: import('@/types/canvas').CanvasData } }> {
+  editor_kind?: 'canvas' | 'mobile';
+  mobile_document?: import('@shared/mobile-menu').MobileMenuDocument;
+}): Promise<{
+  menu: {
+    id: string;
+    title: string;
+    editor_kind: 'canvas' | 'mobile';
+    canvas_data: import('@/types/canvas').CanvasData;
+    mobile_document: import('@shared/mobile-menu').MobileMenuDocument | null;
+  };
+}> {
   return api.post('/api/menus', data);
 }
 
@@ -294,9 +306,20 @@ export async function updateMenu(
   data: {
     title?: string;
     canvas_data?: import('@/types/canvas').CanvasData;
+    editor_kind?: 'canvas' | 'mobile';
+    mobile_document?: import('@shared/mobile-menu').MobileMenuDocument;
     thumbnail_url?: string | null;
   },
-): Promise<{ menu: { id: string; title: string; canvas_data: import('@/types/canvas').CanvasData } }> {
+): Promise<{
+  menu: {
+    id: string;
+    title: string;
+    editor_kind: 'canvas' | 'mobile';
+    canvas_data: import('@/types/canvas').CanvasData;
+    mobile_document: import('@shared/mobile-menu').MobileMenuDocument | null;
+    thumbnail_url: string | null;
+  };
+}> {
   return api.put(`/api/menus/${id}`, data);
 }
 
@@ -350,7 +373,9 @@ export async function listMyQrs(): Promise<{ menus: PublishedQr[] }> {
 export async function getPublicMenu(slug: string): Promise<{
   menu: {
     title: string;
+    editor_kind: 'canvas' | 'mobile';
     canvas_data: import('@/types/canvas').CanvasData;
+    mobile_document: import('@shared/mobile-menu').MobileMenuDocument | null;
     menu_document: import('@shared/menu-document/types').MenuDocument | null;
     export_png_url: string | null;
     thumbnail_url: string | null;

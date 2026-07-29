@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { createMenu, listTemplates, type TemplateSummary } from '@/lib/api';
+import { createMenu, listTemplates, updateMenu, type TemplateSummary } from '@/lib/api';
+import { renderCanvasDataThumbnail } from '@/lib/menu-thumbnail';
 import { AppLayout } from '@/components/AppLayout';
 import { TemplatePreview } from '@/components/templates/TemplatePreview';
 
@@ -30,6 +31,20 @@ export function TemplatesPage() {
         title: template.name,
         template_id: template.id,
       });
+
+      // Vista previa inmediata en «Mis menús» (sin esperar al primer autosave del editor).
+      try {
+        let thumbnail = template.thumbnail_url ?? null;
+        if (!thumbnail && template.canvas_data) {
+          thumbnail = await renderCanvasDataThumbnail(template.canvas_data);
+        }
+        if (thumbnail) {
+          await updateMenu(menu.id, { thumbnail_url: thumbnail });
+        }
+      } catch {
+        /* El menú ya está creado; el preview puede generarse al guardar en el editor */
+      }
+
       navigate(`/editor/${menu.id}`);
     } finally {
       setCreating(null);

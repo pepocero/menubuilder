@@ -10,6 +10,7 @@ import {
   type PublishedQr,
 } from '@/lib/api';
 import { AppLayout } from '@/components/AppLayout';
+import { appConfirm } from '@/lib/app-dialog';
 import {
   downloadQrPng,
   QR_ERROR_LEVEL,
@@ -54,13 +55,15 @@ export function QrsPage() {
   }
 
   async function handleUnpublish(id: string) {
-    if (
-      !confirm(
-        '¿Despublicar esta carta?\n\nEl enlace quedará inactivo, pero se conservan el enlace y el QR. Al publicar de nuevo se reutiliza el mismo enlace.',
-      )
-    ) {
-      return;
-    }
+    const confirmed = await appConfirm(
+      '¿Despublicar esta carta?\n\nEl enlace quedará inactivo, pero se conservan el enlace y el QR. Al publicar de nuevo se reutiliza el mismo enlace.',
+      {
+        title: 'Despublicar carta',
+        variant: 'warning',
+        confirmText: 'Despublicar',
+      },
+    );
+    if (!confirmed) return;
     setBusyId(id);
     setError('');
     try {
@@ -74,13 +77,15 @@ export function QrsPage() {
   }
 
   async function handleRemovePublic(id: string) {
-    if (
-      !confirm(
-        '¿Eliminar el enlace y el QR?\n\nSe borrará el enlace público y la imagen asociada. Los QR impresos dejarán de servir; al publicar de nuevo se creará un enlace nuevo.',
-      )
-    ) {
-      return;
-    }
+    const confirmed = await appConfirm(
+      '¿Eliminar el enlace y el QR?\n\nSe borrará el enlace público y la imagen asociada. Los QR impresos dejarán de servir; al publicar de nuevo se creará un enlace nuevo.',
+      {
+        title: 'Eliminar enlace público',
+        variant: 'danger',
+        confirmText: 'Eliminar',
+      },
+    );
+    if (!confirmed) return;
     setBusyId(id);
     setError('');
     try {

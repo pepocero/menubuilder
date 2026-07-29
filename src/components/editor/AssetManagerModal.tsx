@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { ApiError, deleteAsset, listAssets, type AssetSummary } from '@/lib/api';
+import { appConfirm } from '@/lib/app-dialog';
 
 interface AssetManagerModalProps {
   open: boolean;
@@ -96,8 +97,13 @@ export function AssetManagerModal({
 
   async function handleDelete(asset: AssetSummary) {
     const name = assetDisplayName(asset);
-    const confirmed = confirm(
+    const confirmed = await appConfirm(
       `¿Eliminar «${name}»?\n\nSe borrará de tu almacenamiento (R2) y de la base de datos. Si está en algún menú, la imagen dejará de mostrarse.`,
+      {
+        title: 'Eliminar archivo',
+        variant: 'danger',
+        confirmText: 'Eliminar',
+      },
     );
     if (!confirmed) return;
 

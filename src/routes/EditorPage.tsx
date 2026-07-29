@@ -25,6 +25,7 @@ import {
   uploadAsset,
   type AssetSummary,
 } from '@/lib/api';
+import { appAlert, appConfirm } from '@/lib/app-dialog';
 import {
   clampActiveObjectsIntoPage,
   clampLayerIntoPage,
@@ -504,6 +505,33 @@ export function EditorPage() {
       .finally(() => setLoading(false));
   }, [menuId, navigate, bumpHistoryUi]);
 
+  // Ajustar zoom al viewport (móvil/desktop) al cargar y al cambiar orientación.
+  useEffect(() => {
+    if (loading || pages.length === 0) return;
+
+    let cancelled = false;
+    let frame2 = 0;
+    const frame1 = requestAnimationFrame(() => {
+      frame2 = requestAnimationFrame(() => {
+        if (!cancelled) setZoom(computeFitZoom());
+      });
+    });
+
+    const onOrientation = () => {
+      window.setTimeout(() => {
+        if (!cancelled) setZoom(computeFitZoom());
+      }, 150);
+    };
+    window.addEventListener('orientationchange', onOrientation);
+    return () => {
+      cancelled = true;
+      cancelAnimationFrame(frame1);
+      cancelAnimationFrame(frame2);
+      window.removeEventListener('orientationchange', onOrientation);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [loading, menuId, pages.length, pages[0]?.width, pages[0]?.height]);
+
   useEffect(() => {
     return () => {
       if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
@@ -711,14 +739,19 @@ export function EditorPage() {
     scheduleSave();
   }
 
-  function handleDeletePage(pageIndex?: number) {
+  async function handleDeletePage(pageIndex?: number) {
     const index =
       typeof pageIndex === 'number' && Number.isFinite(pageIndex)
         ? pageIndex
         : activePageIndexRef.current;
     if (pages.length <= 1) return;
     if (index < 0 || index >= pages.length) return;
-    if (!confirm(`¿Eliminar la página ${index + 1}?`)) return;
+    const confirmed = await appConfirm(`¿Eliminar la página ${index + 1}?`, {
+      title: 'Eliminar página',
+      variant: 'danger',
+      confirmText: 'Eliminar',
+    });
+    if (!confirmed) return;
 
     const removedPageId = pages[index]?.id;
     const next = pages.filter((_, i) => i !== index);
@@ -849,7 +882,7 @@ export function EditorPage() {
     await handleTransferSelectionToPage(toIndex, fromSpill);
   }
 
-  function handleClearCanvas() {
+  async function handleClearCanvas() {
     const canvas = getActiveCanvas();
     if (!canvas) return;
 
@@ -857,13 +890,15 @@ export function EditorPage() {
     const hasBgImage = !!canvas.backgroundImage;
     if (objectCount === 0 && !hasBgImage) return;
 
-    if (
-      !confirm(
-        `¿Limpiar el lienzo de la página ${activePageIndex + 1}?\n\nSe eliminarán todas las capas. El color de fondo se mantiene. Puedes deshacer con Ctrl+Z.`,
-      )
-    ) {
-      return;
-    }
+    const confirmed = await appConfirm(
+      `¿Limpiar el lienzo de la página ${activePageIndex + 1}?\n\nSe eliminarán todas las capas. El color de fondo se mantiene. Puedes deshacer con Ctrl+Z.`,
+      {
+        title: 'Limpiar lienzo',
+        variant: 'warning',
+        confirmText: 'Limpiar',
+      },
+    );
+    if (!confirmed) return;
 
     canvas.discardActiveObject();
     canvas.remove(...canvas.getObjects());
@@ -1087,8 +1122,9 @@ export function EditorPage() {
       setEditorError('');
       setImportOpen(false);
       const providerHint = menu.provider ? ` (${menu.provider})` : '';
-      alert(
+      void appAlert(
         `Importación completada${providerHint}: ${textCount} capas de texto por secciones. Revisa y ajusta antes de guardar.`,
+        { title: 'Importación completada', variant: 'success' },
       );
     } catch (err) {
       setEditorError(
@@ -1340,8 +1376,13 @@ export function EditorPage() {
     setEditorError('');
     try {
       const imported = await parseMenuJsonFile(file);
-      const confirmed = confirm(
+      const confirmed = await appConfirm(
         `¿Reemplazar el menú actual por «${file.name}»?\n\nSe sustituirán todas las páginas del editor.`,
+        {
+          title: 'Importar menú',
+          variant: 'warning',
+          confirmText: 'Reemplazar',
+        },
       );
       if (!confirmed) return;
 
@@ -1441,6 +1482,19 @@ export function EditorPage() {
     scheduleSave();
   }
 
+  function computeFitZoom(): number {
+    const area = canvasAreaRef.current;
+    if (!area) return 100;
+    const page = pages[activePageIndex] ?? pages[0];
+    const size = page ? getPageSize(page) : { width: 595, height: 842 };
+    const availW = Math.max(0, area.clientWidth - 48);
+    const availH = Math.max(0, area.clientHeight - 72);
+    if (availW <= 0) return 100;
+    const fitW = (availW / size.width) * 100;
+    const fitH = availH > 40 ? (availH / size.height) * 100 : fitW;
+    return Math.min(250, Math.max(25, Math.round(Math.min(fitW, fitH))));
+  }
+
   function handleZoomIn() {
     setZoom((z) => Math.min(250, z + 10));
   }
@@ -1454,14 +1508,7 @@ export function EditorPage() {
   }
 
   function handleZoomFit() {
-    const area = canvasAreaRef.current;
-    if (!area) {
-      setZoom(100);
-      return;
-    }
-    const available = area.clientWidth - 48;
-    const fit = Math.min(250, Math.max(25, Math.round((available / 595) * 100)));
-    setZoom(fit);
+    setZoom(computeFitZoom());
   }
 
   async function handleDuplicate(obj: FabricObject) {

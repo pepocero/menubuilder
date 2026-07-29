@@ -84,7 +84,7 @@ export async function revokeAllUserRefreshTokens(db: D1Database, userId: string)
 export async function listMenusByUser(db: D1Database, userId: string): Promise<MenuRow[]> {
   const result = await db
     .prepare(
-      `SELECT id, user_id, title, template_id, thumbnail_url, is_public, public_slug, created_at, updated_at
+      `SELECT id, user_id, title, template_id, thumbnail_url, editor_kind, mobile_document, is_public, public_slug, created_at, updated_at
        FROM menus WHERE user_id = ? ORDER BY updated_at DESC`,
     )
     .bind(userId)
@@ -92,6 +92,8 @@ export async function listMenusByUser(db: D1Database, userId: string): Promise<M
   return (result.results ?? []).map((row) => ({
     ...row,
     canvas_data: row.canvas_data ?? '',
+    editor_kind: (row.editor_kind as MenuRow['editor_kind']) ?? 'canvas',
+    mobile_document: row.mobile_document ?? null,
     menu_document: row.menu_document ?? null,
     export_png_url: row.export_png_url ?? null,
   }));
@@ -100,7 +102,7 @@ export async function listMenusByUser(db: D1Database, userId: string): Promise<M
 export async function getMenuById(db: D1Database, id: string): Promise<MenuRow | null> {
   return db
     .prepare(
-      `SELECT id, user_id, title, template_id, canvas_data, thumbnail_url, menu_document, export_png_url, is_public, public_slug, created_at, updated_at
+      `SELECT id, user_id, title, template_id, canvas_data, thumbnail_url, editor_kind, mobile_document, menu_document, export_png_url, is_public, public_slug, created_at, updated_at
        FROM menus WHERE id = ?`,
     )
     .bind(id)
@@ -114,13 +116,16 @@ export async function createMenu(
   title: string,
   canvasData: string,
   templateId: string | null,
+  editorKind: MenuRow['editor_kind'] = 'canvas',
+  mobileDocument: string | null = null,
+  thumbnailUrl: string | null = null,
 ): Promise<void> {
   await db
     .prepare(
-      `INSERT INTO menus (id, user_id, title, template_id, canvas_data, updated_at)
-       VALUES (?, ?, ?, ?, ?, datetime('now'))`,
+      `INSERT INTO menus (id, user_id, title, template_id, canvas_data, editor_kind, mobile_document, thumbnail_url, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))`,
     )
-    .bind(id, userId, title, templateId, canvasData)
+    .bind(id, userId, title, templateId, canvasData, editorKind, mobileDocument, thumbnailUrl)
     .run();
 }
 
@@ -130,16 +135,18 @@ export async function updateMenu(
   userId: string,
   title: string,
   canvasData: string,
+  editorKind: MenuRow['editor_kind'],
+  mobileDocument: string | null,
   thumbnailUrl: string | null,
   menuDocument: string | null,
   exportPngUrl: string | null,
 ): Promise<boolean> {
   const result = await db
     .prepare(
-      `UPDATE menus SET title = ?, canvas_data = ?, thumbnail_url = ?, menu_document = ?, export_png_url = ?, updated_at = datetime('now')
+      `UPDATE menus SET title = ?, canvas_data = ?, editor_kind = ?, mobile_document = ?, thumbnail_url = ?, menu_document = ?, export_png_url = ?, updated_at = datetime('now')
        WHERE id = ? AND user_id = ?`,
     )
-    .bind(title, canvasData, thumbnailUrl, menuDocument, exportPngUrl, id, userId)
+    .bind(title, canvasData, editorKind, mobileDocument, thumbnailUrl, menuDocument, exportPngUrl, id, userId)
     .run();
   return (result.meta.changes ?? 0) > 0;
 }
@@ -203,7 +210,7 @@ export async function removeMenuPublication(
 export async function getPublicMenuBySlug(db: D1Database, slug: string): Promise<MenuRow | null> {
   return db
     .prepare(
-      `SELECT id, user_id, title, template_id, canvas_data, thumbnail_url, menu_document, export_png_url, is_public, public_slug, created_at, updated_at
+      `SELECT id, user_id, title, template_id, canvas_data, thumbnail_url, editor_kind, mobile_document, menu_document, export_png_url, is_public, public_slug, created_at, updated_at
        FROM menus WHERE public_slug = ? AND is_public = 1`,
     )
     .bind(slug)
@@ -214,7 +221,7 @@ export async function getPublicMenuBySlug(db: D1Database, slug: string): Promise
 export async function listPublishedMenusByUser(db: D1Database, userId: string): Promise<MenuRow[]> {
   const result = await db
     .prepare(
-      `SELECT id, user_id, title, template_id, canvas_data, thumbnail_url, menu_document, export_png_url, is_public, public_slug, created_at, updated_at
+      `SELECT id, user_id, title, template_id, canvas_data, thumbnail_url, editor_kind, mobile_document, menu_document, export_png_url, is_public, public_slug, created_at, updated_at
        FROM menus WHERE user_id = ? AND public_slug IS NOT NULL
        ORDER BY updated_at DESC`,
     )

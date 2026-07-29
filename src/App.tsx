@@ -12,16 +12,19 @@ import { DocsPage } from '@/routes/DocsPage';
 import { EditorPage } from '@/routes/EditorPage';
 import { LandingPage } from '@/routes/LandingPage';
 import { LoginPage } from '@/routes/LoginPage';
+import { MobileEditorPage } from '@/routes/MobileEditorPage';
 import { PublicMenuPage } from '@/routes/PublicMenuPage';
 import { QrsPage } from '@/routes/QrsPage';
 import { RegisterPage } from '@/routes/RegisterPage';
 import { TemplatesPage } from '@/routes/TemplatesPage';
+import { AppDialogHost } from '@/components/ui/AppDialogHost';
 
 export default function App() {
   return (
     <AuthProvider>
       <BrowserRouter>
         <DocumentSeo />
+        <AppDialogHost />
         <Routes>
           <Route path="/" element={<LandingPage />} />
 
@@ -36,6 +39,7 @@ export default function App() {
             <Route path="/qrs" element={<QrsPage />} />
             <Route path="/documentacion" element={<DocsPage />} />
             <Route path="/editor/:menuId" element={<EditorPage />} />
+            <Route path="/mobile-editor/:menuId" element={<MobileEditorPage />} />
           </Route>
 
           <Route element={<SystemAdminRoute />}>

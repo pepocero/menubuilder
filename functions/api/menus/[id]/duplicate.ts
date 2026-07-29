@@ -20,6 +20,9 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
     newTitle,
     menu.canvas_data,
     menu.template_id,
+    menu.editor_kind ?? 'canvas',
+    menu.mobile_document ?? null,
+    menu.thumbnail_url ?? null,
   );
 
   return jsonResponse(
@@ -27,7 +30,9 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
       menu: {
         id: newId,
         title: newTitle,
+        editor_kind: menu.editor_kind ?? 'canvas',
         canvas_data: JSON.parse(menu.canvas_data),
+        mobile_document: menu.mobile_document ? JSON.parse(menu.mobile_document) : null,
       },
     },
     201,

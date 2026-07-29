@@ -1,0 +1,42 @@
+---
+description: Controles tipográficos de editores deben usar iconos WYSIWYG, nunca desplegables
+alwaysApply: true
+---
+
+# Controles de formato tipográfico (WYSIWYG)
+
+En cualquier editor de la app (canvas, móvil, propiedades de texto), los controles de formato de texto **NO** usan `<select>` ni desplegables.
+
+## Obligatorio con iconos (botones toggle, estilo Word/Docs)
+
+- Alineación: izquierda / centro / derecha
+- Negrita / cursiva / subrayado / tachado
+- Transformación: MAYÚSCULAS / minúsculas / Capitalizar
+
+## Cómo hacerlo
+
+- Usar grupos de botones con iconos (SVG o glifo tipográfico `AA`/`aa`/`Aa`).
+- Estado activo con clase `is-active` y `aria-pressed`.
+- Toggle: al pulsar de nuevo se desactiva (`none` / `normal`).
+- Misma UX en tipografía general y tipografía por campo (p. ej. Plato).
+
+## ❌ Incorrecto
+
+```tsx
+<select value={fontStyle}>
+  <option value="normal">Normal</option>
+  <option value="italic">Itálica</option>
+</select>
+```
+
+## ✅ Correcto
+
+```tsx
+<button type="button" className={fontStyle === 'italic' ? 'is-active' : undefined} aria-pressed={fontStyle === 'italic'}>
+  <ItalicIcon />
+</button>
+```
+
+## Excepciones
+
+Sí pueden ser inputs/selects: familia tipográfica, tamaño numérico, color, interlineado, letter-spacing.

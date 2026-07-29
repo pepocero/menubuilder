@@ -14,10 +14,13 @@ import {
   canvasDataToMenuDocument,
   serializeMenuDocument,
 } from '../../../shared/menu-document/converter';
+import { parseMobileMenuDocument } from '../../../shared/mobile-menu';
 
 interface UpdateMenuBody {
   title?: string;
   canvas_data?: unknown;
+  editor_kind?: 'canvas' | 'mobile';
+  mobile_document?: unknown;
   thumbnail_url?: string | null;
 }
 
@@ -85,7 +88,9 @@ export const onRequestGet: PagesFunction<Env> = async (context) => {
       id: menu.id,
       title: menu.title,
       template_id: menu.template_id,
+      editor_kind: menu.editor_kind ?? 'canvas',
       canvas_data: JSON.parse(menu.canvas_data),
+      mobile_document: menu.mobile_document ? JSON.parse(menu.mobile_document) : null,
       thumbnail_url: menu.thumbnail_url,
       is_public: menu.is_public === 1,
       public_slug: menu.public_slug,
@@ -111,7 +116,12 @@ export const onRequestPut: PagesFunction<Env> = async (context) => {
   }
 
   const title = body.title?.trim() || menu.title;
+  const editorKind: 'canvas' | 'mobile' =
+    body.editor_kind === 'mobile' || (!body.editor_kind && menu.editor_kind === 'mobile')
+      ? 'mobile'
+      : 'canvas';
   let canvasData = menu.canvas_data;
+  let mobileDocument = menu.mobile_document;
 
   if (body.canvas_data !== undefined) {
     const validated = validateCanvasData(body.canvas_data);
@@ -121,15 +131,26 @@ export const onRequestPut: PagesFunction<Env> = async (context) => {
     canvasData = validated;
   }
 
+  if (body.mobile_document !== undefined) {
+    const parsed = parseMobileMenuDocument(body.mobile_document);
+    if (!parsed) return errorResponse('mobile_document inválido');
+    mobileDocument = JSON.stringify(parsed);
+  }
+
   const thumbnailUrl =
     body.thumbnail_url !== undefined ? body.thumbnail_url : menu.thumbnail_url;
 
-  const parsedCanvas = JSON.parse(canvasData);
-  const menuDoc = canvasDataToMenuDocument(parsedCanvas, {
-    title,
-    sourceMenuId: menuId,
-  });
-  const menuDocumentJson = menuDoc ? serializeMenuDocument(menuDoc) : null;
+  const menuDocumentJson =
+    editorKind === 'canvas'
+      ? (() => {
+          const parsedCanvas = JSON.parse(canvasData);
+          const menuDoc = canvasDataToMenuDocument(parsedCanvas, {
+            title,
+            sourceMenuId: menuId,
+          });
+          return menuDoc ? serializeMenuDocument(menuDoc) : null;
+        })()
+      : null;
 
   let exportPngUrl = menu.export_png_url;
   if (
@@ -154,6 +175,8 @@ export const onRequestPut: PagesFunction<Env> = async (context) => {
     userId,
     title,
     canvasData,
+    editorKind,
+    mobileDocument,
     thumbnailUrl,
     menuDocumentJson,
     exportPngUrl,
@@ -166,7 +189,9 @@ export const onRequestPut: PagesFunction<Env> = async (context) => {
     menu: {
       id: menuId,
       title,
+      editor_kind: editorKind,
       canvas_data: JSON.parse(canvasData),
+      mobile_document: mobileDocument ? JSON.parse(mobileDocument) : null,
       thumbnail_url: thumbnailUrl,
     },
   });

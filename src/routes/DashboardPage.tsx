@@ -5,6 +5,7 @@ import {
   createMenu,
   deleteMenu,
   duplicateMenu,
+  getMenu,
   listMenus,
   updateMenu,
   type MenuSummary,
@@ -12,9 +13,12 @@ import {
 import { parseMenuImportFile } from '@/lib/export';
 import {
   renderCanvasDataThumbnail,
+  renderMobileDocumentThumbnail,
   withImportedMenuTitle,
 } from '@/lib/menu-thumbnail';
+import { createDefaultMobileMenuDocument } from '@shared/mobile-menu';
 import { AppLayout } from '@/components/AppLayout';
+import { appConfirm } from '@/lib/app-dialog';
 
 export function DashboardPage() {
   const navigate = useNavigate();
@@ -23,6 +27,7 @@ export function DashboardPage() {
   const [loading, setLoading] = useState(true);
   const [importing, setImporting] = useState(false);
   const [error, setError] = useState('');
+  const backfillRef = useRef<Set<string>>(new Set());
 
   const loadMenus = useCallback(async () => {
     try {
@@ -39,6 +44,45 @@ export function DashboardPage() {
     loadMenus();
   }, [loadMenus]);
 
+  // Genera miniaturas faltantes (cartas móviles / plantillas sin preview).
+  useEffect(() => {
+    if (loading) return;
+    const missing = menus.filter((m) => !m.thumbnail_url && !backfillRef.current.has(m.id));
+    if (missing.length === 0) return;
+
+    let cancelled = false;
+    (async () => {
+      for (const item of missing) {
+        if (cancelled) return;
+        backfillRef.current.add(item.id);
+        try {
+          const { menu } = await getMenu(item.id);
+          let thumbnail: string | null = null;
+          if (menu.editor_kind === 'mobile' && menu.mobile_document) {
+            thumbnail = await renderMobileDocumentThumbnail(menu.mobile_document);
+          } else if (menu.canvas_data) {
+            thumbnail = await renderCanvasDataThumbnail(menu.canvas_data);
+          }
+          if (!thumbnail || cancelled) continue;
+          await updateMenu(menu.id, {
+            thumbnail_url: thumbnail,
+            editor_kind: menu.editor_kind,
+          });
+          if (cancelled) return;
+          setMenus((prev) =>
+            prev.map((m) => (m.id === menu.id ? { ...m, thumbnail_url: thumbnail } : m)),
+          );
+        } catch {
+          /* Si falla, se reintentará en otra visita o al guardar en el editor */
+        }
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [loading, menus]);
+
   async function handleNewBlank() {
     setError('');
     try {
@@ -46,6 +90,33 @@ export function DashboardPage() {
       navigate(`/editor/${menu.id}`);
     } catch (err) {
       setError(err instanceof ApiError ? err.message : 'No se pudo crear el menú');
+    }
+  }
+
+  async function handleNewMobile() {
+    setError('');
+    try {
+      const mobileDoc = createDefaultMobileMenuDocument();
+      const { menu } = await createMenu({
+        title: 'Nueva carta móvil',
+        editor_kind: 'mobile',
+        mobile_document: mobileDoc,
+      });
+      try {
+        const thumbnail = await renderMobileDocumentThumbnail(mobileDoc);
+        if (thumbnail) {
+          await updateMenu(menu.id, {
+            thumbnail_url: thumbnail,
+            editor_kind: 'mobile',
+            mobile_document: mobileDoc,
+          });
+        }
+      } catch {
+        /* La carta ya está creada */
+      }
+      navigate(`/mobile-editor/${menu.id}`);
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : 'No se pudo crear la carta móvil');
     }
   }
 
@@ -107,7 +178,12 @@ export function DashboardPage() {
   }
 
   async function handleDelete(id: string) {
-    if (!confirm('¿Eliminar este menú?')) return;
+    const confirmed = await appConfirm('¿Eliminar este menú?', {
+      title: 'Eliminar menú',
+      variant: 'danger',
+      confirmText: 'Eliminar',
+    });
+    if (!confirmed) return;
     setError('');
     try {
       await deleteMenu(id);
@@ -155,6 +231,9 @@ export function DashboardPage() {
             <Link to="/templates" className="btn-secondary">
               Desde plantilla
             </Link>
+            <button type="button" className="btn-secondary" onClick={handleNewMobile}>
+              Nueva carta móvil
+            </button>
             <button type="button" className="btn-primary" onClick={handleNewBlank}>
               Nuevo menú en blanco
             </button>
@@ -176,7 +255,10 @@ export function DashboardPage() {
         <div className="menu-grid">
           {menus.map((menu) => (
             <article key={menu.id} className="menu-card">
-              <Link to={`/editor/${menu.id}`} className="menu-card-link">
+              <Link
+                to={menu.editor_kind === 'mobile' ? `/mobile-editor/${menu.id}` : `/editor/${menu.id}`}
+                className="menu-card-link"
+              >
                 <div className="menu-thumbnail">
                   {menu.thumbnail_url ? (
                     <img src={menu.thumbnail_url} alt={menu.title} />
