@@ -1,8 +1,4 @@
-# Archivos estáticos existentes se sirven primero.
-# Si falta un asset (hash antiguo tras un deploy), devolver 404 real
-# en lugar de index.html (evita MIME text/html en .js/.css → pantalla en blanco).
-/assets/*    /404.html   404
-/fonts/*     /404.html   404
-
-# SPA: el resto de rutas de la app → index.html
+# SPA: rutas de la app → index.html (proxy 200).
+# No usar destinos con código 404: Cloudflare Pages no los soporta y
+# invalidan el resto de reglas (rompe /p/:slug, /editor/*, etc.).
 /*    /index.html   200

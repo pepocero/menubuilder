@@ -823,7 +823,7 @@ export function MobileRuntimeRenderer({
   return (
     <div
       ref={rootRef}
-      className={`mobile-runtime-root${editable ? ' is-editable' : ''}${dragActiveId ? ' is-reordering' : ''}`}
+      className={`mobile-runtime-root${editable ? ' is-editable' : ''}${editable && !onReorder ? ' is-scroll-mode' : ''}${dragActiveId ? ' is-reordering' : ''}`}
       style={{
         backgroundColor: document.theme.backgroundColor,
         color: document.theme.textColor,

@@ -13,6 +13,7 @@ import type { ImportMenuOptions } from '@/components/editor/ImportMenuModal';
 import { StockImageSearch } from '@/components/editor/StockImageSearch';
 import { AssetManagerModal } from '@/components/editor/AssetManagerModal';
 import { PublishQrModal } from '@/components/editor/PublishQrModal';
+import type { CanvasInteractionMode } from '@/components/editor/EditorZoomControls';
 import { appConfirm } from '@/lib/app-dialog';
 import {
   countMobileOcrMenuItems,
@@ -116,6 +117,33 @@ function LowercaseIcon() {
 
 function CapitalizeIcon() {
   return <span className="wysiwyg-text-icon" aria-hidden="true">Aa</span>;
+}
+
+function MoveModeIcon() {
+  return (
+    <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true">
+      <path
+        fill="currentColor"
+        d="M13 5.83 15.17 8l1.41-1.41L12 2 7.41 6.59 8.83 8 11 5.83V11H5.83L8 8.83 6.59 7.41 2 12l4.59 4.59L8 15.17 5.83 13H11v5.17L8.83 16l-1.41 1.41L12 22l4.59-4.59L15.17 16 13 18.17V13h5.17L16 15.17l1.41 1.41L22 12l-4.59-4.59L16 8.83 18.17 11H13V5.83z"
+      />
+    </svg>
+  );
+}
+
+function ScrollModeIcon() {
+  return (
+    <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true">
+      <path
+        fill="currentColor"
+        d="M12 3.5 8.5 7h2.25v3.5h2.5V7H15.5L12 3.5zm0 17L15.5 17h-2.25v-3.5h-2.5V17H8.5L12 20.5zM4 11h16v2H4v-2z"
+      />
+    </svg>
+  );
+}
+
+function getDefaultMobileInteractionMode(): CanvasInteractionMode {
+  if (typeof window === 'undefined') return 'move';
+  return window.matchMedia('(max-width: 900px)').matches ? 'scroll' : 'move';
 }
 
 function BulletListIcon() {
@@ -334,6 +362,9 @@ export function MobileEditorPage() {
   const [assetModalOpen, setAssetModalOpen] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [isPhoneLayout, setIsPhoneLayout] = useState(false);
+  const [interactionMode, setInteractionMode] = useState<CanvasInteractionMode>(
+    getDefaultMobileInteractionMode,
+  );
   const [phoneSheet, setPhoneSheet] = useState<'components' | 'props' | 'more' | null>(null);
   const [ocrModalOpen, setOcrModalOpen] = useState(false);
   const [ocrBusy, setOcrBusy] = useState(false);
@@ -1037,6 +1068,28 @@ export function MobileEditorPage() {
         <header className="mobile-editor-header">
           <h1>Editor móvil</h1>
           <div className="mobile-editor-header-actions">
+            <div className="mobile-editor-mode-group" role="group" aria-label="Modo del lienzo">
+              <button
+                type="button"
+                className={interactionMode === 'move' ? 'is-active' : undefined}
+                title="Mover y reordenar componentes"
+                aria-label="Mover"
+                aria-pressed={interactionMode === 'move'}
+                onClick={() => setInteractionMode('move')}
+              >
+                <MoveModeIcon />
+              </button>
+              <button
+                type="button"
+                className={interactionMode === 'scroll' ? 'is-active' : undefined}
+                title="Desplazar la carta (scroll)"
+                aria-label="Scroll"
+                aria-pressed={interactionMode === 'scroll'}
+                onClick={() => setInteractionMode('scroll')}
+              >
+                <ScrollModeIcon />
+              </button>
+            </div>
             <label className="mobile-editor-desktop-only">
               Nombre
               <input
@@ -1169,13 +1222,19 @@ export function MobileEditorPage() {
                   editable
                   selectedId={selectedId}
                   onSelect={handleSelectComponent}
-                  onReorder={handleReorderComponents}
+                  onReorder={
+                    interactionMode === 'move' ? handleReorderComponents : undefined
+                  }
                   onDelete={(id) => void deleteComponent(id)}
                   animationPreview={animationPreview}
                 />
               </div>
               <p className="panel-hint mobile-editor-desktop-only">
-                {saving ? 'Guardando...' : 'Arrastra componentes en el móvil para reordenarlos · Autoguardado activo'}
+                {saving
+                  ? 'Guardando...'
+                  : interactionMode === 'scroll'
+                    ? 'Modo Scroll: desplaza la carta sin mover componentes · Autoguardado activo'
+                    : 'Modo Mover: arrastra componentes para reordenarlos · Autoguardado activo'}
               </p>
             </section>
 
