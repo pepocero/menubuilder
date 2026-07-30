@@ -168,7 +168,21 @@ function renderComponent(
         ...(minHeight > 0 ? { minHeight: `${minHeight}px` } : {}),
         ...borderStyle,
       };
-      const title = <h3 style={typographyStyle(component)}>{component.title}</h3>;
+      const title = (
+        <h3
+          style={{
+            ...typographyStyle(component),
+            ...(component.textOffsetX
+              ? { marginLeft: `${component.textOffsetX}px` }
+              : {}),
+            ...(component.textOffsetY
+              ? { marginTop: `${component.textOffsetY}px` }
+              : {}),
+          }}
+        >
+          {component.title}
+        </h3>
+      );
       if (onAction) {
         return (
           <button
@@ -464,6 +478,9 @@ export function MobileRuntimeRenderer({
   const dragMovedRef = useRef(false);
   const dragFrameRef = useRef<number | null>(null);
   const listeningRef = useRef(false);
+  const longPressTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const longPressArmedRef = useRef(false);
+  const requireLongPressRef = useRef(false);
   const nodeRefs = useRef<Map<string, HTMLDivElement>>(new Map());
   const prevPosRef = useRef<Map<string, number>>(new Map());
   const componentIdsRef = useRef<string[]>(document.components.map((c) => c.id));
@@ -472,6 +489,9 @@ export function MobileRuntimeRenderer({
   componentIdsRef.current = document.components.map((c) => c.id);
   onReorderRef.current = onReorder;
   onSelectRef.current = onSelect;
+
+  const LONG_PRESS_MS = 400;
+  const LONG_PRESS_CANCEL_PX = 12;
 
   const visibleComponents = useMemo(() => {
     if (editable) return document.components;
@@ -546,12 +566,37 @@ export function MobileRuntimeRenderer({
     window.removeEventListener('pointercancel', stableCancel);
   }
 
+  function clearLongPressTimer() {
+    if (longPressTimerRef.current == null) return;
+    clearTimeout(longPressTimerRef.current);
+    longPressTimerRef.current = null;
+  }
+
+  function armLongPressDrag(id: string) {
+    if (longPressArmedRef.current) return;
+    longPressArmedRef.current = true;
+    dragActiveIdRef.current = id;
+    setDragActiveId(id);
+    const ids = [...componentIdsRef.current];
+    dragOrderIdsRef.current = ids;
+    setDragOrderIds(ids);
+    capturePositions();
+    onSelectRef.current?.(id);
+    try {
+      navigator.vibrate?.(12);
+    } catch {
+      /* ignore */
+    }
+  }
+
   function endDrag(commit: boolean) {
+    clearLongPressTimer();
     const finalIds = dragOrderIdsRef.current;
     const moved = dragMovedRef.current;
     const startId = dragStartRef.current?.id ?? null;
+    const wasArmed = longPressArmedRef.current;
 
-    if (commit && moved && finalIds && finalIds.length === componentIdsRef.current.length) {
+    if (commit && moved && wasArmed && finalIds && finalIds.length === componentIdsRef.current.length) {
       onReorderRef.current?.(finalIds);
     } else if (commit && !moved && startId) {
       onSelectRef.current?.(startId);
@@ -562,6 +607,8 @@ export function MobileRuntimeRenderer({
     dragPointerIdRef.current = null;
     dragStartRef.current = null;
     dragMovedRef.current = false;
+    longPressArmedRef.current = false;
+    requireLongPressRef.current = false;
     setDragActiveId(null);
     setDragOrderIds(null);
     if (dragFrameRef.current !== null) {
@@ -578,16 +625,22 @@ export function MobileRuntimeRenderer({
 
     const dx = e.clientX - start.x;
     const dy = e.clientY - start.y;
-    if (!dragMovedRef.current) {
-      if (Math.hypot(dx, dy) < 6) return;
+    const dist = Math.hypot(dx, dy);
+
+    if (!longPressArmedRef.current) {
+      if (requireLongPressRef.current) {
+        if (dist >= LONG_PRESS_CANCEL_PX) {
+          endDrag(false);
+        }
+        return;
+      }
+      // Ratón / escritorio: activar al mover un poco (sin pulsación larga).
+      if (dist < 6) return;
+      armLongPressDrag(start.id);
       dragMovedRef.current = true;
-      dragActiveIdRef.current = start.id;
-      setDragActiveId(start.id);
-      const ids = [...componentIdsRef.current];
-      dragOrderIdsRef.current = ids;
-      setDragOrderIds(ids);
-      capturePositions();
-      onSelectRef.current?.(start.id);
+    } else if (!dragMovedRef.current) {
+      if (dist < 6) return;
+      dragMovedRef.current = true;
     }
 
     if (dragFrameRef.current !== null) return;
@@ -632,13 +685,25 @@ export function MobileRuntimeRenderer({
 
     e.preventDefault();
     removeDragListeners();
+    clearLongPressTimer();
     dragPointerIdRef.current = e.pointerId;
     dragStartRef.current = { x: e.clientX, y: e.clientY, id };
     dragMovedRef.current = false;
+    longPressArmedRef.current = false;
+    requireLongPressRef.current = e.pointerType !== 'mouse';
     listeningRef.current = true;
     window.addEventListener('pointermove', stableMove, { passive: true });
     window.addEventListener('pointerup', stableUp);
     window.addEventListener('pointercancel', stableCancel);
+
+    if (requireLongPressRef.current) {
+      longPressTimerRef.current = setTimeout(() => {
+        longPressTimerRef.current = null;
+        if (dragStartRef.current?.id === id && dragPointerIdRef.current === e.pointerId) {
+          armLongPressDrag(id);
+        }
+      }, LONG_PRESS_MS);
+    }
   }
 
   useEffect(() => {
@@ -649,6 +714,7 @@ export function MobileRuntimeRenderer({
 
   useEffect(
     () => () => {
+      clearLongPressTimer();
       removeDragListeners();
       if (dragFrameRef.current !== null) window.cancelAnimationFrame(dragFrameRef.current);
     },

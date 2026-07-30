@@ -219,11 +219,13 @@ async function drawMobileComponentThumb(
       ctx.restore();
       ctx.fillStyle = component.typography?.color || textColor;
       ctx.font = `700 16px ${fontFamily}`;
+      const offsetX = component.textOffsetX ?? 0;
+      const offsetY = component.textOffsetY ?? 0;
       ctx.fillText(
         component.title || 'Sección',
-        x + pad,
-        y + Math.min(28, minH - 8),
-        width - pad * 2,
+        x + pad + offsetX,
+        y + Math.min(28, minH - 8) + offsetY,
+        Math.max(8, width - pad * 2),
       );
       return y + minH;
     }

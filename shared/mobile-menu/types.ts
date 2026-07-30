@@ -121,6 +121,15 @@ export interface MobileSectionComponent extends MobileComponentBase {
     /** Si es true, la imagen cubre todo el componente. */
     stretch: boolean;
   };
+  /**
+   * Margen izquierdo del título (px). Puede ser negativo.
+   * Útil para desplazar el texto cuando hay imagen alineada a la izquierda.
+   */
+  textOffsetX?: number;
+  /**
+   * Desplazamiento vertical del título (px). Negativo = arriba, positivo = abajo.
+   */
+  textOffsetY?: number;
   action?: MobileInteractionAction;
 }
 

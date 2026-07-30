@@ -4130,6 +4130,40 @@ textarea {
   color: #0369a1;
 }
 
+.mobile-editor-mode-text {
+  display: none;
+}
+
+.mobile-editor-more-mode {
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+}
+
+.mobile-editor-more-mode-label {
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--color-muted, #64748b);
+}
+
+.mobile-editor-page--phone .mobile-editor-more-mode .mobile-editor-mode-group {
+  width: 100%;
+}
+
+.mobile-editor-page--phone .mobile-editor-more-mode .mobile-editor-mode-group button {
+  flex: 1;
+  width: auto;
+  min-width: 0;
+  height: 2.6rem;
+  gap: 0.4rem;
+  font-size: 0.85rem;
+  font-weight: 600;
+}
+
+.mobile-editor-page--phone .mobile-editor-more-mode .mobile-editor-mode-text {
+  display: inline;
+}
+
 .mobile-editor-layout {
   flex: 1;
   min-height: 0;
@@ -5544,10 +5578,6 @@ textarea {
 
 .mobile-editor-page--phone .mobile-editor-props-pane {
   padding-bottom: calc(0.5rem + env(safe-area-inset-bottom, 0px));
-}
-
-.mobile-editor-page--phone .mobile-editor-mode-group {
-  margin-right: 0.15rem;
 }
 
 .mobile-editor-page--phone .mobile-editor-phone-backdrop {

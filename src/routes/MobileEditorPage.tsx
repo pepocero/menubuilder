@@ -141,11 +141,6 @@ function ScrollModeIcon() {
   );
 }
 
-function getDefaultMobileInteractionMode(): CanvasInteractionMode {
-  if (typeof window === 'undefined') return 'move';
-  return window.matchMedia('(max-width: 900px)').matches ? 'scroll' : 'move';
-}
-
 function BulletListIcon() {
   return (
     <svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true">
@@ -362,9 +357,7 @@ export function MobileEditorPage() {
   const [assetModalOpen, setAssetModalOpen] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [isPhoneLayout, setIsPhoneLayout] = useState(false);
-  const [interactionMode, setInteractionMode] = useState<CanvasInteractionMode>(
-    getDefaultMobileInteractionMode,
-  );
+  const [interactionMode, setInteractionMode] = useState<CanvasInteractionMode>('scroll');
   const [phoneSheet, setPhoneSheet] = useState<'components' | 'props' | 'more' | null>(null);
   const [ocrModalOpen, setOcrModalOpen] = useState(false);
   const [ocrBusy, setOcrBusy] = useState(false);
@@ -690,12 +683,11 @@ export function MobileEditorPage() {
       components: [...current.components, next],
     }));
     setSelectedId(next.id);
-    if (isPhoneLayout) setPhoneSheet('props');
+    // En teléfono las propiedades solo se abren con el botón Editar.
   }
 
   function handleSelectComponent(id: string) {
     setSelectedId(id);
-    if (isPhoneLayout) setPhoneSheet('props');
   }
 
   function togglePhoneSheet(sheet: 'components' | 'props' | 'more') {
@@ -995,6 +987,31 @@ export function MobileEditorPage() {
     }));
   }
 
+  function updateSelectedSectionTextOffset(patch: {
+    textOffsetX?: number;
+    textOffsetY?: number;
+  }) {
+    if (!selectedId) return;
+    updateDoc((current) => ({
+      ...current,
+      components: current.components.map((component) => {
+        if (component.id !== selectedId || component.type !== 'section') return component;
+        const next = { ...component };
+        if (patch.textOffsetX !== undefined) {
+          const value = Math.max(-400, Math.min(400, Math.round(patch.textOffsetX) || 0));
+          if (value === 0) delete next.textOffsetX;
+          else next.textOffsetX = value;
+        }
+        if (patch.textOffsetY !== undefined) {
+          const value = Math.max(-400, Math.min(400, Math.round(patch.textOffsetY) || 0));
+          if (value === 0) delete next.textOffsetY;
+          else next.textOffsetY = value;
+        }
+        return next;
+      }),
+    }));
+  }
+
   function updateSelectedSectionBorderLine(borderLine: MobileSectionBorderLine) {
     if (!selectedId) return;
     updateDoc((current) => ({
@@ -1068,7 +1085,11 @@ export function MobileEditorPage() {
         <header className="mobile-editor-header">
           <h1>Editor móvil</h1>
           <div className="mobile-editor-header-actions">
-            <div className="mobile-editor-mode-group" role="group" aria-label="Modo del lienzo">
+            <div
+              className="mobile-editor-mode-group mobile-editor-desktop-only"
+              role="group"
+              aria-label="Modo del lienzo"
+            >
               <button
                 type="button"
                 className={interactionMode === 'move' ? 'is-active' : undefined}
@@ -1946,6 +1967,43 @@ export function MobileEditorPage() {
                       }
                     />
                   </label>
+                  {selected.type === 'section' && (
+                    <>
+                      <label>
+                        Margen izquierdo (px)
+                        <input
+                          type="number"
+                          min={-400}
+                          max={400}
+                          step={1}
+                          value={selected.textOffsetX ?? 0}
+                          onChange={(e) =>
+                            updateSelectedSectionTextOffset({
+                              textOffsetX: Number(e.target.value),
+                            })
+                          }
+                        />
+                      </label>
+                      <label>
+                        Desplazamiento vertical (px)
+                        <input
+                          type="number"
+                          min={-400}
+                          max={400}
+                          step={1}
+                          value={selected.textOffsetY ?? 0}
+                          onChange={(e) =>
+                            updateSelectedSectionTextOffset({
+                              textOffsetY: Number(e.target.value),
+                            })
+                          }
+                        />
+                      </label>
+                      <small className="panel-hint">
+                        Negativo mueve el texto a la izquierda / arriba. Positivo a la derecha / abajo.
+                      </small>
+                    </>
+                  )}
                     </>
                   )}
                   {selected.type === 'menuItem' && selectedMenuItemFieldTypo && (
@@ -2247,6 +2305,38 @@ export function MobileEditorPage() {
               </button>
             </div>
             <div className="mobile-editor-more-body">
+              <div className="mobile-editor-more-mode">
+                <span className="mobile-editor-more-mode-label">Modo del lienzo</span>
+                <div className="mobile-editor-mode-group" role="group" aria-label="Modo del lienzo">
+                  <button
+                    type="button"
+                    className={interactionMode === 'move' ? 'is-active' : undefined}
+                    title="Mover: mantén pulsado un componente para reordenarlo"
+                    aria-label="Mover"
+                    aria-pressed={interactionMode === 'move'}
+                    onClick={() => setInteractionMode('move')}
+                  >
+                    <MoveModeIcon />
+                    <span className="mobile-editor-mode-text">Mover</span>
+                  </button>
+                  <button
+                    type="button"
+                    className={interactionMode === 'scroll' ? 'is-active' : undefined}
+                    title="Scroll: desplaza la carta sin mover componentes"
+                    aria-label="Scroll"
+                    aria-pressed={interactionMode === 'scroll'}
+                    onClick={() => setInteractionMode('scroll')}
+                  >
+                    <ScrollModeIcon />
+                    <span className="mobile-editor-mode-text">Scroll</span>
+                  </button>
+                </div>
+                <small className="panel-hint">
+                  {interactionMode === 'move'
+                    ? 'Mantén pulsado un componente y arrástralo para reordenarlo. Las propiedades se abren con Editar.'
+                    : 'Desplaza la carta con el dedo. Toca un componente para seleccionarlo y pulsa Editar para sus propiedades.'}
+                </small>
+              </div>
               <label>
                 Nombre
                 <input

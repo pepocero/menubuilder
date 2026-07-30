@@ -246,6 +246,12 @@ function parseComponent(value: unknown): MobileComponent | null {
       borderLine,
       borderRound,
       backgroundImage: parseSectionBackgroundImage(value.backgroundImage),
+      textOffsetX: isNumber(value.textOffsetX)
+        ? Math.max(-400, Math.min(400, Math.round(value.textOffsetX)))
+        : undefined,
+      textOffsetY: isNumber(value.textOffsetY)
+        ? Math.max(-400, Math.min(400, Math.round(value.textOffsetY)))
+        : undefined,
       action: parseInteractionAction(value.action),
       animation: parseAnimation(value.animation),
       effect: parseEffect(value.effect),
