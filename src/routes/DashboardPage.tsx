@@ -44,14 +44,25 @@ export function DashboardPage() {
     loadMenus();
   }, [loadMenus]);
 
-  // Genera miniaturas faltantes (cartas móviles / plantillas sin preview).
+  // Genera miniaturas faltantes y regenera las de cartas móviles (para incluir imágenes).
   useEffect(() => {
     if (loading) return;
-    const missing = menus.filter((m) => !m.thumbnail_url && !backfillRef.current.has(m.id));
+    let mobileRefreshDone = false;
+    try {
+      mobileRefreshDone = sessionStorage.getItem('mb.mobileThumb.images.v1') === '1';
+    } catch {
+      mobileRefreshDone = false;
+    }
+    const missing = menus.filter((m) => {
+      if (backfillRef.current.has(m.id)) return false;
+      if (!m.thumbnail_url) return true;
+      return m.editor_kind === 'mobile' && !mobileRefreshDone;
+    });
     if (missing.length === 0) return;
 
     let cancelled = false;
     (async () => {
+      let refreshedMobile = false;
       for (const item of missing) {
         if (cancelled) return;
         backfillRef.current.add(item.id);
@@ -60,6 +71,7 @@ export function DashboardPage() {
           let thumbnail: string | null = null;
           if (menu.editor_kind === 'mobile' && menu.mobile_document) {
             thumbnail = await renderMobileDocumentThumbnail(menu.mobile_document);
+            refreshedMobile = true;
           } else if (menu.canvas_data) {
             thumbnail = await renderCanvasDataThumbnail(menu.canvas_data);
           }
@@ -74,6 +86,13 @@ export function DashboardPage() {
           );
         } catch {
           /* Si falla, se reintentará en otra visita o al guardar en el editor */
+        }
+      }
+      if (!cancelled && refreshedMobile) {
+        try {
+          sessionStorage.setItem('mb.mobileThumb.images.v1', '1');
+        } catch {
+          /* ignore */
         }
       }
     })();

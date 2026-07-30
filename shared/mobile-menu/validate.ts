@@ -1,6 +1,12 @@
 import { MOBILE_DEVICE_PRESETS, createDefaultMobileMenuDocument } from './defaults';
-import type { MobileComponent, MobileMenuDocument } from './types';
-import { MOBILE_MENU_VERSION } from './types';
+import {
+  MOBILE_MENU_VERSION,
+  migrateLegacySectionBorder,
+  type MobileComponent,
+  type MobileMenuDocument,
+  type MobileSectionBorderLine,
+  type MobileSectionBorderRound,
+} from './types';
 
 function isObject(value: unknown): value is Record<string, unknown> {
   return !!value && typeof value === 'object';
@@ -194,12 +200,51 @@ function parseComponent(value: unknown): MobileComponent | null {
   if (!isObject(value) || !isString(value.id) || !isString(value.type)) return null;
   const type = value.type;
   if (type === 'section' && isString(value.title) && isString(value.backgroundColor) && isNumber(value.padding)) {
+    const size =
+      value.size === 'auto' ||
+      value.size === 's' ||
+      value.size === 'm' ||
+      value.size === 'l' ||
+      value.size === 'xl'
+        ? value.size
+        : 's';
+    const hasNewBorderFields =
+      value.borderLine !== undefined || value.borderRound !== undefined;
+    let borderLine: MobileSectionBorderLine;
+    let borderRound: MobileSectionBorderRound;
+    if (hasNewBorderFields) {
+      borderLine =
+        value.borderLine === 'none' ||
+        value.borderLine === 'thin' ||
+        value.borderLine === 'medium' ||
+        value.borderLine === 'thick' ||
+        value.borderLine === 'dashed'
+          ? value.borderLine
+          : 'thin';
+      borderRound =
+        value.borderRound === 'none' ||
+        value.borderRound === 'sm' ||
+        value.borderRound === 'md' ||
+        value.borderRound === 'lg' ||
+        value.borderRound === 'xl'
+          ? value.borderRound
+          : 'md';
+    } else {
+      const migrated = migrateLegacySectionBorder(
+        isString(value.border) ? value.border : undefined,
+      );
+      borderLine = migrated.borderLine;
+      borderRound = migrated.borderRound;
+    }
     return {
       id: value.id,
       type,
       title: value.title,
       backgroundColor: value.backgroundColor,
       padding: value.padding,
+      size,
+      borderLine,
+      borderRound,
       backgroundImage: parseSectionBackgroundImage(value.backgroundImage),
       action: parseInteractionAction(value.action),
       animation: parseAnimation(value.animation),
@@ -350,7 +395,11 @@ export function parseMobileMenuDocument(value: unknown): MobileMenuDocument | nu
   for (const item of value.components) {
     const parsed = parseComponent(item);
     if (!parsed) return null;
-    components.push(parsed);
+    if (isObject(item) && item.hidden === true) {
+      components.push({ ...parsed, hidden: true });
+    } else {
+      components.push(parsed);
+    }
   }
 
   return {

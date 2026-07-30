@@ -2,6 +2,7 @@ import type { CanvasData } from '@/types/canvas';
 import type { MobileComponent, MobileMenuDocument } from '@shared/mobile-menu';
 import { generateThumbnail } from '@/lib/image-compress';
 import { renderMenuPageToDataUrl } from '@/lib/render-menu-page';
+import { normalizeAssetUrl } from '@/lib/asset-url';
 
 /**
  * Renderiza la primera página del documento a una miniatura PNG (data URL)
@@ -69,18 +70,49 @@ function drawRoundedRect(
   ctx.closePath();
 }
 
+function isExternalUrl(src: string): boolean {
+  if (!/^https?:\/\//i.test(src)) return false;
+  try {
+    return new URL(src, window.location.origin).origin !== window.location.origin;
+  } catch {
+    return true;
+  }
+}
+
 function loadImage(src: string): Promise<HTMLImageElement | null> {
   return new Promise((resolve) => {
-    if (!src.trim()) {
+    const url = normalizeAssetUrl(src);
+    if (!url.trim()) {
       resolve(null);
       return;
     }
     const img = new Image();
-    img.crossOrigin = 'anonymous';
+    // Solo CORS en URLs externas. En assets propios (/api/...) hace falta la cookie
+    // de sesión; con crossOrigin=anonymous la imagen falla y el preview sale vacío.
+    if (isExternalUrl(url)) {
+      img.crossOrigin = 'anonymous';
+    }
     img.onload = () => resolve(img);
     img.onerror = () => resolve(null);
-    img.src = src;
+    img.src = url;
   });
+}
+
+function drawCoverImage(
+  ctx: CanvasRenderingContext2D,
+  img: HTMLImageElement,
+  x: number,
+  y: number,
+  w: number,
+  h: number,
+  cover: boolean,
+) {
+  const scale = cover
+    ? Math.max(w / img.naturalWidth, h / img.naturalHeight)
+    : Math.min(w / img.naturalWidth, h / img.naturalHeight);
+  const dw = img.naturalWidth * scale;
+  const dh = img.naturalHeight * scale;
+  ctx.drawImage(img, x + (w - dw) / 2, y + (h - dh) / 2, dw, dh);
 }
 
 /**
@@ -111,7 +143,7 @@ export async function renderMobileDocumentThumbnail(
     let y = 24;
     const contentW = vw - padX * 2;
 
-    const components = doc.components ?? [];
+    const components = (doc.components ?? []).filter((c) => c.hidden !== true);
     for (const component of components) {
       if (y > vh - 40) break;
       y = await drawMobileComponentThumb(ctx, component, {
@@ -150,13 +182,50 @@ async function drawMobileComponentThumb(
   switch (component.type) {
     case 'section': {
       const pad = Math.min(component.padding ?? 16, 24);
+      const minH =
+        component.size === 's'
+          ? 72
+          : component.size === 'm'
+            ? 96
+            : component.size === 'l'
+              ? 120
+              : component.size === 'xl'
+                ? 150
+                : component.size === 'auto'
+                  ? 56
+                  : 72;
+      const radius =
+        component.borderRound === 'sm'
+          ? 8
+          : component.borderRound === 'md'
+            ? 12
+            : component.borderRound === 'lg'
+              ? 16
+              : component.borderRound === 'xl'
+                ? 20
+                : 10;
+      drawRoundedRect(ctx, x, y, width, minH, radius);
+      ctx.save();
+      ctx.clip();
       ctx.fillStyle = component.backgroundColor || '#ffffff';
-      drawRoundedRect(ctx, x, y, width, 44, 10);
-      ctx.fill();
-      ctx.fillStyle = textColor;
+      ctx.fillRect(x, y, width, minH);
+      const bgSrc = component.backgroundImage?.src?.trim();
+      if (bgSrc) {
+        const img = await loadImage(bgSrc);
+        if (img) {
+          drawCoverImage(ctx, img, x, y, width, minH, component.backgroundImage?.stretch !== false);
+        }
+      }
+      ctx.restore();
+      ctx.fillStyle = component.typography?.color || textColor;
       ctx.font = `700 16px ${fontFamily}`;
-      ctx.fillText(component.title || 'Sección', x + pad, y + 28, width - pad * 2);
-      return y + 44;
+      ctx.fillText(
+        component.title || 'Sección',
+        x + pad,
+        y + Math.min(28, minH - 8),
+        width - pad * 2,
+      );
+      return y + minH;
     }
     case 'heading': {
       const size = component.typography?.fontSize ?? 28;
@@ -191,10 +260,7 @@ async function drawMobileComponentThumb(
       ctx.save();
       ctx.clip();
       if (img) {
-        const scale = Math.max(width / img.width, h / img.height);
-        const dw = img.width * scale;
-        const dh = img.height * scale;
-        ctx.drawImage(img, x + (width - dw) / 2, y + (h - dh) / 2, dw, dh);
+        drawCoverImage(ctx, img, x, y, width, h, true);
       } else {
         ctx.fillStyle = '#e5e7eb';
         ctx.fillRect(x, y, width, h);
@@ -221,10 +287,7 @@ async function drawMobileComponentThumb(
         ctx.save();
         ctx.clip();
         if (img) {
-          const scale = Math.max(thumbW / img.width, thumbH / img.height);
-          const dw = img.width * scale;
-          const dh = img.height * scale;
-          ctx.drawImage(img, thumbX + (thumbW - dw) / 2, y + (thumbH - dh) / 2, dw, dh);
+          drawCoverImage(ctx, img, thumbX, y, thumbW, thumbH, true);
         } else {
           ctx.fillStyle = '#e5e7eb';
           ctx.fillRect(thumbX, y, thumbW, thumbH);
@@ -236,7 +299,7 @@ async function drawMobileComponentThumb(
       ctx.fillStyle = textColor;
       ctx.font = `700 15px ${fontFamily}`;
       const title = component.title || 'Plato';
-      const price = component.price || '';
+      const price = (component.price || '').replace(/(\d)\s+€/g, '$1€').replace(/€\s+(\d)/g, '€$1');
       const priceW = ctx.measureText(price).width;
       ctx.fillText(title, contentX, y + 16, Math.max(40, contentWidth - priceW - 8));
       ctx.textAlign = 'right';

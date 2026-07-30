@@ -8,15 +8,26 @@ import {
 import { Link, useParams } from 'react-router-dom';
 import { AppLayout } from '@/components/AppLayout';
 import { MobileRuntimeRenderer } from '@/components/mobile-public/MobileRuntimeRenderer';
-import { ApiError, getMenu, updateMenu, uploadAsset } from '@/lib/api';
-import { renderMobileDocumentThumbnail } from '@/lib/menu-thumbnail';
+import { MobileImportOcrModal, type MobileOcrImportSource } from '@/components/mobile-public/MobileImportOcrModal';
+import type { ImportMenuOptions } from '@/components/editor/ImportMenuModal';
 import { StockImageSearch } from '@/components/editor/StockImageSearch';
 import { AssetManagerModal } from '@/components/editor/AssetManagerModal';
 import { PublishQrModal } from '@/components/editor/PublishQrModal';
+import { appConfirm } from '@/lib/app-dialog';
+import {
+  countMobileOcrMenuItems,
+  menuOcrResultToMobileComponents,
+} from '@/lib/ocr-to-mobile-menu';
+import { prepareImageForVisionOcr } from '@/lib/vision-menu-import';
 import { ensureEditorFontLoaded } from '@/lib/google-fonts';
+import { renderMobileDocumentThumbnail } from '@/lib/menu-thumbnail';
+import { ApiError, getMenu, recognizeMenuWithVision, updateMenu, uploadAsset } from '@/lib/api';
 import {
   MOBILE_COMPONENT_LIBRARY,
   MOBILE_DEVICE_PRESETS,
+  MOBILE_SECTION_SIZE_OPTIONS,
+  MOBILE_SECTION_BORDER_LINE_OPTIONS,
+  MOBILE_SECTION_BORDER_ROUND_OPTIONS,
   COMMON_ALLERGENS,
   createDefaultMobileComponent,
   createDefaultMobileMenuDocument,
@@ -35,6 +46,9 @@ import {
   type MobileInteractionAction,
   type MobileInteractionActionType,
   type MobileMenuDocument,
+  type MobileSectionBorderLine,
+  type MobileSectionBorderRound,
+  type MobileSectionSize,
   type MobileTypographyConfig,
 } from '@shared/mobile-menu';
 
@@ -321,7 +335,25 @@ export function MobileEditorPage() {
   const [uploading, setUploading] = useState(false);
   const [isPhoneLayout, setIsPhoneLayout] = useState(false);
   const [phoneSheet, setPhoneSheet] = useState<'components' | 'props' | 'more' | null>(null);
+  const [ocrModalOpen, setOcrModalOpen] = useState(false);
+  const [ocrBusy, setOcrBusy] = useState(false);
+  const [ocrError, setOcrError] = useState('');
+  const [ocrProgress, setOcrProgress] = useState<{
+    phase: string;
+    percent: number;
+    detail?: string;
+  } | null>(null);
+  const ocrInFlightRef = useRef(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const documentRef = useRef(document);
+  const persistTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  documentRef.current = document;
+
+  useEffect(() => {
+    return () => {
+      if (persistTimerRef.current != null) clearTimeout(persistTimerRef.current);
+    };
+  }, []);
 
   useEffect(() => {
     const mq = window.matchMedia('(max-width: 900px)');
@@ -458,6 +490,104 @@ export function MobileEditorPage() {
     }
   }
 
+  async function resolveOcrSourceBlob(source: MobileOcrImportSource): Promise<Blob> {
+    if (source.type === 'file') return source.file;
+    if (!source.asset.url) {
+      throw new Error('El archivo seleccionado no tiene URL válida');
+    }
+    const response = await fetch(source.asset.url, { credentials: 'include' });
+    if (!response.ok) {
+      throw new Error('No se pudo cargar la imagen desde tus archivos');
+    }
+    return response.blob();
+  }
+
+  async function handleMobileOcrImport(
+    sources: MobileOcrImportSource[],
+    options: ImportMenuOptions,
+  ) {
+    if (ocrInFlightRef.current || sources.length === 0) return;
+    ocrInFlightRef.current = true;
+    setOcrBusy(true);
+    setOcrError('');
+    setError('');
+    setOcrProgress({ phase: 'prepare', percent: 1, detail: `1 / ${sources.length}` });
+
+    const imported: ReturnType<typeof menuOcrResultToMobileComponents> = [];
+    try {
+      for (let i = 0; i < sources.length; i++) {
+        const source = sources[i];
+        const base = Math.round((i / sources.length) * 100);
+        const span = Math.max(1, Math.round(100 / sources.length));
+        setOcrProgress({
+          phase: 'prepare',
+          percent: Math.min(99, base + 2),
+          detail: `${i + 1} / ${sources.length}`,
+        });
+        const sourceBlob = await resolveOcrSourceBlob(source);
+        const visionInput = await prepareImageForVisionOcr(sourceBlob);
+        setOcrProgress({
+          phase: 'ocr',
+          percent: Math.min(99, base + Math.round(span * 0.15)),
+          detail: `${i + 1} / ${sources.length}`,
+        });
+        const { menu } = await recognizeMenuWithVision(visionInput, {
+          provider: options.provider,
+          promptExtra: options.promptExtra,
+          onProgress: (p) => {
+            setOcrProgress({
+              phase: 'ocr',
+              percent: Math.min(99, base + Math.round(span * (0.15 + (p / 100) * 0.7))),
+              detail: `${i + 1} / ${sources.length}`,
+            });
+          },
+        });
+        setOcrProgress({
+          phase: 'build',
+          percent: Math.min(99, base + Math.round(span * 0.92)),
+          detail: `${i + 1} / ${sources.length}`,
+        });
+        imported.push(...menuOcrResultToMobileComponents(menu));
+      }
+
+      if (imported.length === 0) {
+        throw new Error(
+          'No se detectaron platos legibles. Prueba con fotos más nítidas y buen contraste.',
+        );
+      }
+
+      setOcrProgress({ phase: 'done', percent: 100, detail: `${sources.length} imagen(es)` });
+      updateDoc((current) => ({
+        ...current,
+        components: [...current.components, ...imported],
+      }));
+      const firstMenuItem = imported.find((c) => c.type === 'menuItem');
+      if (firstMenuItem) setSelectedId(firstMenuItem.id);
+      setOcrModalOpen(false);
+      setOcrError('');
+      setPhoneSheet(null);
+      const dishCount = countMobileOcrMenuItems(imported);
+      if (dishCount === 0) {
+        setError(
+          'Se importó contenido, pero no se detectaron platos con precio. Revisa las secciones añadidas.',
+        );
+      }
+    } catch (err) {
+      const message =
+        err instanceof ApiError
+          ? err.message
+          : err instanceof Error
+            ? err.message
+            : 'No se pudo importar la carta';
+      setOcrError(message);
+      setError(message);
+    } finally {
+      ocrInFlightRef.current = false;
+      setOcrBusy(false);
+      setOcrProgress(null);
+    }
+  }
+
   useEffect(() => {
     if (!livePreviewOpen) return;
     function onKeyDown(e: KeyboardEvent) {
@@ -496,9 +626,29 @@ export function MobileEditorPage() {
     }
   }
 
-  function updateDoc(mutator: (current: MobileMenuDocument) => MobileMenuDocument) {
-    const next = mutator(document);
+  function schedulePersist() {
+    if (persistTimerRef.current != null) clearTimeout(persistTimerRef.current);
+    persistTimerRef.current = setTimeout(() => {
+      persistTimerRef.current = null;
+      void persist(documentRef.current);
+    }, 400);
+  }
+
+  function updateDoc(
+    mutator: (current: MobileMenuDocument) => MobileMenuDocument,
+    options?: { debouncePersist?: boolean },
+  ) {
+    const next = mutator(documentRef.current);
+    documentRef.current = next;
     setDocument(next);
+    if (options?.debouncePersist) {
+      schedulePersist();
+      return;
+    }
+    if (persistTimerRef.current != null) {
+      clearTimeout(persistTimerRef.current);
+      persistTimerRef.current = null;
+    }
     void persist(next);
   }
 
@@ -688,7 +838,10 @@ export function MobileEditorPage() {
     });
   }
 
-  function updateSelectedTypography(patch: Partial<MobileTypographyConfig>) {
+  function updateSelectedTypography(
+    patch: Partial<MobileTypographyConfig>,
+    options?: { debouncePersist?: boolean },
+  ) {
     if (!selectedId) return;
     updateDoc((current) => ({
       ...current,
@@ -710,12 +863,13 @@ export function MobileEditorPage() {
         if (nextTypography.fontFamily) ensureEditorFontLoaded(nextTypography.fontFamily);
         return { ...component, typography: nextTypography };
       }),
-    }));
+    }), options);
   }
 
   function updateSelectedMenuItemTypography(
     target: 'title' | 'description' | 'price' | 'ingredients',
     patch: Partial<MobileTypographyConfig>,
+    options?: { debouncePersist?: boolean },
   ) {
     if (!selectedId) return;
     updateDoc((current) => ({
@@ -736,7 +890,7 @@ export function MobileEditorPage() {
           },
         };
       }),
-    }));
+    }), options);
   }
 
   function updateSelectedMenuItemImage(
@@ -799,15 +953,81 @@ export function MobileEditorPage() {
     }));
   }
 
-  function deleteSelected() {
+  function updateSelectedSectionSize(size: MobileSectionSize) {
     if (!selectedId) return;
-    const id = selectedId;
     updateDoc((current) => ({
       ...current,
-      components: current.components.filter((component) => component.id !== id),
+      components: current.components.map((component) => {
+        if (component.id !== selectedId || component.type !== 'section') return component;
+        return { ...component, size };
+      }),
     }));
-    setSelectedId(null);
+  }
+
+  function updateSelectedSectionBorderLine(borderLine: MobileSectionBorderLine) {
+    if (!selectedId) return;
+    updateDoc((current) => ({
+      ...current,
+      components: current.components.map((component) => {
+        if (component.id !== selectedId || component.type !== 'section') return component;
+        return { ...component, borderLine };
+      }),
+    }));
+  }
+
+  function updateSelectedSectionBorderRound(borderRound: MobileSectionBorderRound) {
+    if (!selectedId) return;
+    updateDoc((current) => ({
+      ...current,
+      components: current.components.map((component) => {
+        if (component.id !== selectedId || component.type !== 'section') return component;
+        return { ...component, borderRound };
+      }),
+    }));
+  }
+
+  function deleteSelected() {
+    if (!selectedId) return;
+    void deleteComponent(selectedId);
+  }
+
+  async function deleteComponent(id: string) {
+    const component = documentRef.current.components.find((c) => c.id === id);
+    const label =
+      component && 'title' in component && component.title.trim()
+        ? `«${component.title.trim()}»`
+        : component && 'text' in component && component.text.trim()
+          ? `«${component.text.trim().slice(0, 40)}${component.text.trim().length > 40 ? '…' : ''}»`
+          : component && 'label' in component && component.label.trim()
+            ? `«${component.label.trim()}»`
+            : 'este componente';
+    const confirmed = await appConfirm(`¿Eliminar ${label}?`, {
+      title: 'Eliminar componente',
+      variant: 'danger',
+      confirmText: 'Eliminar',
+      cancelText: 'Cancelar',
+    });
+    if (!confirmed) return;
+
+    updateDoc((current) => ({
+      ...current,
+      components: current.components.filter((c) => c.id !== id),
+    }));
+    setSelectedId((current) => (current === id ? null : current));
     if (isPhoneLayout) setPhoneSheet(null);
+  }
+
+  function updateSelectedHidden(hidden: boolean) {
+    if (!selectedId) return;
+    updateDoc((current) => ({
+      ...current,
+      components: current.components.map((component) => {
+        if (component.id !== selectedId) return component;
+        if (hidden) return { ...component, hidden: true };
+        const { hidden: _removed, ...rest } = component;
+        return rest as typeof component;
+      }),
+    }));
   }
 
   return (
@@ -842,6 +1062,14 @@ export function MobileEditorPage() {
                 ))}
               </select>
             </label>
+            <button
+              type="button"
+              className="btn-secondary mobile-editor-desktop-only"
+              onClick={() => setOcrModalOpen(true)}
+              disabled={loading || ocrBusy}
+            >
+              Importar con IA
+            </button>
             <Link
               to={menuId ? `/editor/${menuId}` : '/dashboard'}
               className="btn-secondary mobile-editor-desktop-only"
@@ -942,6 +1170,7 @@ export function MobileEditorPage() {
                   selectedId={selectedId}
                   onSelect={handleSelectComponent}
                   onReorder={handleReorderComponents}
+                  onDelete={(id) => void deleteComponent(id)}
                   animationPreview={animationPreview}
                 />
               </div>
@@ -1180,6 +1409,55 @@ export function MobileEditorPage() {
                   )}
                   {selected.type === 'section' && (
                     <>
+                      <label>
+                        Tamaño
+                        <select
+                          value={selected.size ?? 's'}
+                          onChange={(e) =>
+                            updateSelectedSectionSize(e.target.value as MobileSectionSize)
+                          }
+                        >
+                          {MOBILE_SECTION_SIZE_OPTIONS.map((option) => (
+                            <option key={option.id} value={option.id}>
+                              {option.label}
+                            </option>
+                          ))}
+                        </select>
+                      </label>
+                      <label>
+                        Línea de borde
+                        <select
+                          value={selected.borderLine ?? 'thin'}
+                          onChange={(e) =>
+                            updateSelectedSectionBorderLine(
+                              e.target.value as MobileSectionBorderLine,
+                            )
+                          }
+                        >
+                          {MOBILE_SECTION_BORDER_LINE_OPTIONS.map((option) => (
+                            <option key={option.id} value={option.id}>
+                              {option.label}
+                            </option>
+                          ))}
+                        </select>
+                      </label>
+                      <label>
+                        Bordes redondeados
+                        <select
+                          value={selected.borderRound ?? 'md'}
+                          onChange={(e) =>
+                            updateSelectedSectionBorderRound(
+                              e.target.value as MobileSectionBorderRound,
+                            )
+                          }
+                        >
+                          {MOBILE_SECTION_BORDER_ROUND_OPTIONS.map((option) => (
+                            <option key={option.id} value={option.id}>
+                              {option.label}
+                            </option>
+                          ))}
+                        </select>
+                      </label>
                       <h4>Imagen de fondo</h4>
                       <div className="image-picker-field">
                         {selected.backgroundImage?.src ? (
@@ -1604,7 +1882,9 @@ export function MobileEditorPage() {
                     <input
                       type="color"
                       value={selected.typography?.color ?? '#111827'}
-                      onChange={(e) => updateSelectedTypography({ color: e.target.value })}
+                      onChange={(e) =>
+                        updateSelectedTypography({ color: e.target.value }, { debouncePersist: true })
+                      }
                     />
                   </label>
                     </>
@@ -1757,7 +2037,11 @@ export function MobileEditorPage() {
                           type="color"
                           value={selectedMenuItemFieldTypo.color}
                           onChange={(e) =>
-                            updateSelectedMenuItemTypography(menuTypoTarget, { color: e.target.value })
+                            updateSelectedMenuItemTypography(
+                              menuTypoTarget,
+                              { color: e.target.value },
+                              { debouncePersist: true },
+                            )
                           }
                         />
                       </label>
@@ -1862,6 +2146,16 @@ export function MobileEditorPage() {
                       </label>
                     </>
                   )}
+                  <label>
+                    Visibilidad pública
+                    <select
+                      value={selected.hidden === true ? 'hidden' : 'visible'}
+                      onChange={(e) => updateSelectedHidden(e.target.value === 'hidden')}
+                    >
+                      <option value="visible">Mostrar</option>
+                      <option value="hidden">Ocultar</option>
+                    </select>
+                  </label>
                   <button type="button" className="danger" onClick={deleteSelected}>
                     Eliminar componente
                   </button>
@@ -1916,6 +2210,17 @@ export function MobileEditorPage() {
                   ))}
                 </select>
               </label>
+              <button
+                type="button"
+                className="btn-primary"
+                disabled={ocrBusy}
+                onClick={() => {
+                  setPhoneSheet(null);
+                  setOcrModalOpen(true);
+                }}
+              >
+                Importar con IA
+              </button>
               <button
                 type="button"
                 className="btn-primary"
@@ -2009,6 +2314,20 @@ export function MobileEditorPage() {
           </div>
         </div>
       )}
+
+      <MobileImportOcrModal
+        open={ocrModalOpen}
+        onClose={() => {
+          if (ocrBusy) return;
+          setOcrModalOpen(false);
+          setOcrError('');
+        }}
+        onImport={(sources, options) => void handleMobileOcrImport(sources, options)}
+        busy={ocrBusy}
+        progress={ocrProgress}
+        error={ocrError}
+      />
+
       {/* QR / Publish modal */}
       {menuId && (
         <PublishQrModal

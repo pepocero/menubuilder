@@ -86,6 +86,11 @@ export interface MobileTypographyConfig {
 export interface MobileComponentBase {
   id: string;
   type: MobileComponentType;
+  /**
+   * Si true, el componente no se muestra en la URL pública.
+   * En el editor siempre se puede ver y editar. Por defecto: visible.
+   */
+  hidden?: boolean;
   animation?: MobileAnimationConfig;
   typography?: MobileTypographyConfig;
   effect?: MobileEffectConfig;
@@ -96,6 +101,19 @@ export interface MobileSectionComponent extends MobileComponentBase {
   title: string;
   backgroundColor: string;
   padding: number;
+  /**
+   * Altura de la sección. Por defecto: `s` (Pequeño).
+   * `auto` = según el contenido.
+   */
+  size?: MobileSectionSize;
+  /**
+   * Línea de borde. Por defecto: `thin` (Fino).
+   */
+  borderLine?: MobileSectionBorderLine;
+  /**
+   * Redondeado de esquinas. Por defecto: `md` (Redondeado).
+   */
+  borderRound?: MobileSectionBorderRound;
   /** Imagen de fondo opcional de la sección. */
   backgroundImage?: {
     src: string;
@@ -104,6 +122,104 @@ export interface MobileSectionComponent extends MobileComponentBase {
     stretch: boolean;
   };
   action?: MobileInteractionAction;
+}
+
+/** Tamaños de sección móvil. Por defecto en nuevas secciones: `s` (Pequeño). */
+export type MobileSectionSize = 'auto' | 's' | 'm' | 'l' | 'xl';
+
+export const MOBILE_SECTION_SIZE_OPTIONS: ReadonlyArray<{
+  id: MobileSectionSize;
+  label: string;
+  /** min-height en px; 0 = sin mínimo (automático). */
+  minHeight: number;
+}> = [
+  { id: 'auto', label: 'Automático', minHeight: 0 },
+  { id: 's', label: 'Pequeño', minHeight: 96 },
+  { id: 'm', label: 'Mediano', minHeight: 160 },
+  { id: 'l', label: 'Grande', minHeight: 240 },
+  { id: 'xl', label: 'Muy grande', minHeight: 360 },
+];
+
+export function resolveSectionMinHeight(size?: MobileSectionSize): number {
+  const match = MOBILE_SECTION_SIZE_OPTIONS.find((o) => o.id === (size ?? 's'));
+  return match?.minHeight ?? 96;
+}
+
+/** Línea del borde de sección. */
+export type MobileSectionBorderLine = 'none' | 'thin' | 'medium' | 'thick' | 'dashed';
+
+export const MOBILE_SECTION_BORDER_LINE_OPTIONS: ReadonlyArray<{
+  id: MobileSectionBorderLine;
+  label: string;
+  style: 'none' | 'solid' | 'dashed';
+  width: number;
+  color: string;
+}> = [
+  { id: 'none', label: 'Sin borde', style: 'none', width: 0, color: 'transparent' },
+  { id: 'thin', label: 'Fino', style: 'solid', width: 1, color: '#d1d5db' },
+  { id: 'medium', label: 'Medio', style: 'solid', width: 2, color: '#d1d5db' },
+  { id: 'thick', label: 'Grueso', style: 'solid', width: 3, color: '#9ca3af' },
+  { id: 'dashed', label: 'Discontinuo', style: 'dashed', width: 2, color: '#9ca3af' },
+];
+
+/** Redondeado de esquinas de sección. */
+export type MobileSectionBorderRound = 'none' | 'sm' | 'md' | 'lg' | 'xl';
+
+export const MOBILE_SECTION_BORDER_ROUND_OPTIONS: ReadonlyArray<{
+  id: MobileSectionBorderRound;
+  label: string;
+  radius: number;
+}> = [
+  { id: 'none', label: 'Sin borde redondeado', radius: 0 },
+  { id: 'sm', label: 'Suave', radius: 8 },
+  { id: 'md', label: 'Redondeado', radius: 16 },
+  { id: 'lg', label: 'Más redondeado', radius: 28 },
+  { id: 'xl', label: 'Muy redondeado', radius: 40 },
+];
+
+export function resolveSectionBorderStyle(
+  borderLine?: MobileSectionBorderLine,
+  borderRound?: MobileSectionBorderRound,
+): { border?: string; borderRadius?: string } {
+  const line =
+    MOBILE_SECTION_BORDER_LINE_OPTIONS.find((o) => o.id === (borderLine ?? 'thin')) ??
+    MOBILE_SECTION_BORDER_LINE_OPTIONS.find((o) => o.id === 'thin')!;
+  const round =
+    MOBILE_SECTION_BORDER_ROUND_OPTIONS.find((o) => o.id === (borderRound ?? 'md')) ??
+    MOBILE_SECTION_BORDER_ROUND_OPTIONS.find((o) => o.id === 'md')!;
+
+  const style: { border?: string; borderRadius?: string } = {};
+  if (line.style !== 'none' && line.width > 0) {
+    style.border = `${line.width}px ${line.style} ${line.color}`;
+  }
+  if (round.radius > 0) {
+    style.borderRadius = `${round.radius}px`;
+  }
+  return style;
+}
+
+/** Compatibilidad con el antiguo campo único `border`. */
+export function migrateLegacySectionBorder(legacy: string | undefined): {
+  borderLine: MobileSectionBorderLine;
+  borderRound: MobileSectionBorderRound;
+} {
+  switch (legacy) {
+    case 'none':
+      return { borderLine: 'none', borderRound: 'none' };
+    case 'thin':
+      return { borderLine: 'thin', borderRound: 'none' };
+    case 'medium':
+      return { borderLine: 'medium', borderRound: 'sm' };
+    case 'thick':
+      return { borderLine: 'thick', borderRound: 'sm' };
+    case 'extraRounded':
+      return { borderLine: 'thin', borderRound: 'lg' };
+    case 'dashed':
+      return { borderLine: 'dashed', borderRound: 'sm' };
+    case 'rounded':
+    default:
+      return { borderLine: 'thin', borderRound: 'md' };
+  }
 }
 
 export interface MobileHeadingComponent extends MobileComponentBase {

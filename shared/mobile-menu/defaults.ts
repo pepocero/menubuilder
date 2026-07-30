@@ -112,6 +112,9 @@ export function createDefaultMobileComponent(type: MobileComponent['type']): Mob
         title: 'Nueva seccion',
         backgroundColor: '#ffffff',
         padding: 16,
+        size: 's',
+        borderLine: 'thin',
+        borderRound: 'md',
         backgroundImage: {
           src: '',
           align: 'center',
@@ -159,7 +162,7 @@ export function createDefaultMobileComponent(type: MobileComponent['type']): Mob
         type,
         title: 'Nombre del plato',
         description: 'Descripcion breve del plato',
-        price: '12,00 €',
+        price: '12,00€',
         ingredients: 'Ingrediente 1 - Ingrediente 2 - Ingrediente 3',
         allergens: '',
         menuImage: {

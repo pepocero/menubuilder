@@ -171,6 +171,11 @@ export interface MenuPage {
   width?: number;
   /** Alto en puntos (~72 dpi). Si falta, A4_HEIGHT. */
   height?: number;
+  /**
+   * Si true, la página no se muestra en la URL pública (QR).
+   * En el editor siempre se puede editar. Por defecto: visible.
+   */
+  hidden?: boolean;
 }
 
 /** Dirección del scroll entre páginas en la carta pública (QR). El editor no cambia. */
@@ -301,6 +306,7 @@ export function normalizeCanvasData(raw: unknown): CanvasData {
         layers: Array.isArray(page.layers) ? (page.layers as CanvasLayer[]) : [],
         width: normalizePageSize(page.width, width),
         height: normalizePageSize(page.height, height),
+        ...(page.hidden === true ? { hidden: true } : {}),
       };
     });
     return { width, height, pageScroll, pageGap, pages };
@@ -362,9 +368,12 @@ export function serializeCanvasData(data: CanvasData): CanvasData {
     pageScroll: normalizePageScroll(normalized.pageScroll ?? data.pageScroll),
     pageGap: normalizePageGap(normalized.pageGap ?? data.pageGap),
     pages: normalized.pages.map((page) => ({
-      ...page,
+      id: page.id,
+      background: page.background,
+      layers: page.layers,
       width: normalizePageSize(page.width, normalized.width || A4_WIDTH),
       height: normalizePageSize(page.height, normalized.height || A4_HEIGHT),
+      ...(page.hidden === true ? { hidden: true } : {}),
     })),
   };
 }

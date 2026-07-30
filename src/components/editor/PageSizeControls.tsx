@@ -14,6 +14,7 @@ interface PageSizeControlsProps {
   page: MenuPage;
   pageIndex: number;
   onChange: (size: { width: number; height: number }) => void;
+  onHiddenChange?: (hidden: boolean) => void;
   disabled?: boolean;
 }
 
@@ -21,6 +22,7 @@ export function PageSizeControls({
   page,
   pageIndex,
   onChange,
+  onHiddenChange,
   disabled = false,
 }: PageSizeControlsProps) {
   const { width, height } = getPageSize(page);
@@ -28,7 +30,7 @@ export function PageSizeControls({
   const [presetId, setPresetId] = useState(matched);
   const [widthCm, setWidthCm] = useState(String(ptToCm(width)));
   const [heightCm, setHeightCm] = useState(String(ptToCm(height)));
-
+  const isHidden = page.hidden === true;
   useEffect(() => {
     const size = getPageSize(page);
     setPresetId(matchPageSizePreset(size.width, size.height));
@@ -65,6 +67,20 @@ export function PageSizeControls({
       <p className="panel-hint">
         Cada página puede tener un tamaño distinto (ideal para carta digital / QR).
       </p>
+
+      {onHiddenChange && (
+        <label>
+          Visibilidad pública
+          <select
+            value={isHidden ? 'hidden' : 'visible'}
+            disabled={disabled}
+            onChange={(e) => onHiddenChange(e.target.value === 'hidden')}
+          >
+            <option value="visible">Mostrar</option>
+            <option value="hidden">Ocultar</option>
+          </select>
+        </label>
+      )}
 
       <label>
         Formato

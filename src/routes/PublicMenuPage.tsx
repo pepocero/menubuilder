@@ -101,7 +101,7 @@ export function PublicMenuPage() {
         // Misma fuente de verdad que el editor.
         if (validateCanvasData(menu.canvas_data)) {
           const canvasDoc = normalizeCanvasData(menu.canvas_data);
-          setPages(canvasDoc.pages);
+          setPages(canvasDoc.pages.filter((page) => page.hidden !== true));
           setPageScroll(canvasDoc.pageScroll ?? 'vertical');
           setPageGap(normalizePageGap(canvasDoc.pageGap));
           setMenuDocument(null);

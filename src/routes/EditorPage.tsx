@@ -168,7 +168,11 @@ export function EditorPage() {
   const collectDocument = useCallback((): CanvasData => {
     const collected: MenuPage[] = pagesMetaRef.current.map((page, index) => {
       const fromCanvas = pageRefs.current[index]?.getPageData();
-      return fromCanvas ?? page;
+      if (!fromCanvas) return page;
+      return {
+        ...fromCanvas,
+        ...(page.hidden === true ? { hidden: true } : {}),
+      };
     });
     return serializeCanvasData({
       width: 595,
@@ -266,8 +270,14 @@ export function EditorPage() {
       const pageId = pagesMetaRef.current[pageIndex]?.id;
       if (!pageId) return;
 
-      const snapshot = pageRefs.current[pageIndex]?.getPageData();
-      if (!snapshot) return;
+      const fromCanvas = pageRefs.current[pageIndex]?.getPageData();
+      if (!fromCanvas) return;
+
+      const meta = pagesMetaRef.current[pageIndex];
+      const snapshot: MenuPage = {
+        ...fromCanvas,
+        ...(meta?.hidden === true ? { hidden: true } : {}),
+      };
 
       const prev = historyByPageIdRef.current.get(pageId);
       // Sin baseline sembrada, el primer snapshot se convertiría en el único estado
@@ -297,8 +307,14 @@ export function EditorPage() {
       if (!pageId) return;
       if (historyByPageIdRef.current.has(pageId)) return;
 
-      const snapshot =
-        pageRefs.current[pageIndex]?.getPageData() ?? pagesMetaRef.current[pageIndex];
+      const fromCanvas = pageRefs.current[pageIndex]?.getPageData();
+      const meta = pagesMetaRef.current[pageIndex];
+      const snapshot = fromCanvas
+        ? {
+            ...fromCanvas,
+            ...(meta?.hidden === true ? { hidden: true } : {}),
+          }
+        : meta;
       if (!snapshot) return;
 
       historyByPageIdRef.current.set(pageId, createPageHistory(snapshot));
@@ -1367,6 +1383,19 @@ export function EditorPage() {
     scheduleSave();
   }
 
+  function handlePageHiddenChange(hidden: boolean) {
+    const index = activePageIndexRef.current;
+    setPages((prev) =>
+      prev.map((page, i) => {
+        if (i !== index) return page;
+        if (hidden) return { ...page, hidden: true };
+        const { hidden: _removed, ...rest } = page;
+        return rest;
+      }),
+    );
+    scheduleSave();
+  }
+
   function handleExportJson() {
     const data = collectDocument();
     exportMenuDocumentJson(data, title || 'menu', title || undefined);
@@ -1756,6 +1785,9 @@ export function EditorPage() {
                     {index === activePageIndex && (
                       <span className="page-label-active"> · editando</span>
                     )}
+                    {page.hidden === true && (
+                      <span className="page-label-hidden"> · oculta en pública</span>
+                    )}
                     <span className="page-label-size">
                       {' '}
                       · {ptToCm(getPageSize(page).width)}×{ptToCm(getPageSize(page).height)} cm
@@ -1862,6 +1894,7 @@ export function EditorPage() {
               page={pages[activePageIndex]}
               pageIndex={activePageIndex}
               onChange={handlePageSizeChange}
+              onHiddenChange={handlePageHiddenChange}
             />
           )}
           <PropertiesPanel

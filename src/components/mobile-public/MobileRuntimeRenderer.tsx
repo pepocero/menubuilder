@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useRef, useState, type CSSProperties, type PointerEvent as ReactPointerEvent } from 'react';
 import {
   defaultMenuItemFieldTypography,
+  resolveSectionBorderStyle,
+  resolveSectionMinHeight,
   type MobileComponent,
   type MobileEffectConfig,
   type MobileInteractionAction,
@@ -16,6 +18,8 @@ interface MobileRuntimeRendererProps {
   onSelect?: (id: string) => void;
   /** Reordenar componentes arrastrándolos en el marco móvil (solo editable). */
   onReorder?: (orderedIds: string[]) => void;
+  /** Eliminar componente desde el marco (solo editable). */
+  onDelete?: (id: string) => void;
   animationPreview?: { componentId: string; nonce: number } | null;
   /** En preview del editor: abre URLs en pestaña nueva en vez de salir del editor. */
   openLinksInNewTab?: boolean;
@@ -62,6 +66,11 @@ function menuItemTypographyStyle(
     ...component.menuTypography?.[key],
   };
   return typographyConfigToStyle(t);
+}
+
+/** Precio móvil: sin espacio entre cifra y € (p. ej. 6,00€). */
+function formatMenuItemPrice(price: string): string {
+  return price.replace(/(\d)\s+€/g, '$1€').replace(/€\s+(\d)/g, '€$1');
 }
 
 const EFFECT_KEYFRAMES: Record<string, string> = {
@@ -148,10 +157,16 @@ function renderComponent(
   switch (component.type) {
     case 'section': {
       const hasBg = !!component.backgroundImage?.src?.trim();
-      const sectionClass = `mobile-block mobile-block-section${hasBg ? ' has-bg-image' : ''}`;
-      const sectionStyle = {
+      const minHeight = resolveSectionMinHeight(component.size);
+      const borderStyle = resolveSectionBorderStyle(component.borderLine, component.borderRound);
+      const sectionClass = `mobile-block mobile-block-section${hasBg ? ' has-bg-image' : ''}${
+        minHeight > 0 ? ' has-fixed-size' : ''
+      }`;
+      const sectionStyle: CSSProperties = {
         backgroundColor: component.backgroundColor,
         padding: `${component.padding}px`,
+        ...(minHeight > 0 ? { minHeight: `${minHeight}px` } : {}),
+        ...borderStyle,
       };
       const title = <h3 style={typographyStyle(component)}>{component.title}</h3>;
       if (onAction) {
@@ -258,7 +273,9 @@ function renderComponent(
           <div className="mobile-menu-item-content">
             <header>
               <h4 style={menuItemTypographyStyle(component, 'title')}>{component.title}</h4>
-              <strong style={menuItemTypographyStyle(component, 'price')}>{component.price}</strong>
+              <strong style={menuItemTypographyStyle(component, 'price')}>
+                {formatMenuItemPrice(component.price)}
+              </strong>
             </header>
             <p style={menuItemTypographyStyle(component, 'description')}>{component.description}</p>
             {component.ingredients.trim() && (
@@ -425,6 +442,7 @@ export function MobileRuntimeRenderer({
   selectedId = null,
   onSelect,
   onReorder,
+  onDelete,
   animationPreview = null,
   openLinksInNewTab = false,
 }: MobileRuntimeRendererProps) {
@@ -455,11 +473,16 @@ export function MobileRuntimeRenderer({
   onReorderRef.current = onReorder;
   onSelectRef.current = onSelect;
 
+  const visibleComponents = useMemo(() => {
+    if (editable) return document.components;
+    return document.components.filter((c) => c.hidden !== true);
+  }, [document.components, editable]);
+
   const displayComponents = useMemo(() => {
-    if (!dragOrderIds) return document.components;
-    const map = new Map(document.components.map((c) => [c.id, c]));
+    if (!dragOrderIds) return visibleComponents;
+    const map = new Map(visibleComponents.map((c) => [c.id, c]));
     return dragOrderIds.map((id) => map.get(id)).filter((c): c is MobileComponent => !!c);
-  }, [document.components, dragOrderIds]);
+  }, [visibleComponents, dragOrderIds]);
 
   function capturePositions() {
     const positions = new Map<string, number>();
@@ -822,6 +845,7 @@ export function MobileRuntimeRenderer({
             'mobile-runtime-node',
             editable && selectedId === component.id ? 'is-selected' : '',
             editable ? 'is-anim-visible' : '',
+            editable && component.hidden === true ? 'is-hidden-public' : '',
             dragActiveId === component.id ? 'is-dragging' : '',
             effectClassName(component.effect),
           ]
@@ -859,6 +883,21 @@ export function MobileRuntimeRenderer({
               : undefined
           }
         >
+          {editable && onDelete && (
+            <button
+              type="button"
+              className="mobile-runtime-node-delete"
+              title="Eliminar componente"
+              aria-label="Eliminar componente"
+              onPointerDown={(e) => e.stopPropagation()}
+              onClick={(e) => {
+                e.stopPropagation();
+                onDelete(component.id);
+              }}
+            >
+              ✕
+            </button>
+          )}
           {renderComponent(
             component,
             !editable ? (action) => runAction(action) : undefined,
