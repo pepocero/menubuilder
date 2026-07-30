@@ -64,16 +64,6 @@ function menuItemTypographyStyle(
   return typographyConfigToStyle(t);
 }
 
-function resolveAction(component: MobileComponent): MobileInteractionAction | undefined {
-  if (component.type === 'button') {
-    return component.action ?? { type: 'url', url: component.href };
-  }
-  if (component.type === 'section') {
-    return component.action;
-  }
-  return undefined;
-}
-
 const EFFECT_KEYFRAMES: Record<string, string> = {
   pulse: 'mob-effect-pulse',
   shake: 'mob-effect-shake',

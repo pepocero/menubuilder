@@ -8,7 +8,7 @@ import {
 import { Link, useParams } from 'react-router-dom';
 import { AppLayout } from '@/components/AppLayout';
 import { MobileRuntimeRenderer } from '@/components/mobile-public/MobileRuntimeRenderer';
-import { ApiError, getMenu, listAssets, updateMenu, uploadAsset, type AssetSummary } from '@/lib/api';
+import { ApiError, getMenu, updateMenu, uploadAsset } from '@/lib/api';
 import { renderMobileDocumentThumbnail } from '@/lib/menu-thumbnail';
 import { StockImageSearch } from '@/components/editor/StockImageSearch';
 import { AssetManagerModal } from '@/components/editor/AssetManagerModal';
@@ -235,8 +235,6 @@ export function MobileEditorPage() {
   const [title, setTitle] = useState('Carta móvil');
   const [document, setDocument] = useState<MobileMenuDocument>(createDefaultMobileMenuDocument());
   const [selectedId, setSelectedId] = useState<string | null>(null);
-  const [assets, setAssets] = useState<AssetSummary[]>([]);
-  const [loadingAssets, setLoadingAssets] = useState(false);
   const [menuTypoTarget, setMenuTypoTarget] = useState<
     'title' | 'description' | 'price' | 'ingredients'
   >('title');
@@ -354,26 +352,6 @@ export function MobileEditorPage() {
     return anchors;
   }, [document.components]);
 
-  async function loadAssetsForUser() {
-    setLoadingAssets(true);
-    setAssetsError('');
-    try {
-      const { assets: data } = await listAssets();
-      setAssets(data.filter((a) => !!a.url));
-    } catch (err) {
-      setAssetsError(err instanceof ApiError ? err.message : 'No se pudieron cargar los assets.');
-    } finally {
-      setLoadingAssets(false);
-    }
-  }
-
-  useEffect(() => {
-    if (!loading) {
-      void loadAssetsForUser();
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [loading]);
-
   /** Apply a picked image URL to the correct target field */
   function applyPickedImageUrl(url: string) {
     if (imagePickerTarget === 'menuImage') {
@@ -404,7 +382,6 @@ export function MobileEditorPage() {
     try {
       const { asset } = await uploadAsset(file);
       applyPickedImageUrl(asset.url);
-      setAssets((prev) => [{ id: asset.id, url: asset.url, r2_key: null, source: 'upload', created_at: new Date().toISOString() } as AssetSummary, ...prev]);
     } catch (err) {
       setAssetsError(err instanceof ApiError ? err.message : 'Error al subir la imagen');
     } finally {
@@ -1927,9 +1904,7 @@ export function MobileEditorPage() {
           }
           setAssetModalOpen(false);
         }}
-        onAssetDeleted={(deleted) => {
-          setAssets((prev) => prev.filter((a) => a.id !== deleted.id));
-        }}
+        onAssetDeleted={() => undefined}
       />
     </div>
   );

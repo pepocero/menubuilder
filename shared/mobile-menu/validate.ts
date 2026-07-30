@@ -113,10 +113,16 @@ function parseMenuTypography(value: unknown):
   };
 }
 
-function parseMenuItemImage(value: unknown) {
+function parseMenuItemImage(value: unknown): {
+  src: string;
+  alt: string;
+  position: 'left' | 'right';
+  width: number;
+  radius: number;
+} | undefined {
   if (!isObject(value)) return undefined;
   if (!isString(value.src) || !isString(value.alt)) return undefined;
-  const position = value.position === 'right' ? 'right' : 'left';
+  const position: 'left' | 'right' = value.position === 'right' ? 'right' : 'left';
   const width = isNumber(value.width) ? Math.max(56, Math.min(180, Math.round(value.width))) : 92;
   const radius = isNumber(value.radius) ? Math.max(0, Math.min(28, Math.round(value.radius))) : 10;
   return {
@@ -128,10 +134,14 @@ function parseMenuItemImage(value: unknown) {
   };
 }
 
-function parseSectionBackgroundImage(value: unknown) {
+function parseSectionBackgroundImage(value: unknown): {
+  src: string;
+  align: 'left' | 'center' | 'right';
+  stretch: boolean;
+} | undefined {
   if (!isObject(value)) return undefined;
   if (!isString(value.src)) return undefined;
-  const align =
+  const align: 'left' | 'center' | 'right' =
     value.align === 'left' || value.align === 'right' ? value.align : 'center';
   return {
     src: value.src.trim().slice(0, 4096),
