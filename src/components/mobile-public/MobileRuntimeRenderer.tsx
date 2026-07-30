@@ -15,6 +15,8 @@ interface MobileRuntimeRendererProps {
   document: MobileMenuDocument;
   editable?: boolean;
   selectedId?: string | null;
+  /** Selección múltiple (resaltado). Si no se pasa, se usa selectedId. */
+  selectedIds?: string[];
   onSelect?: (id: string) => void;
   /** Reordenar componentes arrastrándolos en el marco móvil (solo editable). */
   onReorder?: (orderedIds: string[]) => void;
@@ -359,7 +361,115 @@ function renderComponent(
       );
     case 'spacer':
       return <div className="mobile-block mobile-block-spacer" style={{ height: `${component.height}px` }} />;
+    case 'accordion':
+      // El acordeón se renderiza con AccordionRuntime (estado abierto/cerrado).
+      return null;
   }
+}
+
+function AccordionRuntime({
+  component,
+  editable = false,
+  onSelectAccordion,
+  onAction,
+  onImageClick,
+  onAllergensOpen,
+}: {
+  component: Extract<MobileComponent, { type: 'accordion' }>;
+  editable?: boolean;
+  onSelectAccordion?: () => void;
+  onAction?: (action: MobileInteractionAction) => void;
+  onImageClick?: (src: string) => void;
+  onAllergensOpen?: (payload: { dishTitle: string; allergens: string[] }) => void;
+}) {
+  const [open, setOpen] = useState(component.defaultOpen === true);
+
+  useEffect(() => {
+    setOpen(component.defaultOpen === true);
+  }, [component.id, component.defaultOpen]);
+
+  const header = component.children[0];
+  const body = component.children.slice(1).filter((child) => editable || child.hidden !== true);
+  const showChevron = component.showChevron !== false;
+  const chevronColor = component.chevronColor?.trim() || '#64748b';
+  const chevronThickness = Math.max(1, Math.min(8, component.chevronThickness ?? 2));
+  const headerIsSection = header?.type === 'section';
+
+  function toggle() {
+    setOpen((current) => !current);
+    onSelectAccordion?.();
+  }
+
+  return (
+    <div
+      className={`mobile-block mobile-block-accordion${open ? ' is-open' : ''}${
+        headerIsSection ? ' has-section-header' : ''
+      }${showChevron ? ' has-chevron' : ''}`}
+    >
+      <div
+        className="mobile-accordion-header"
+        role="button"
+        tabIndex={0}
+        aria-expanded={open}
+        onClick={(e) => {
+          e.stopPropagation();
+          toggle();
+        }}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter' || e.key === ' ') {
+            e.preventDefault();
+            e.stopPropagation();
+            toggle();
+          }
+        }}
+      >
+        <div className="mobile-accordion-header-content">
+          {header
+            ? renderComponent(
+                header,
+                // La cabecera no ejecuta acciones propias: el clic abre/cierra el acordeón.
+                undefined,
+                !editable ? onImageClick : undefined,
+                !editable ? onAllergensOpen : undefined,
+              )
+            : null}
+        </div>
+        {showChevron && (
+          <span
+            className={`mobile-accordion-chevron${open ? ' is-open' : ''}`}
+            aria-hidden="true"
+            style={{ color: chevronColor }}
+          >
+            <svg viewBox="0 0 24 24" width="22" height="22" fill="none">
+              <path
+                d="M6 9l6 6 6-6"
+                stroke="currentColor"
+                strokeWidth={chevronThickness}
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              />
+            </svg>
+          </span>
+        )}
+      </div>
+      <div
+        className="mobile-accordion-panel"
+        hidden={!open}
+        aria-hidden={!open}
+      >
+        {body.map((child) => (
+          <div key={child.id} className="mobile-accordion-child" data-accordion-child-id={child.id}>
+            {renderComponent(
+              child,
+              !editable ? onAction : undefined,
+              !editable ? onImageClick : undefined,
+              !editable ? onAllergensOpen : undefined,
+            )}
+          </div>
+        ))}
+      </div>
+    </div>
+  );
 }
 
 function playNodeAnimationPreview(node: HTMLElement) {
@@ -454,6 +564,7 @@ export function MobileRuntimeRenderer({
   document,
   editable = false,
   selectedId = null,
+  selectedIds,
   onSelect,
   onReorder,
   onDelete,
@@ -723,17 +834,23 @@ export function MobileRuntimeRenderer({
 
   useEffect(() => {
     for (const component of document.components) {
-      if (component.typography?.fontFamily) {
-        ensureEditorFontLoaded(component.typography.fontFamily);
-      }
-      if (component.type === 'menuItem' && component.menuTypography) {
-        for (const field of ['title', 'description', 'price', 'ingredients'] as const) {
-          const fontFamily =
-            component.menuTypography[field]?.fontFamily ??
-            defaultMenuItemFieldTypography(field).fontFamily;
-          ensureEditorFontLoaded(fontFamily);
+      const loadFonts = (c: MobileComponent) => {
+        if (c.typography?.fontFamily) {
+          ensureEditorFontLoaded(c.typography.fontFamily);
         }
-      }
+        if (c.type === 'menuItem' && c.menuTypography) {
+          for (const field of ['title', 'description', 'price', 'ingredients'] as const) {
+            const fontFamily =
+              c.menuTypography[field]?.fontFamily ??
+              defaultMenuItemFieldTypography(field).fontFamily;
+            ensureEditorFontLoaded(fontFamily);
+          }
+        }
+        if (c.type === 'accordion') {
+          for (const child of c.children) loadFonts(child);
+        }
+      };
+      loadFonts(component);
     }
   }, [document.components]);
 
@@ -896,7 +1013,15 @@ export function MobileRuntimeRenderer({
         fontFamily: document.theme.fontFamily,
       }}
     >
-      {displayComponents.map((component) => (
+      {displayComponents.map((component) => {
+        const isSelected =
+          editable &&
+          (selectedIds && selectedIds.length > 0
+            ? selectedIds.includes(component.id)
+            : selectedId === component.id);
+        const isMulti =
+          editable && !!selectedIds && selectedIds.length > 1 && selectedIds.includes(component.id);
+        return (
         <div
           key={component.id}
           ref={(el) => {
@@ -909,7 +1034,8 @@ export function MobileRuntimeRenderer({
           data-component-id={component.id}
           className={[
             'mobile-runtime-node',
-            editable && selectedId === component.id ? 'is-selected' : '',
+            isSelected ? 'is-selected' : '',
+            isMulti ? 'is-multi-selected' : '',
             editable ? 'is-anim-visible' : '',
             editable && component.hidden === true ? 'is-hidden-public' : '',
             dragActiveId === component.id ? 'is-dragging' : '',
@@ -964,14 +1090,26 @@ export function MobileRuntimeRenderer({
               ✕
             </button>
           )}
-          {renderComponent(
-            component,
-            !editable ? (action) => runAction(action) : undefined,
-            !editable ? (src) => setLightboxSrc(src) : undefined,
-            !editable ? (payload) => setAllergensModal(payload) : undefined,
+          {component.type === 'accordion' ? (
+            <AccordionRuntime
+              component={component}
+              editable={editable}
+              onSelectAccordion={editable ? () => onSelect?.(component.id) : undefined}
+              onAction={!editable ? (action) => runAction(action) : undefined}
+              onImageClick={!editable ? (src) => setLightboxSrc(src) : undefined}
+              onAllergensOpen={!editable ? (payload) => setAllergensModal(payload) : undefined}
+            />
+          ) : (
+            renderComponent(
+              component,
+              !editable ? (action) => runAction(action) : undefined,
+              !editable ? (src) => setLightboxSrc(src) : undefined,
+              !editable ? (payload) => setAllergensModal(payload) : undefined,
+            )
           )}
         </div>
-      ))}
+        );
+      })}
       {activeModal && !editable && (
         <div className="mobile-action-modal-overlay" onClick={() => setActiveModal(null)}>
           <div

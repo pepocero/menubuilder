@@ -206,6 +206,28 @@ export function createDefaultMobileComponent(type: MobileComponent['type']): Mob
       };
     case 'spacer':
       return { id, type, height: 20, animation: defaultAnimation(), effect: defaultEffect(), typography: defaultTypography() };
+    case 'accordion':
+      return {
+        id,
+        type,
+        children: [
+          {
+            ...(createDefaultMobileComponent('heading') as Extract<
+              MobileComponent,
+              { type: 'heading' }
+            >),
+            text: 'Cabecera del acordeón',
+          },
+          {
+            ...(createDefaultMobileComponent('text') as Extract<MobileComponent, { type: 'text' }>),
+            text: 'Contenido del acordeón.',
+          },
+        ],
+        defaultOpen: false,
+        showChevron: true,
+        animation: defaultAnimation(),
+        effect: defaultEffect(),
+      };
   }
 }
 

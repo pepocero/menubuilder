@@ -34,7 +34,8 @@ export type MobileComponentType =
   | 'menuItem'
   | 'button'
   | 'divider'
-  | 'spacer';
+  | 'spacer'
+  | 'accordion';
 
 export type MobileAnimationPreset = 'none' | 'reveal' | 'tap' | 'parallax' | 'lottie';
 export type MobileAnimationTrigger = 'on_view' | 'on_load' | 'on_tap';
@@ -310,6 +311,26 @@ export interface MobileSpacerComponent extends MobileComponentBase {
   height: number;
 }
 
+/**
+ * Contenedor acordeón: el primer hijo es la cabecera (clic para expandir/contraer);
+ * el resto es el cuerpo colapsable. No admite acordeones anidados.
+ */
+export interface MobileAccordionComponent extends MobileComponentBase {
+  type: 'accordion';
+  children: MobileAccordionChild[];
+  /** Si true, arranca expandido. Por defecto: false (colapsado). */
+  defaultOpen?: boolean;
+  /** Si true, muestra flecha de expansión. Por defecto: true. */
+  showChevron?: boolean;
+  /** Color de la flecha (CSS). Por defecto: `#64748b`. */
+  chevronColor?: string;
+  /** Grosor de línea de la flecha (1–8). Por defecto: 2. */
+  chevronThickness?: number;
+}
+
+/** Hijos válidos de un acordeón (cualquier componente excepto otro acordeón). */
+export type MobileAccordionChild = Exclude<MobileComponent, MobileAccordionComponent>;
+
 export type MobileComponent =
   | MobileSectionComponent
   | MobileHeadingComponent
@@ -318,7 +339,8 @@ export type MobileComponent =
   | MobileMenuItemComponent
   | MobileButtonComponent
   | MobileDividerComponent
-  | MobileSpacerComponent;
+  | MobileSpacerComponent
+  | MobileAccordionComponent;
 
 export interface MobileTheme {
   backgroundColor: string;

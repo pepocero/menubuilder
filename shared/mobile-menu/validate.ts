@@ -379,6 +379,37 @@ function parseComponent(value: unknown): MobileComponent | null {
       typography: parseTypography(value.typography),
     };
   }
+  if (type === 'accordion' && Array.isArray(value.children) && value.children.length >= 1) {
+    const children: Extract<MobileComponent, { type: 'accordion' }>['children'] = [];
+    for (const item of value.children) {
+      if (isObject(item) && item.type === 'accordion') return null;
+      const parsed = parseComponent(item);
+      if (!parsed || parsed.type === 'accordion') return null;
+      if (isObject(item) && item.hidden === true) {
+        children.push({ ...parsed, hidden: true });
+      } else {
+        children.push(parsed);
+      }
+    }
+    if (children.length < 1) return null;
+    return {
+      id: value.id,
+      type,
+      children,
+      defaultOpen: value.defaultOpen === true,
+      showChevron: value.showChevron !== false,
+      chevronColor:
+        isString(value.chevronColor) && value.chevronColor.trim()
+          ? value.chevronColor.trim().slice(0, 64)
+          : undefined,
+      chevronThickness: isNumber(value.chevronThickness)
+        ? Math.max(1, Math.min(8, Math.round(value.chevronThickness)))
+        : undefined,
+      animation: parseAnimation(value.animation),
+      effect: parseEffect(value.effect),
+      typography: parseTypography(value.typography),
+    };
+  }
   return null;
 }
 

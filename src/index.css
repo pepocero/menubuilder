@@ -4285,9 +4285,116 @@ textarea {
   gap: 12px;
 }
 
-.mobile-runtime-node.is-selected {
-  outline: 2px solid #38bdf8;
+.mobile-runtime-node.is-multi-selected {
+  outline: 2px dashed #38bdf8;
   border-radius: 10px;
+}
+
+.mobile-block-accordion {
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  overflow: hidden;
+  background: transparent;
+}
+
+.mobile-accordion-header {
+  position: relative;
+  display: block;
+  width: 100%;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  text-align: inherit;
+  font: inherit;
+  color: inherit;
+  cursor: pointer;
+}
+
+.mobile-accordion-header-content {
+  width: 100%;
+  min-width: 0;
+}
+
+.mobile-accordion-header-content > .mobile-block {
+  margin: 0;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+/* La sección (y su imagen de fondo) ocupa todo el ancho del header, incluida la zona de la flecha. */
+.mobile-block-accordion.has-section-header .mobile-accordion-header-content > .mobile-block-section {
+  width: 100%;
+}
+
+.mobile-block-accordion.has-chevron.has-section-header
+  .mobile-accordion-header-content
+  > .mobile-block-section
+  > h3 {
+  padding-right: 2.75rem;
+  box-sizing: border-box;
+}
+
+.mobile-block-accordion.has-chevron:not(.has-section-header) .mobile-accordion-header-content {
+  padding-right: 2.75rem;
+  box-sizing: border-box;
+}
+
+.mobile-accordion-chevron {
+  position: absolute;
+  top: 50%;
+  right: 0.55rem;
+  z-index: 3;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2.25rem;
+  height: 2.25rem;
+  color: #64748b;
+  pointer-events: none;
+  transform: translateY(-50%);
+  transition: transform 0.2s ease;
+  filter: drop-shadow(0 1px 2px rgb(15 23 42 / 25%));
+}
+
+.mobile-accordion-chevron.is-open {
+  transform: translateY(-50%) rotate(180deg);
+}
+
+.mobile-accordion-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 0.35rem 0.65rem 0.75rem;
+  border-top: 1px solid #e2e8f0;
+}
+
+.mobile-accordion-panel[hidden] {
+  display: none;
+}
+
+.mobile-accordion-child {
+  min-width: 0;
+}
+
+.mobile-selection-tools {
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+  padding-bottom: 0.5rem;
+  margin-bottom: 0.25rem;
+  border-bottom: 1px solid var(--color-border);
+}
+
+.mobile-selection-tools .btn-secondary.is-active,
+.mobile-editor-header-actions .btn-secondary.is-active {
+  background: #e0f2fe;
+  border-color: #7dd3fc;
+  color: #0369a1;
+}
+
+.mobile-accordion-error {
+  color: #b91c1c;
 }
 
 .mobile-runtime-node.is-hidden-public {

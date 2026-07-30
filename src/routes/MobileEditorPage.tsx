@@ -36,6 +36,12 @@ import {
   isAllergenSelected,
   normalizeMobileMenuDocument,
   toggleAllergenTag,
+  findMobileComponentById,
+  updateMobileComponentById,
+  removeMobileComponentById,
+  createAccordionFromTopLevelIds,
+  ungroupAccordionById,
+  areTopLevelIdsConsecutive,
   type MobileAnimationConfig,
   type MobileAnimationPreset,
   type MobileAnimationTrigger,
@@ -341,6 +347,9 @@ export function MobileEditorPage() {
   const [title, setTitle] = useState('Carta móvil');
   const [document, setDocument] = useState<MobileMenuDocument>(createDefaultMobileMenuDocument());
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [selectedIds, setSelectedIds] = useState<string[]>([]);
+  const [multiSelectMode, setMultiSelectMode] = useState(false);
+  const [accordionActionError, setAccordionActionError] = useState('');
   const [menuTypoTarget, setMenuTypoTarget] = useState<
     'title' | 'description' | 'price' | 'ingredients'
   >('title');
@@ -429,10 +438,20 @@ export function MobileEditorPage() {
     };
   }, [menuId]);
 
-  const selected = useMemo(
-    () => document.components.find((component) => component.id === selectedId) ?? null,
+  const selectedLocation = useMemo(
+    () => (selectedId ? findMobileComponentById(document.components, selectedId) : null),
     [document.components, selectedId],
   );
+  /** Nodo seleccionado en el lienzo (acordeón completo o componente suelto). */
+  const selectedNode = selectedLocation?.component ?? null;
+  const selectedAccordion = selectedNode?.type === 'accordion' ? selectedNode : null;
+  /**
+   * Objetivo de las props de contenido: cabecera del acordeón, o el propio componente.
+   * Así el formulario existente sigue usando `selected` sin cambios masivos.
+   */
+  const selected = selectedAccordion ? selectedAccordion.children[0] ?? null : selectedNode;
+  const propsComponentId = selected?.id ?? null;
+
   const selectedMenuItemFieldTypo = useMemo(() => {
     if (!selected || selected.type !== 'menuItem') return null;
     return {
@@ -440,6 +459,11 @@ export function MobileEditorPage() {
       ...selected.menuTypography?.[menuTypoTarget],
     };
   }, [selected, menuTypoTarget]);
+
+  const canCreateAccordion = useMemo(() => {
+    if (selectedIds.length < 2) return false;
+    return areTopLevelIdsConsecutive(document.components, selectedIds).ok;
+  }, [document.components, selectedIds]);
   const selectableSections = useMemo(() => {
     const components = document.components;
     const anchors: Array<{ id: string; index: number; label: string; preview: string }> = [];
@@ -677,6 +701,7 @@ export function MobileEditorPage() {
   }
 
   function handleDropComponent(type: (typeof MOBILE_COMPONENT_LIBRARY)[number]['type']) {
+    if (type === 'accordion') return;
     const next = createDefaultMobileComponent(type);
     const insertAfterId = selectedId;
     updateDoc((current) => {
@@ -692,11 +717,52 @@ export function MobileEditorPage() {
       return { ...current, components };
     });
     setSelectedId(next.id);
-    // En teléfono las propiedades solo se abren con el botón Editar.
+    setSelectedIds([next.id]);
+    setAccordionActionError('');
   }
 
   function handleSelectComponent(id: string) {
+    setAccordionActionError('');
+    if (multiSelectMode) {
+      setSelectedIds((prev) => {
+        if (prev.includes(id)) {
+          const next = prev.filter((x) => x !== id);
+          setSelectedId(next[next.length - 1] ?? null);
+          return next;
+        }
+        const next = [...prev, id];
+        setSelectedId(id);
+        return next;
+      });
+      return;
+    }
     setSelectedId(id);
+    setSelectedIds([id]);
+  }
+
+  function handleCreateAccordion() {
+    const result = createAccordionFromTopLevelIds(documentRef.current.components, selectedIds);
+    if ('error' in result) {
+      setAccordionActionError(result.error);
+      return;
+    }
+    updateDoc((current) => ({ ...current, components: result.components }));
+    setSelectedId(result.accordionId);
+    setSelectedIds([result.accordionId]);
+    setMultiSelectMode(false);
+    setAccordionActionError('');
+    if (isPhoneLayout) setPhoneSheet('props');
+  }
+
+  function handleUngroupAccordion() {
+    if (!selectedId || selectedNode?.type !== 'accordion') return;
+    const next = ungroupAccordionById(documentRef.current.components, selectedId);
+    if (!next) return;
+    const firstChildId = selectedNode.children[0]?.id ?? null;
+    updateDoc((current) => ({ ...current, components: next }));
+    setSelectedId(firstChildId);
+    setSelectedIds(firstChildId ? [firstChildId] : []);
+    setAccordionActionError('');
   }
 
   function togglePhoneSheet(sheet: 'components' | 'props' | 'more') {
@@ -729,11 +795,10 @@ export function MobileEditorPage() {
   }
 
   function updateSelectedField(field: string, value: string) {
-    if (!selectedId) return;
+    if (!propsComponentId) return;
     updateDoc((current) => ({
       ...current,
-      components: current.components.map((component) => {
-        if (component.id !== selectedId) return component;
+      components: updateMobileComponentById(current.components, propsComponentId, (component) => {
         if (!(field in component)) return component;
         return { ...component, [field]: value } as typeof component;
       }),
@@ -741,22 +806,22 @@ export function MobileEditorPage() {
   }
 
   function updateSelectedTextListStyle(listStyle: 'none' | 'bullet' | 'number') {
-    if (!selectedId) return;
+    if (!propsComponentId) return;
     updateDoc((current) => ({
       ...current,
-      components: current.components.map((component) => {
-        if (component.id !== selectedId || component.type !== 'text') return component;
+      components: updateMobileComponentById(current.components, propsComponentId, (component) => {
+        if (component.type !== 'text') return component;
         return { ...component, listStyle };
       }),
     }));
   }
 
   function updateSelectedTextIndent(delta: number) {
-    if (!selectedId) return;
+    if (!propsComponentId) return;
     updateDoc((current) => ({
       ...current,
-      components: current.components.map((component) => {
-        if (component.id !== selectedId || component.type !== 'text') return component;
+      components: updateMobileComponentById(current.components, propsComponentId, (component) => {
+        if (component.type !== 'text') return component;
         const next = Math.max(0, Math.min(96, (component.indentPx ?? 0) + delta));
         return { ...component, indentPx: next };
       }),
@@ -764,12 +829,11 @@ export function MobileEditorPage() {
   }
 
   function updateSelectedNumberField(field: string, value: number) {
-    if (!selectedId) return;
+    if (!propsComponentId) return;
     if (!Number.isFinite(value)) return;
     updateDoc((current) => ({
       ...current,
-      components: current.components.map((component) => {
-        if (component.id !== selectedId) return component;
+      components: updateMobileComponentById(current.components, propsComponentId, (component) => {
         if (!(field in component)) return component;
         return { ...component, [field]: value } as typeof component;
       }),
@@ -780,8 +844,7 @@ export function MobileEditorPage() {
     if (!selectedId) return;
     updateDoc((current) => ({
       ...current,
-      components: current.components.map((component) => {
-        if (component.id !== selectedId) return component;
+      components: updateMobileComponentById(current.components, selectedId, (component) => {
         const base: MobileAnimationConfig = component.animation ?? {
           preset: 'none',
           trigger: 'on_view',
@@ -801,8 +864,7 @@ export function MobileEditorPage() {
     if (!selectedId) return;
     updateDoc((current) => ({
       ...current,
-      components: current.components.map((component) => {
-        if (component.id !== selectedId) return component;
+      components: updateMobileComponentById(current.components, selectedId, (component) => {
         const base: MobileEffectConfig = component.effect ?? {
           type: 'none',
           repeat: 'once',
@@ -817,16 +879,15 @@ export function MobileEditorPage() {
 
   function previewSelectedAnimation() {
     if (!selectedId) return;
-    if ((selected?.animation?.preset ?? 'none') === 'none') return;
+    if ((selectedNode?.animation?.preset ?? 'none') === 'none') return;
     setAnimationPreview({ componentId: selectedId, nonce: Date.now() });
   }
 
   function updateSelectedAction(patch: Partial<MobileInteractionAction>) {
-    if (!selectedId) return;
+    if (!propsComponentId) return;
     updateDoc((current) => ({
       ...current,
-      components: current.components.map((component) => {
-        if (component.id !== selectedId) return component;
+      components: updateMobileComponentById(current.components, propsComponentId, (component) => {
         if (component.type !== 'button' && component.type !== 'section') return component;
         const base: MobileInteractionAction =
           component.action ??
@@ -843,7 +904,9 @@ export function MobileEditorPage() {
   }
 
   function setSelectedActionType(type: MobileInteractionActionType) {
-    if (!selected || (selected.type !== 'button' && selected.type !== 'section')) return;
+    if (!selected || (selected.type !== 'button' && selected.type !== 'section')) {
+      return;
+    }
     if (type === 'none') {
       updateSelectedAction({ type, url: undefined, sectionId: undefined, modal: undefined });
       return;
@@ -874,11 +937,10 @@ export function MobileEditorPage() {
     patch: Partial<MobileTypographyConfig>,
     options?: { debouncePersist?: boolean },
   ) {
-    if (!selectedId) return;
+    if (!propsComponentId) return;
     updateDoc((current) => ({
       ...current,
-      components: current.components.map((component) => {
-        if (component.id !== selectedId) return component;
+      components: updateMobileComponentById(current.components, propsComponentId, (component) => {
         const base: MobileTypographyConfig = component.typography ?? {
           fontFamily: 'Inter, system-ui, Arial, sans-serif',
           fontSize: 16,
@@ -903,11 +965,11 @@ export function MobileEditorPage() {
     patch: Partial<MobileTypographyConfig>,
     options?: { debouncePersist?: boolean },
   ) {
-    if (!selectedId) return;
+    if (!propsComponentId) return;
     updateDoc((current) => ({
       ...current,
-      components: current.components.map((component) => {
-        if (component.id !== selectedId || component.type !== 'menuItem') return component;
+      components: updateMobileComponentById(current.components, propsComponentId, (component) => {
+        if (component.type !== 'menuItem') return component;
         const base: MobileTypographyConfig = {
           ...defaultMenuItemFieldTypography(target),
           ...component.menuTypography?.[target],
@@ -934,11 +996,11 @@ export function MobileEditorPage() {
       radius: number;
     }>,
   ) {
-    if (!selectedId) return;
+    if (!propsComponentId) return;
     updateDoc((current) => ({
       ...current,
-      components: current.components.map((component) => {
-        if (component.id !== selectedId || component.type !== 'menuItem') return component;
+      components: updateMobileComponentById(current.components, propsComponentId, (component) => {
+        if (component.type !== 'menuItem') return component;
         const base = component.menuImage ?? {
           src: '',
           alt: 'Imagen del plato',
@@ -964,11 +1026,11 @@ export function MobileEditorPage() {
       stretch: boolean;
     }>,
   ) {
-    if (!selectedId) return;
+    if (!propsComponentId) return;
     updateDoc((current) => ({
       ...current,
-      components: current.components.map((component) => {
-        if (component.id !== selectedId || component.type !== 'section') return component;
+      components: updateMobileComponentById(current.components, propsComponentId, (component) => {
+        if (component.type !== 'section') return component;
         const base = component.backgroundImage ?? {
           src: '',
           align: 'center' as const,
@@ -986,11 +1048,11 @@ export function MobileEditorPage() {
   }
 
   function updateSelectedSectionSize(size: MobileSectionSize) {
-    if (!selectedId) return;
+    if (!propsComponentId) return;
     updateDoc((current) => ({
       ...current,
-      components: current.components.map((component) => {
-        if (component.id !== selectedId || component.type !== 'section') return component;
+      components: updateMobileComponentById(current.components, propsComponentId, (component) => {
+        if (component.type !== 'section') return component;
         return { ...component, size };
       }),
     }));
@@ -1000,11 +1062,11 @@ export function MobileEditorPage() {
     textOffsetX?: number;
     textOffsetY?: number;
   }) {
-    if (!selectedId) return;
+    if (!propsComponentId) return;
     updateDoc((current) => ({
       ...current,
-      components: current.components.map((component) => {
-        if (component.id !== selectedId || component.type !== 'section') return component;
+      components: updateMobileComponentById(current.components, propsComponentId, (component) => {
+        if (component.type !== 'section') return component;
         const next = { ...component };
         if (patch.textOffsetX !== undefined) {
           const value = Math.max(-400, Math.min(400, Math.round(patch.textOffsetX) || 0));
@@ -1022,23 +1084,48 @@ export function MobileEditorPage() {
   }
 
   function updateSelectedSectionBorderLine(borderLine: MobileSectionBorderLine) {
-    if (!selectedId) return;
+    if (!propsComponentId) return;
     updateDoc((current) => ({
       ...current,
-      components: current.components.map((component) => {
-        if (component.id !== selectedId || component.type !== 'section') return component;
+      components: updateMobileComponentById(current.components, propsComponentId, (component) => {
+        if (component.type !== 'section') return component;
         return { ...component, borderLine };
       }),
     }));
   }
 
   function updateSelectedSectionBorderRound(borderRound: MobileSectionBorderRound) {
-    if (!selectedId) return;
+    if (!propsComponentId) return;
     updateDoc((current) => ({
       ...current,
-      components: current.components.map((component) => {
-        if (component.id !== selectedId || component.type !== 'section') return component;
+      components: updateMobileComponentById(current.components, propsComponentId, (component) => {
+        if (component.type !== 'section') return component;
         return { ...component, borderRound };
+      }),
+    }));
+  }
+
+  function updateSelectedAccordion(patch: {
+    defaultOpen?: boolean;
+    showChevron?: boolean;
+    chevronColor?: string;
+    chevronThickness?: number;
+  }) {
+    if (!selectedId || selectedNode?.type !== 'accordion') return;
+    updateDoc((current) => ({
+      ...current,
+      components: updateMobileComponentById(current.components, selectedId, (component) => {
+        if (component.type !== 'accordion') return component;
+        const next = { ...component, ...patch };
+        if (patch.chevronColor !== undefined) {
+          const color = patch.chevronColor.trim();
+          if (!color) delete next.chevronColor;
+          else next.chevronColor = color.slice(0, 64);
+        }
+        if (patch.chevronThickness !== undefined) {
+          next.chevronThickness = Math.max(1, Math.min(8, Math.round(patch.chevronThickness) || 2));
+        }
+        return next;
       }),
     }));
   }
@@ -1049,7 +1136,8 @@ export function MobileEditorPage() {
   }
 
   async function deleteComponent(id: string) {
-    const component = documentRef.current.components.find((c) => c.id === id);
+    const found = findMobileComponentById(documentRef.current.components, id);
+    const component = found?.component;
     const label =
       component && 'title' in component && component.title.trim()
         ? `«${component.title.trim()}»`
@@ -1057,7 +1145,9 @@ export function MobileEditorPage() {
           ? `«${component.text.trim().slice(0, 40)}${component.text.trim().length > 40 ? '…' : ''}»`
           : component && 'label' in component && component.label.trim()
             ? `«${component.label.trim()}»`
-            : 'este componente';
+            : component?.type === 'accordion'
+              ? 'este acordeón'
+              : 'este componente';
     const confirmed = await appConfirm(`¿Eliminar ${label}?`, {
       title: 'Eliminar componente',
       variant: 'danger',
@@ -1068,9 +1158,13 @@ export function MobileEditorPage() {
 
     updateDoc((current) => ({
       ...current,
-      components: current.components.filter((c) => c.id !== id),
+      components: removeMobileComponentById(current.components, id),
     }));
-    setSelectedId((current) => (current === id ? null : current));
+    setSelectedIds((prev) => {
+      const next = prev.filter((x) => x !== id);
+      setSelectedId(next[next.length - 1] ?? null);
+      return next;
+    });
     if (isPhoneLayout) setPhoneSheet(null);
   }
 
@@ -1078,8 +1172,7 @@ export function MobileEditorPage() {
     if (!selectedId) return;
     updateDoc((current) => ({
       ...current,
-      components: current.components.map((component) => {
-        if (component.id !== selectedId) return component;
+      components: updateMobileComponentById(current.components, selectedId, (component) => {
         if (hidden) return { ...component, hidden: true };
         const { hidden: _removed, ...rest } = component;
         return rest as typeof component;
@@ -1251,6 +1344,7 @@ export function MobileEditorPage() {
                   document={document}
                   editable
                   selectedId={selectedId}
+                  selectedIds={selectedIds}
                   onSelect={handleSelectComponent}
                   onReorder={
                     interactionMode === 'move' ? handleReorderComponents : undefined
@@ -1282,9 +1376,115 @@ export function MobileEditorPage() {
                 )}
               </div>
               <div className="mobile-editor-props-pane">
-              {!selected && <p className="panel-empty">Selecciona un componente en la carta.</p>}
-              {selected && (
+              {!selectedNode && (
+                <p className="panel-empty">Selecciona un componente en la carta.</p>
+              )}
+              {selectedNode && (
                 <div className="mobile-props-form">
+                  <div className="mobile-selection-tools">
+                    <button
+                      type="button"
+                      className={`btn-secondary${multiSelectMode ? ' is-active' : ''}`}
+                      aria-pressed={multiSelectMode}
+                      onClick={() => {
+                        setMultiSelectMode((v) => !v);
+                        setAccordionActionError('');
+                      }}
+                    >
+                      {multiSelectMode ? 'Selección múltiple: ON' : 'Selección múltiple'}
+                    </button>
+                    {selectedIds.length > 0 && (
+                      <small className="panel-hint">
+                        {selectedIds.length} seleccionado{selectedIds.length === 1 ? '' : 's'}
+                        {multiSelectMode ? ' · toca para añadir o quitar' : ''}
+                      </small>
+                    )}
+                    {selectedIds.length >= 2 && (
+                      <button
+                        type="button"
+                        className="btn-primary"
+                        disabled={!canCreateAccordion}
+                        onClick={handleCreateAccordion}
+                      >
+                        Crear acordeón
+                      </button>
+                    )}
+                    {accordionActionError && (
+                      <small className="panel-hint mobile-accordion-error">{accordionActionError}</small>
+                    )}
+                  </div>
+                  {selectedAccordion && (
+                    <>
+                      <h4>Acordeón</h4>
+                      <small className="panel-hint">
+                        El primer componente es la cabecera. Tócalo en preview para expandir o
+                        contraer. Abajo editas las propiedades de esa cabecera.
+                      </small>
+                      <label>
+                        Al cargar
+                        <select
+                          value={selectedAccordion.defaultOpen === true ? 'open' : 'closed'}
+                          onChange={(e) =>
+                            updateSelectedAccordion({ defaultOpen: e.target.value === 'open' })
+                          }
+                        >
+                          <option value="closed">Colapsado</option>
+                          <option value="open">Abierto</option>
+                        </select>
+                      </label>
+                      <label>
+                        Flecha de expansión
+                        <select
+                          value={selectedAccordion.showChevron === false ? 'hide' : 'show'}
+                          onChange={(e) =>
+                            updateSelectedAccordion({ showChevron: e.target.value === 'show' })
+                          }
+                        >
+                          <option value="show">Mostrar flecha</option>
+                          <option value="hide">Ocultar flecha</option>
+                        </select>
+                      </label>
+                      {selectedAccordion.showChevron !== false && (
+                        <>
+                          <label>
+                            Color de flecha
+                            <input
+                              type="color"
+                              value={selectedAccordion.chevronColor ?? '#64748b'}
+                              onChange={(e) =>
+                                updateSelectedAccordion({ chevronColor: e.target.value })
+                              }
+                            />
+                          </label>
+                          <label>
+                            Grosor de flecha
+                            <input
+                              type="number"
+                              min={1}
+                              max={8}
+                              step={1}
+                              value={selectedAccordion.chevronThickness ?? 2}
+                              onChange={(e) =>
+                                updateSelectedAccordion({
+                                  chevronThickness: Number(e.target.value),
+                                })
+                              }
+                            />
+                          </label>
+                        </>
+                      )}
+                      <button
+                        type="button"
+                        className="btn-secondary"
+                        onClick={handleUngroupAccordion}
+                      >
+                        Desagrupar acordeón
+                      </button>
+                      <h4>Cabecera</h4>
+                    </>
+                  )}
+                  {selected && (
+                    <>
                   {'title' in selected && (
                     <label>
                       Título
@@ -1828,7 +2028,7 @@ export function MobileEditorPage() {
                   <label>
                     Animación
                     <select
-                      value={selected.animation?.preset ?? 'none'}
+                      value={selectedNode.animation?.preset ?? 'none'}
                       onChange={(e) =>
                         updateSelectedAnimation({ preset: e.target.value as MobileAnimationPreset })
                       }
@@ -1843,7 +2043,7 @@ export function MobileEditorPage() {
                   <label>
                     Trigger
                     <select
-                      value={selected.animation?.trigger ?? 'on_view'}
+                      value={selectedNode.animation?.trigger ?? 'on_view'}
                       onChange={(e) =>
                         updateSelectedAnimation({ trigger: e.target.value as MobileAnimationTrigger })
                       }
@@ -1859,12 +2059,12 @@ export function MobileEditorPage() {
                       type="button"
                       className="btn-secondary"
                       onClick={previewSelectedAnimation}
-                      disabled={(selected.animation?.preset ?? 'none') === 'none'}
+                      disabled={(selectedNode.animation?.preset ?? 'none') === 'none'}
                     >
                       Ver preview
                     </button>
                   </label>
-                  {selected.type !== 'menuItem' && (
+                  {selected && selected.type !== 'menuItem' && (
                     <>
                   <h4>Tipografía</h4>
                   <label>
@@ -2180,7 +2380,7 @@ export function MobileEditorPage() {
                       min={0}
                       max={5000}
                       step={50}
-                      value={selected.animation?.durationMs ?? 450}
+                      value={selectedNode.animation?.durationMs ?? 450}
                       onChange={(e) => updateSelectedAnimation({ durationMs: Number(e.target.value) })}
                     />
                   </label>
@@ -2191,7 +2391,7 @@ export function MobileEditorPage() {
                       min={0}
                       max={5000}
                       step={50}
-                      value={selected.animation?.delayMs ?? 0}
+                      value={selectedNode.animation?.delayMs ?? 0}
                       onChange={(e) => updateSelectedAnimation({ delayMs: Number(e.target.value) })}
                     />
                   </label>
@@ -2202,7 +2402,7 @@ export function MobileEditorPage() {
                       min={0.1}
                       max={3}
                       step={0.1}
-                      value={selected.animation?.intensity ?? 1}
+                      value={selectedNode.animation?.intensity ?? 1}
                       onChange={(e) => updateSelectedAnimation({ intensity: Number(e.target.value) })}
                     />
                   </label>
@@ -2210,7 +2410,7 @@ export function MobileEditorPage() {
                   <label>
                     Efecto
                     <select
-                      value={selected.effect?.type ?? 'none'}
+                      value={selectedNode.effect?.type ?? 'none'}
                       onChange={(e) => updateSelectedEffect({ type: e.target.value as MobileEffectType })}
                     >
                       <option value="none">Sin efecto</option>
@@ -2225,12 +2425,12 @@ export function MobileEditorPage() {
                       <option value="flash">Parpadeo</option>
                     </select>
                   </label>
-                  {(selected.effect?.type ?? 'none') !== 'none' && (
+                  {(selectedNode.effect?.type ?? 'none') !== 'none' && (
                     <>
                       <label>
                         Repetición
                         <select
-                          value={selected.effect?.repeat ?? 'once'}
+                          value={selectedNode.effect?.repeat ?? 'once'}
                           onChange={(e) => updateSelectedEffect({ repeat: e.target.value as MobileEffectRepeat })}
                         >
                           <option value="once">Una vez</option>
@@ -2240,7 +2440,7 @@ export function MobileEditorPage() {
                       <label>
                         Activación
                         <select
-                          value={selected.effect?.trigger ?? 'on_view'}
+                          value={selectedNode.effect?.trigger ?? 'on_view'}
                           onChange={(e) => updateSelectedEffect({ trigger: e.target.value as MobileEffectTrigger })}
                         >
                           <option value="on_view">Al ser visible</option>
@@ -2249,24 +2449,24 @@ export function MobileEditorPage() {
                         </select>
                       </label>
                       <label>
-                        Duración (ms): {selected.effect?.durationMs ?? 600}
+                        Duración (ms): {selectedNode.effect?.durationMs ?? 600}
                         <input
                           type="range"
                           min={100}
                           max={3000}
                           step={50}
-                          value={selected.effect?.durationMs ?? 600}
+                          value={selectedNode.effect?.durationMs ?? 600}
                           onChange={(e) => updateSelectedEffect({ durationMs: Number(e.target.value) })}
                         />
                       </label>
                       <label>
-                        Retardo (ms): {selected.effect?.delayMs ?? 0}
+                        Retardo (ms): {selectedNode.effect?.delayMs ?? 0}
                         <input
                           type="range"
                           min={0}
                           max={3000}
                           step={50}
-                          value={selected.effect?.delayMs ?? 0}
+                          value={selectedNode.effect?.delayMs ?? 0}
                           onChange={(e) => updateSelectedEffect({ delayMs: Number(e.target.value) })}
                         />
                       </label>
@@ -2275,7 +2475,7 @@ export function MobileEditorPage() {
                   <label>
                     Visibilidad pública
                     <select
-                      value={selected.hidden === true ? 'hidden' : 'visible'}
+                      value={selectedNode.hidden === true ? 'hidden' : 'visible'}
                       onChange={(e) => updateSelectedHidden(e.target.value === 'hidden')}
                     >
                       <option value="visible">Mostrar</option>
@@ -2285,6 +2485,8 @@ export function MobileEditorPage() {
                   <button type="button" className="danger" onClick={deleteSelected}>
                     Eliminar componente
                   </button>
+                    </>
+                  )}
                 </div>
               )}
               </div>
@@ -2346,6 +2548,33 @@ export function MobileEditorPage() {
                     : 'Desplaza la carta con el dedo. Toca un componente para seleccionarlo y pulsa Editar para sus propiedades.'}
                 </small>
               </div>
+              <button
+                type="button"
+                className={`btn-secondary${multiSelectMode ? ' is-active' : ''}`}
+                aria-pressed={multiSelectMode}
+                onClick={() => {
+                  setMultiSelectMode((v) => !v);
+                  setAccordionActionError('');
+                }}
+              >
+                {multiSelectMode ? 'Selección múltiple: ON' : 'Selección múltiple'}
+              </button>
+              {selectedIds.length >= 2 && (
+                <button
+                  type="button"
+                  className="btn-primary"
+                  disabled={!canCreateAccordion}
+                  onClick={() => {
+                    handleCreateAccordion();
+                    setPhoneSheet(null);
+                  }}
+                >
+                  Crear acordeón ({selectedIds.length})
+                </button>
+              )}
+              {accordionActionError && (
+                <small className="panel-hint mobile-accordion-error">{accordionActionError}</small>
+              )}
               <label>
                 Nombre
                 <input

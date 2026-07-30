@@ -351,6 +351,16 @@ async function drawMobileComponentThumb(
     case 'spacer': {
       return y + Math.min(Math.max(component.height || 16, 8), 48);
     }
+    case 'accordion': {
+      const header = component.children[0];
+      if (header) {
+        y = await drawMobileComponentThumb(ctx, header, { ...opts, y });
+      }
+      ctx.fillStyle = '#94a3b8';
+      ctx.font = `600 11px ${fontFamily}`;
+      ctx.fillText('▾ acordeón', x + 4, y + 12, width - 8);
+      return y + 18;
+    }
     default:
       return y;
   }
