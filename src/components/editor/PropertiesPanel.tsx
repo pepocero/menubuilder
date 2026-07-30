@@ -13,6 +13,7 @@ import {
   getTextFormatState,
   textboxHasSelection,
 } from '@/lib/text-char-styles';
+import { getTextListState, indentTextLines, toggleTextList } from '@/lib/text-list';
 import {
   DEFAULT_TEXT_BORDER,
   readTextboxBorder,
@@ -80,6 +81,46 @@ function PasteLayerIcon() {
     <svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true" fill="none" stroke="currentColor" strokeWidth="1.5">
       <path d="M6 3.5h4a1 1 0 0 1 1 1V5h1.2A1.3 1.3 0 0 1 13.5 6.3v6.4A1.3 1.3 0 0 1 12.2 14H3.8A1.3 1.3 0 0 1 2.5 12.7V6.3A1.3 1.3 0 0 1 3.8 5H5V4.5a1 1 0 0 1 1-1Z" />
       <path d="M6 5h4V4.5a.5.5 0 0 0-.5-.5h-3a.5.5 0 0 0-.5.5V5Z" fill="currentColor" stroke="none" />
+    </svg>
+  );
+}
+
+function BulletListIcon() {
+  return (
+    <svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true">
+      <circle cx="3" cy="4" r="1.2" fill="currentColor" />
+      <circle cx="3" cy="8" r="1.2" fill="currentColor" />
+      <circle cx="3" cy="12" r="1.2" fill="currentColor" />
+      <path fill="currentColor" d="M6 3.2h8v1.5H6V3.2zm0 4h8v1.5H6V7.2zm0 4h8v1.5H6v-1.5z" />
+    </svg>
+  );
+}
+
+function NumberListIcon() {
+  return (
+    <svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true">
+      <path
+        fill="currentColor"
+        d="M2.2 2.5h1.2v2.2H2.2V2.5zm0 4.2h1.8v.8H3l.9 1.4v.7H2.2v-.8h.9l-.9-1.3v-.8zm.1 3.8h1v.35c0 .25-.1.4-.35.4s-.35-.15-.35-.4H1.4c0 .85.55 1.35 1.45 1.35S4.3 12.5 4.3 11.7v-.35c0-.55-.35-.9-.9-1 .4-.1.7-.4.7-.9 0-.65-.5-1.15-1.25-1.15S1.4 9.15 1.4 9.8h1c0-.25.15-.4.4-.4s.35.15.35.4-.15.4-.4.4H2.3v.75zM6 3.2h8v1.5H6V3.2zm0 4h8v1.5H6V7.2zm0 4h8v1.5H6v-1.5z"
+      />
+    </svg>
+  );
+}
+
+function IndentIcon() {
+  return (
+    <svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true">
+      <path fill="currentColor" d="M1 2.5h14v1.5H1V2.5zm6 3.5h8v1.5H7V6zm0 3.5h8v1.5H7V9.5zM1 13h14v1.5H1V13z" />
+      <path fill="currentColor" d="M1.2 7.2h3.2v1.6H1.2V7.2zm3.2.8L2.2 6.4v3.2L4.4 8z" />
+    </svg>
+  );
+}
+
+function OutdentIcon() {
+  return (
+    <svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true">
+      <path fill="currentColor" d="M1 2.5h14v1.5H1V2.5zm6 3.5h8v1.5H7V6zm0 3.5h8v1.5H7V9.5zM1 13h14v1.5H1V13z" />
+      <path fill="currentColor" d="M4.4 7.2H1.2v1.6h3.2V7.2zM1.2 8l2.2 1.6V6.4L1.2 8z" />
     </svg>
   );
 }
@@ -414,6 +455,34 @@ export function PropertiesPanel({
     refresh();
   }
 
+  function applyTextList(mode: 'bullet' | 'number') {
+    if (!activeObject || !isTextObject(activeObject)) return;
+    const text = asTextbox(activeObject);
+    const nextRange = toggleTextList(text, mode, textSelectionRef.current);
+    textSelectionRef.current = nextRange;
+    if (!text.isEditing) {
+      text.enterEditing();
+    }
+    text.setSelectionStart(nextRange.start);
+    text.setSelectionEnd(nextRange.end);
+    text.canvas?.requestRenderAll();
+    refresh();
+  }
+
+  function applyTextIndent(direction: 1 | -1) {
+    if (!activeObject || !isTextObject(activeObject)) return;
+    const text = asTextbox(activeObject);
+    const nextRange = indentTextLines(text, direction, textSelectionRef.current);
+    textSelectionRef.current = nextRange;
+    if (!text.isEditing) {
+      text.enterEditing();
+    }
+    text.setSelectionStart(nextRange.start);
+    text.setSelectionEnd(nextRange.end);
+    text.canvas?.requestRenderAll();
+    refresh();
+  }
+
   function handleUnifyFormat() {
     if (!activeObject || !isTextObject(activeObject)) return;
     refreshTextboxLayout(activeObject, { clearCharStyles: true });
@@ -440,6 +509,9 @@ export function PropertiesPanel({
     ? textboxHasSelection(textObj) ||
       (!!storedSelection && storedSelection.end > storedSelection.start)
     : false;
+  const listState = textObj
+    ? getTextListState(textObj, storedSelection)
+    : { bullet: false, number: false };
   const fontSizeInfo = textObj
     ? getActiveFontSizeInfo(textObj, storedSelection)
     : null;
@@ -601,8 +673,8 @@ export function PropertiesPanel({
           )}
           {hasPartialSelection && (
             <p className="panel-hint properties-selection-hint">
-              Hay texto seleccionado en el lienzo: negrita, cursiva, fuente, tamaño y color se
-              aplican solo a esa porción.
+              Hay texto seleccionado en el lienzo: negrita, cursiva, viñetas, fuente, tamaño y color
+              se aplican a esa porción (las listas a las líneas afectadas).
             </p>
           )}
           <label onMouseDown={preserveTextSelection}>
@@ -736,6 +808,60 @@ export function PropertiesPanel({
               }
             >
               <em>C</em>
+            </button>
+            <button
+              type="button"
+              className={listState.bullet ? 'is-active' : undefined}
+              title={
+                hasPartialSelection
+                  ? 'Viñetas (líneas de la selección)'
+                  : 'Viñetas (todo el texto de la capa)'
+              }
+              aria-pressed={listState.bullet}
+              onMouseDown={preserveTextSelection}
+              onClick={() => applyTextList('bullet')}
+            >
+              <BulletListIcon />
+            </button>
+            <button
+              type="button"
+              className={listState.number ? 'is-active' : undefined}
+              title={
+                hasPartialSelection
+                  ? 'Numeración (líneas de la selección)'
+                  : 'Numeración (todo el texto de la capa)'
+              }
+              aria-pressed={listState.number}
+              onMouseDown={preserveTextSelection}
+              onClick={() => applyTextList('number')}
+            >
+              <NumberListIcon />
+            </button>
+            <button
+              type="button"
+              title={
+                hasPartialSelection
+                  ? 'Aumentar sangría (selección)'
+                  : 'Aumentar sangría'
+              }
+              aria-label="Aumentar sangría"
+              onMouseDown={preserveTextSelection}
+              onClick={() => applyTextIndent(1)}
+            >
+              <IndentIcon />
+            </button>
+            <button
+              type="button"
+              title={
+                hasPartialSelection
+                  ? 'Reducir sangría (selección)'
+                  : 'Reducir sangría'
+              }
+              aria-label="Reducir sangría"
+              onMouseDown={preserveTextSelection}
+              onClick={() => applyTextIndent(-1)}
+            >
+              <OutdentIcon />
             </button>
           </div>
           <div className="properties-align-row" role="group" aria-label="Alineación">

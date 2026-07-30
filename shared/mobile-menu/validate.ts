@@ -237,10 +237,17 @@ function parseComponent(value: unknown): MobileComponent | null {
     const legacyColor = isString(value.color) ? value.color : '#374151';
     const legacySize = isNumber(value.fontSize) ? value.fontSize : 16;
     const legacyAlign = value.align === 'center' || value.align === 'right' ? value.align : 'left';
+    const listStyle =
+      value.listStyle === 'bullet' || value.listStyle === 'number' ? value.listStyle : 'none';
+    const indentPx = isNumber(value.indentPx)
+      ? Math.max(0, Math.min(96, Math.round(value.indentPx)))
+      : 0;
     return {
       id: value.id,
       type,
       text: value.text,
+      listStyle,
+      indentPx,
       animation: parseAnimation(value.animation),
       effect: parseEffect(value.effect),
       typography:

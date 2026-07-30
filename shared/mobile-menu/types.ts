@@ -114,6 +114,10 @@ export interface MobileHeadingComponent extends MobileComponentBase {
 export interface MobileTextComponent extends MobileComponentBase {
   type: 'text';
   text: string;
+  /** Lista: ninguna, viñetas o numerada (una línea = un ítem). */
+  listStyle: 'none' | 'bullet' | 'number';
+  /** Sangría izquierda en px (0–96). */
+  indentPx: number;
 }
 
 export interface MobileImageComponent extends MobileComponentBase {

@@ -104,17 +104,62 @@ function CapitalizeIcon() {
   return <span className="wysiwyg-text-icon" aria-hidden="true">Aa</span>;
 }
 
+function BulletListIcon() {
+  return (
+    <svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true">
+      <circle cx="5" cy="7" r="1.6" fill="currentColor" />
+      <circle cx="5" cy="12" r="1.6" fill="currentColor" />
+      <circle cx="5" cy="17" r="1.6" fill="currentColor" />
+      <path fill="currentColor" d="M9 6h11v2H9V6zm0 5h11v2H9v-2zm0 5h11v2H9v-2z" />
+    </svg>
+  );
+}
+
+function NumberListIcon() {
+  return (
+    <svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true">
+      <path
+        fill="currentColor"
+        d="M4 5h1.6v1.1H4.7V7h.9v1.1H4V5zm0 5.2h2.2v.9H5.1l1.1 1.6v.8H4v-.9h1.1L4 12.1v-.9zm.1 4.5h1.2v.4c0 .3-.1.5-.4.5s-.4-.2-.4-.5H3.2c0 1 .7 1.6 1.7 1.6s1.7-.7 1.7-1.6v-.4c0-.7-.4-1.1-1.1-1.2.5-.1.9-.5.9-1.1 0-.8-.6-1.4-1.5-1.4S3.2 12.9 3.2 13.7h1.2c0-.3.2-.5.5-.5s.4.2.4.5-.2.5-.5.5H4.1v.9zm5.9-9.5h11v2H10V5.2zm0 5h11v2H10v-2zm0 5h11v2H10v-2z"
+      />
+    </svg>
+  );
+}
+
+function IndentIcon() {
+  return (
+    <svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true">
+      <path fill="currentColor" d="M3 5h18v2H3V5zm8 4h10v2H11V9zm0 4h10v2H11v-2zM3 17h18v2H3v-2z" />
+      <path fill="currentColor" d="M3 10.5h5v3H3v-3zm5 1.5L5 9.5v5L8 12z" />
+    </svg>
+  );
+}
+
+function OutdentIcon() {
+  return (
+    <svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true">
+      <path fill="currentColor" d="M3 5h18v2H3V5zm8 4h10v2H11V9zm0 4h10v2H11v-2zM3 17h18v2H3v-2z" />
+      <path fill="currentColor" d="M8 10.5H3v3h5v-3zM3 12l3 2.5v-5L3 12z" />
+    </svg>
+  );
+}
+
 function TypographyStyleToolbar({
   fontStyle,
   textDecoration,
   textTransform,
   onChange,
+  listStyle,
+  onListStyleChange,
 }: {
   fontStyle: MobileTypographyConfig['fontStyle'];
   textDecoration: MobileTypographyConfig['textDecoration'];
   textTransform: MobileTypographyConfig['textTransform'];
   onChange: (patch: Partial<MobileTypographyConfig>) => void;
+  listStyle?: 'none' | 'bullet' | 'number';
+  onListStyleChange?: (next: 'none' | 'bullet' | 'number') => void;
 }) {
+  const currentList = listStyle ?? 'none';
   return (
     <>
       <label>
@@ -156,6 +201,30 @@ function TypographyStyleToolbar({
           >
             <StrikethroughIcon />
           </button>
+          {onListStyleChange ? (
+            <>
+              <button
+                type="button"
+                className={currentList === 'bullet' ? 'is-active' : undefined}
+                onClick={() => onListStyleChange(currentList === 'bullet' ? 'none' : 'bullet')}
+                title="Viñetas"
+                aria-label="Viñetas"
+                aria-pressed={currentList === 'bullet'}
+              >
+                <BulletListIcon />
+              </button>
+              <button
+                type="button"
+                className={currentList === 'number' ? 'is-active' : undefined}
+                onClick={() => onListStyleChange(currentList === 'number' ? 'none' : 'number')}
+                title="Numeración"
+                aria-label="Numeración"
+                aria-pressed={currentList === 'number'}
+              >
+                <NumberListIcon />
+              </button>
+            </>
+          ) : null}
         </div>
       </label>
       <label>
@@ -485,6 +554,29 @@ export function MobileEditorPage() {
         if (component.id !== selectedId) return component;
         if (!(field in component)) return component;
         return { ...component, [field]: value } as typeof component;
+      }),
+    }));
+  }
+
+  function updateSelectedTextListStyle(listStyle: 'none' | 'bullet' | 'number') {
+    if (!selectedId) return;
+    updateDoc((current) => ({
+      ...current,
+      components: current.components.map((component) => {
+        if (component.id !== selectedId || component.type !== 'text') return component;
+        return { ...component, listStyle };
+      }),
+    }));
+  }
+
+  function updateSelectedTextIndent(delta: number) {
+    if (!selectedId) return;
+    updateDoc((current) => ({
+      ...current,
+      components: current.components.map((component) => {
+        if (component.id !== selectedId || component.type !== 'text') return component;
+        const next = Math.max(0, Math.min(96, (component.indentPx ?? 0) + delta));
+        return { ...component, indentPx: next };
       }),
     }));
   }
@@ -892,6 +984,61 @@ export function MobileEditorPage() {
                         value={selected.text}
                         onChange={(e) => updateSelectedField('text', e.target.value)}
                       />
+                    </label>
+                  )}
+                  {selected.type === 'text' && (
+                    <label>
+                      Lista y sangría
+                      <div className="wysiwyg-align-group" role="group" aria-label="Lista y sangría">
+                        <button
+                          type="button"
+                          className={(selected.listStyle ?? 'none') === 'bullet' ? 'is-active' : undefined}
+                          aria-pressed={(selected.listStyle ?? 'none') === 'bullet'}
+                          title="Viñetas"
+                          aria-label="Viñetas"
+                          onClick={() =>
+                            updateSelectedTextListStyle(
+                              (selected.listStyle ?? 'none') === 'bullet' ? 'none' : 'bullet',
+                            )
+                          }
+                        >
+                          <BulletListIcon />
+                        </button>
+                        <button
+                          type="button"
+                          className={(selected.listStyle ?? 'none') === 'number' ? 'is-active' : undefined}
+                          aria-pressed={(selected.listStyle ?? 'none') === 'number'}
+                          title="Numeración"
+                          aria-label="Numeración"
+                          onClick={() =>
+                            updateSelectedTextListStyle(
+                              (selected.listStyle ?? 'none') === 'number' ? 'none' : 'number',
+                            )
+                          }
+                        >
+                          <NumberListIcon />
+                        </button>
+                        <button
+                          type="button"
+                          title="Aumentar sangría"
+                          aria-label="Aumentar sangría"
+                          onClick={() => updateSelectedTextIndent(16)}
+                        >
+                          <IndentIcon />
+                        </button>
+                        <button
+                          type="button"
+                          title="Reducir sangría"
+                          aria-label="Reducir sangría"
+                          disabled={(selected.indentPx ?? 0) <= 0}
+                          onClick={() => updateSelectedTextIndent(-16)}
+                        >
+                          <OutdentIcon />
+                        </button>
+                      </div>
+                      <small className="panel-hint">
+                        Una línea = un elemento. Sangría actual: {selected.indentPx ?? 0}px.
+                      </small>
                     </label>
                   )}
                   {'description' in selected && (
@@ -1425,6 +1572,10 @@ export function MobileEditorPage() {
                     textDecoration={selected.typography?.textDecoration ?? 'none'}
                     textTransform={selected.typography?.textTransform ?? 'none'}
                     onChange={updateSelectedTypography}
+                    listStyle={selected.type === 'text' ? (selected.listStyle ?? 'none') : undefined}
+                    onListStyleChange={
+                      selected.type === 'text' ? updateSelectedTextListStyle : undefined
+                    }
                   />
                   <label>
                     Interlineado

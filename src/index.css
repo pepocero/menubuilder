@@ -1873,6 +1873,15 @@ textarea {
   border-top: 1px solid var(--color-border);
 }
 
+.menu-line-width-control input[type='range'],
+.menu-line-properties input[type='range'],
+.properties-panel input[type='range'] {
+  width: 100%;
+  min-height: 2rem;
+  margin: 0.15rem 0;
+  accent-color: var(--color-primary);
+}
+
 .menu-line-column-tabs {
   display: flex;
   gap: 0.25rem;
@@ -2196,6 +2205,13 @@ textarea {
   padding: 0.4rem;
   border: 1px solid var(--color-border);
   border-radius: 4px;
+}
+
+.properties-panel input[type='range'] {
+  padding: 0.5rem 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
 }
 
 .font-family-picker {
@@ -4307,6 +4323,52 @@ textarea {
 .mobile-block-text {
   margin: 0;
   line-height: 1.45;
+  white-space: pre-wrap;
+}
+
+.mobile-block-text.is-list {
+  margin: 0;
+  padding-left: 0;
+  white-space: normal;
+  list-style: none;
+}
+
+.mobile-block-text.is-list li {
+  position: relative;
+  margin: 0.25em 0;
+  padding-left: 1.35em;
+}
+
+.mobile-block-text.is-list-bullet li::before {
+  content: '•';
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 1.1em;
+  text-align: center;
+  color: currentColor;
+  font-weight: 700;
+  line-height: inherit;
+}
+
+.mobile-block-text.is-list-number {
+  counter-reset: mobile-text-list;
+}
+
+.mobile-block-text.is-list-number li {
+  counter-increment: mobile-text-list;
+}
+
+.mobile-block-text.is-list-number li::before {
+  content: counter(mobile-text-list) '.';
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 1.25em;
+  text-align: right;
+  color: currentColor;
+  font-variant-numeric: tabular-nums;
+  line-height: inherit;
 }
 
 .mobile-block-image {

@@ -183,15 +183,36 @@ function renderComponent(
           {component.text}
         </h2>
       );
-    case 'text':
+    case 'text': {
+      const listMode =
+        component.listStyle === 'bullet' || component.listStyle === 'number'
+          ? component.listStyle
+          : 'none';
+      const indentPx = Math.max(0, Math.min(96, component.indentPx ?? 0));
+      const indentStyle = indentPx > 0 ? { paddingLeft: `${indentPx}px` } : undefined;
+      if (listMode !== 'none') {
+        const items = component.text.split(/\r?\n/);
+        const ListTag = listMode === 'number' ? 'ol' : 'ul';
+        return (
+          <ListTag
+            className={`mobile-block mobile-block-text is-list is-list-${listMode}`}
+            style={{ ...typographyStyle(component), ...indentStyle }}
+          >
+            {items.map((item, index) => (
+              <li key={`text-li-${index}`}>{item || '\u00A0'}</li>
+            ))}
+          </ListTag>
+        );
+      }
       return (
         <p
           className="mobile-block mobile-block-text"
-          style={typographyStyle(component)}
+          style={{ ...typographyStyle(component), ...indentStyle }}
         >
           {component.text}
         </p>
       );
+    }
     case 'image':
       return component.src ? (
         <img

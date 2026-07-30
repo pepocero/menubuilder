@@ -20,6 +20,7 @@ import {
   layoutMenuLineGroup,
   normalizeLeaderUnit,
 } from '@/lib/menu-line';
+import { continueListPrefixIfNeeded } from '@/lib/text-list';
 import { hydrateDesign } from '@/lib/canvas/render-design';
 import type { CanvasInteractionMode } from '@/components/editor/EditorZoomControls';
 import {
@@ -370,6 +371,7 @@ export const CanvasEditor = forwardRef<CanvasEditorHandle, CanvasEditorProps>(
           return;
         }
         const text = target as import('fabric').Textbox;
+        continueListPrefixIfNeeded(text);
         if ((text.width ?? 0) < 48) {
           refreshTextboxLayout(target);
         } else {

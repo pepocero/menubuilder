@@ -4,20 +4,24 @@
   "pages_build_output_dir": "dist",
   "compatibility_date": "2026-01-01",
   "ai": {
-    "binding": "AI"
+    "binding": "AI",
+    "remote": true
   },
   "d1_databases": [
     {
       "binding": "DB",
       "database_name": "menu-db",
       "database_id": "9435ef80-d78d-4534-ae0e-c4ab1bad1e0d",
-      "preview_database_id": "DB"
+      // En `wrangler pages dev` usa la D1 de producción (usuarios/menús reales).
+      // Pon remote:false si quieres la base SQLite local de .wrangler/state.
+      "remote": true
     }
   ],
   "r2_buckets": [
     {
       "binding": "MEDIA",
-      "bucket_name": "menu-assets"
+      "bucket_name": "menu-assets",
+      "remote": true
     }
   ]
 }

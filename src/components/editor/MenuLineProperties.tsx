@@ -236,6 +236,21 @@ export function MenuLineProperties({ group, onUpdate }: MenuLinePropertiesProps)
         />
       </label>
 
+      <label className="menu-line-width-control">
+        Ancho columna plato ({leftPercent}%)
+        <input
+          type="range"
+          min={15}
+          max={75}
+          step={1}
+          value={Math.min(75, Math.max(15, leftPercent))}
+          onChange={(e) => {
+            updateMenuLineColumnRatio(group, 'left', Number(e.target.value) / 100);
+            refresh();
+          }}
+        />
+      </label>
+
       <div className="menu-line-column-tabs" role="tablist" aria-label="Columna">
         {MENU_LINE_COLUMN_KEYS.map((key) => (
           <button
@@ -386,26 +401,12 @@ export function MenuLineProperties({ group, onUpdate }: MenuLinePropertiesProps)
         </p>
       )}
 
-      {activeColumn === 'left' ? (
-        <label>
-          Ancho columna plato ({leftPercent}%)
-          <input
-            type="range"
-            min={15}
-            max={75}
-            step={1}
-            value={leftPercent}
-            onChange={(e) => {
-              updateMenuLineColumnRatio(group, 'left', Number(e.target.value) / 100);
-              refresh();
-            }}
-          />
-        </label>
-      ) : (
+      {activeColumn === 'right' && (
+        <p className="panel-hint">El ancho del precio se ajusta solo al texto.</p>
+      )}
+      {activeColumn === 'center' && (
         <p className="panel-hint">
-          {activeColumn === 'right'
-            ? 'El ancho del precio se ajusta solo al texto.'
-            : 'El separador ocupa el espacio que queda entre plato y precio.'}
+          El separador ocupa el espacio que queda entre plato y precio.
         </p>
       )}
 
