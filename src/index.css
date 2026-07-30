@@ -5251,7 +5251,7 @@ textarea {
   align-items: center;
   justify-content: space-between;
   gap: 0.75rem;
-  padding: 0.65rem 1rem;
+  padding: max(0.75rem, env(safe-area-inset-top, 0px)) 1rem 0.75rem;
   background: rgb(15 23 42 / 92%);
   border-bottom: 1px solid rgb(148 163 184 / 25%);
   color: #e2e8f0;
@@ -5279,7 +5279,7 @@ textarea {
   display: flex;
   align-items: flex-start;
   justify-content: center;
-  padding: 1rem;
+  padding: 1.5rem 1rem max(1.5rem, env(safe-area-inset-bottom, 0px));
   overflow: auto;
 }
 
@@ -5292,10 +5292,13 @@ textarea {
   height: var(--mobile-viewport-height, 852px);
   min-height: var(--mobile-viewport-height, 852px);
   max-height: var(--mobile-viewport-height, 852px);
+  padding-top: 22px;
+  padding-bottom: 28px;
   overflow-x: hidden;
   overflow-y: auto;
   overscroll-behavior: contain;
   -webkit-overflow-scrolling: touch;
+  scroll-padding-top: 12px;
 }
 
 .mobile-editor-header-actions .btn-primary {

@@ -678,10 +678,19 @@ export function MobileEditorPage() {
 
   function handleDropComponent(type: (typeof MOBILE_COMPONENT_LIBRARY)[number]['type']) {
     const next = createDefaultMobileComponent(type);
-    updateDoc((current) => ({
-      ...current,
-      components: [...current.components, next],
-    }));
+    const insertAfterId = selectedId;
+    updateDoc((current) => {
+      const list = current.components;
+      if (!insertAfterId) {
+        return { ...current, components: [...list, next] };
+      }
+      const index = list.findIndex((c) => c.id === insertAfterId);
+      if (index < 0) {
+        return { ...current, components: [...list, next] };
+      }
+      const components = [...list.slice(0, index + 1), next, ...list.slice(index + 1)];
+      return { ...current, components };
+    });
     setSelectedId(next.id);
     // En teléfono las propiedades solo se abren con el botón Editar.
   }
