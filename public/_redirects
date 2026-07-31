@@ -1,2 +1,3 @@
-# SPA: rutas de la app → index.html (proxy 200).
-/*    /index.html   200
+# Sin catch-all SPA aquí: si /* → index.html, los /assets/*.js faltantes
+# devolvían HTML (MIME text/html) y rompían la app.
+# El fallback SPA lo hace functions/_middleware.ts (excluye /assets y /fonts).

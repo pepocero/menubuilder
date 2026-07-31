@@ -8,6 +8,8 @@ interface Env {
   OPENAI_API_KEY?: string;
   OPENAI_OCR_MODEL?: string;
   AI?: Ai;
+  /** Binding automático de Cloudflare Pages para assets estáticos. */
+  ASSETS?: Fetcher;
 }
 
 interface AuthContext {
