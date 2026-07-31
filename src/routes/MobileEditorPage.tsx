@@ -60,6 +60,7 @@ import {
   type MobileEffectRepeat,
   type MobileEffectTrigger,
   type DevicePresetId,
+  type MobileAccordionChevronAnimation,
   type MobileInteractionAction,
   type MobileInteractionActionType,
   type MobileMenuDocument,
@@ -1008,6 +1009,7 @@ export function MobileEditorPage() {
       }),
     }));
     if (patch.trigger !== undefined || patch.preset !== undefined) {
+      if (isPhoneLayout) setPhoneSheet(null);
       setAnimationPreview({ componentId: selectedId, nonce: Date.now() });
     }
   }
@@ -1032,6 +1034,7 @@ export function MobileEditorPage() {
   function previewSelectedAnimation() {
     if (!selectedId) return;
     if ((selectedNode?.animation?.preset ?? 'none') === 'none') return;
+    if (isPhoneLayout) setPhoneSheet(null);
     setAnimationPreview({ componentId: selectedId, nonce: Date.now() });
   }
 
@@ -1288,6 +1291,7 @@ export function MobileEditorPage() {
     showChevron?: boolean;
     chevronColor?: string;
     chevronThickness?: number;
+    chevronAnimation?: MobileAccordionChevronAnimation;
   }) {
     if (!selectedId || selectedNode?.type !== 'accordion') return;
     updateDoc((current) => ({
@@ -1302,6 +1306,9 @@ export function MobileEditorPage() {
         }
         if (patch.chevronThickness !== undefined) {
           next.chevronThickness = Math.max(1, Math.min(8, Math.round(patch.chevronThickness) || 2));
+        }
+        if (patch.chevronAnimation !== undefined) {
+          next.chevronAnimation = patch.chevronAnimation;
         }
         return next;
       }),
@@ -1658,6 +1665,32 @@ export function MobileEditorPage() {
                               }
                             />
                           </label>
+                          <label>
+                            Animación en reposo
+                            <select
+                              value={
+                                !selectedAccordion.chevronAnimation ||
+                                selectedAccordion.chevronAnimation === 'rotate' ||
+                                selectedAccordion.chevronAnimation === 'none'
+                                  ? 'none'
+                                  : selectedAccordion.chevronAnimation
+                              }
+                              onChange={(e) =>
+                                updateSelectedAccordion({
+                                  chevronAnimation: e.target.value as MobileAccordionChevronAnimation,
+                                })
+                              }
+                            >
+                              <option value="none">Sin animación</option>
+                              <option value="bounce">Rebote hacia abajo</option>
+                              <option value="pulse">Pulso</option>
+                              <option value="flip">Volteo</option>
+                              <option value="spin">Balanceo</option>
+                            </select>
+                          </label>
+                          <small className="panel-hint">
+                            Se reproduce con el acordeón colapsado. Al abrir, la flecha siempre gira 180°.
+                          </small>
                         </>
                       )}
                       <button
@@ -2257,18 +2290,51 @@ export function MobileEditorPage() {
                       <option value="on_load">Al cargar</option>
                       <option value="on_tap">Al tocar</option>
                     </select>
-                    <small className="panel-hint">
-                      Al cambiar Trigger o Animación se reproduce un preview en el móvil.
-                    </small>
-                    <button
-                      type="button"
-                      className="btn-secondary"
-                      onClick={previewSelectedAnimation}
-                      disabled={(selectedNode.animation?.preset ?? 'none') === 'none'}
-                    >
-                      Ver preview
-                    </button>
                   </label>
+                  <small className="panel-hint">
+                    Al cambiar Trigger o Animación se reproduce un preview en el móvil.
+                  </small>
+                  <label>
+                    Duración (ms)
+                    <input
+                      type="number"
+                      min={0}
+                      max={5000}
+                      step={50}
+                      value={selectedNode.animation?.durationMs ?? 450}
+                      onChange={(e) => updateSelectedAnimation({ durationMs: Number(e.target.value) })}
+                    />
+                  </label>
+                  <label>
+                    Delay (ms)
+                    <input
+                      type="number"
+                      min={0}
+                      max={5000}
+                      step={50}
+                      value={selectedNode.animation?.delayMs ?? 0}
+                      onChange={(e) => updateSelectedAnimation({ delayMs: Number(e.target.value) })}
+                    />
+                  </label>
+                  <label>
+                    Intensidad
+                    <input
+                      type="range"
+                      min={0.1}
+                      max={3}
+                      step={0.1}
+                      value={selectedNode.animation?.intensity ?? 1}
+                      onChange={(e) => updateSelectedAnimation({ intensity: Number(e.target.value) })}
+                    />
+                  </label>
+                  <button
+                    type="button"
+                    className="btn-secondary"
+                    onClick={previewSelectedAnimation}
+                    disabled={(selectedNode.animation?.preset ?? 'none') === 'none'}
+                  >
+                    Ver preview
+                  </button>
                   {selected && selected.type !== 'menuItem' && (
                     <>
                   <h4>Tipografía</h4>
@@ -2617,39 +2683,6 @@ export function MobileEditorPage() {
                       </label>
                     </>
                   )}
-                  <label>
-                    Duración (ms)
-                    <input
-                      type="number"
-                      min={0}
-                      max={5000}
-                      step={50}
-                      value={selectedNode.animation?.durationMs ?? 450}
-                      onChange={(e) => updateSelectedAnimation({ durationMs: Number(e.target.value) })}
-                    />
-                  </label>
-                  <label>
-                    Delay (ms)
-                    <input
-                      type="number"
-                      min={0}
-                      max={5000}
-                      step={50}
-                      value={selectedNode.animation?.delayMs ?? 0}
-                      onChange={(e) => updateSelectedAnimation({ delayMs: Number(e.target.value) })}
-                    />
-                  </label>
-                  <label>
-                    Intensidad
-                    <input
-                      type="range"
-                      min={0.1}
-                      max={3}
-                      step={0.1}
-                      value={selectedNode.animation?.intensity ?? 1}
-                      onChange={(e) => updateSelectedAnimation({ intensity: Number(e.target.value) })}
-                    />
-                  </label>
                   <h4>Efecto visual</h4>
                   <label>
                     Efecto

@@ -2,6 +2,7 @@ import { MOBILE_DEVICE_PRESETS, createDefaultMobileMenuDocument } from './defaul
 import {
   MOBILE_MENU_VERSION,
   migrateLegacySectionBorder,
+  type MobileAccordionChevronAnimation,
   type MobileComponent,
   type MobileMenuDocument,
   type MobileSectionBorderLine,
@@ -18,6 +19,22 @@ function isString(value: unknown): value is string {
 
 function isNumber(value: unknown): value is number {
   return typeof value === 'number' && Number.isFinite(value);
+}
+
+const ACCORDION_CHEVRON_ANIMATIONS: readonly MobileAccordionChevronAnimation[] = [
+  'rotate',
+  'bounce',
+  'flip',
+  'spin',
+  'pulse',
+  'none',
+];
+
+function parseChevronAnimation(value: unknown): MobileAccordionChevronAnimation | undefined {
+  if (!isString(value)) return undefined;
+  return (ACCORDION_CHEVRON_ANIMATIONS as readonly string[]).includes(value)
+    ? (value as MobileAccordionChevronAnimation)
+    : undefined;
 }
 
 function parseAnimation(value: unknown): MobileComponent['animation'] {
@@ -411,6 +428,7 @@ function parseComponent(value: unknown): MobileComponent | null {
       chevronThickness: isNumber(value.chevronThickness)
         ? Math.max(1, Math.min(8, Math.round(value.chevronThickness)))
         : undefined,
+      chevronAnimation: parseChevronAnimation(value.chevronAnimation),
       animation: parseAnimation(value.animation),
       effect: parseEffect(value.effect),
       typography: parseTypography(value.typography),

@@ -4357,8 +4357,86 @@ textarea {
   filter: drop-shadow(0 1px 2px rgb(15 23 42 / 25%));
 }
 
+/* Apertura/cierre: siempre giro 180° (comportamiento estándar del acordeón). */
 .mobile-accordion-chevron.is-open {
   transform: translateY(-50%) rotate(180deg);
+  animation: none;
+}
+
+/* Animaciones en reposo: solo con el acordeón colapsado. */
+.mobile-accordion-chevron--bounce:not(.is-open) {
+  animation: mobile-accordion-chevron-idle-bounce 1s ease-in-out infinite;
+}
+
+.mobile-accordion-chevron--pulse:not(.is-open) {
+  animation: mobile-accordion-chevron-idle-pulse 1.15s ease-in-out infinite;
+}
+
+.mobile-accordion-chevron--flip:not(.is-open) {
+  animation: mobile-accordion-chevron-idle-flip 1.4s ease-in-out infinite;
+  transform-style: preserve-3d;
+}
+
+.mobile-accordion-chevron--spin:not(.is-open) {
+  animation: mobile-accordion-chevron-idle-spin 1.5s ease-in-out infinite;
+}
+
+@keyframes mobile-accordion-chevron-idle-bounce {
+  0%,
+  100% {
+    transform: translateY(-50%);
+  }
+  50% {
+    transform: translateY(calc(-50% + 6px));
+  }
+}
+
+@keyframes mobile-accordion-chevron-idle-pulse {
+  0%,
+  100% {
+    transform: translateY(-50%) scale(1);
+    opacity: 1;
+  }
+  50% {
+    transform: translateY(-50%) scale(1.2);
+    opacity: 0.8;
+  }
+}
+
+@keyframes mobile-accordion-chevron-idle-flip {
+  0%,
+  100% {
+    transform: translateY(-50%) perspective(180px) rotateY(0deg);
+  }
+  50% {
+    transform: translateY(-50%) perspective(180px) rotateY(42deg);
+  }
+}
+
+@keyframes mobile-accordion-chevron-idle-spin {
+  0%,
+  100% {
+    transform: translateY(-50%) rotate(0deg);
+  }
+  25% {
+    transform: translateY(-50%) rotate(-14deg);
+  }
+  75% {
+    transform: translateY(-50%) rotate(14deg);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .mobile-accordion-chevron--bounce:not(.is-open),
+  .mobile-accordion-chevron--pulse:not(.is-open),
+  .mobile-accordion-chevron--flip:not(.is-open),
+  .mobile-accordion-chevron--spin:not(.is-open) {
+    animation: none !important;
+  }
+
+  .mobile-accordion-chevron.is-open {
+    transition: none;
+  }
 }
 
 .mobile-accordion-panel {

@@ -380,15 +380,59 @@ function renderComponent(
   }
 }
 
+type AnimationPreviewPlay = {
+  componentId: string;
+  nonce: number;
+  className: string;
+  revealVisible: boolean;
+};
+
+function animationStyleVars(component: MobileComponent): CSSProperties {
+  return {
+    ['--mobile-anim-duration' as string]: `${component.animation?.durationMs ?? 450}ms`,
+    ['--mobile-anim-delay' as string]: `${component.animation?.delayMs ?? 0}ms`,
+    ['--mobile-intensity' as string]: String(component.animation?.intensity ?? 1),
+  };
+}
+
+function previewVisibilityClasses(
+  componentId: string,
+  previewPlay: AnimationPreviewPlay | null,
+  editable: boolean,
+): string[] {
+  const isTarget = previewPlay?.componentId === componentId;
+  const classes: string[] = [];
+  if (isTarget && previewPlay.className) classes.push(previewPlay.className);
+  const revealPreview = isTarget && previewPlay.className === 'is-anim-preview-reveal';
+  if (revealPreview) {
+    if (previewPlay.revealVisible) classes.push('is-anim-visible');
+  } else if (editable) {
+    classes.push('is-anim-visible');
+  }
+  return classes;
+}
+
+function resolvePreviewClassName(preset: string, trigger: string): string | null {
+  if (preset === 'none') return null;
+  if (trigger === 'on_tap' || preset === 'tap') return 'is-anim-preview-tap';
+  if (preset === 'reveal') return 'is-anim-preview-reveal';
+  if (preset === 'parallax') return 'is-anim-preview-parallax';
+  if (preset === 'lottie') return 'is-anim-preview-lottie';
+  return null;
+}
+
 function AccordionRuntime({
   component,
-  editable = false,
-  selectedId = null,
+  editable,
+  selectedId,
   onSelectAccordion,
   onSelectChild,
   onAction,
   onImageClick,
   onAllergensOpen,
+  previewPlay,
+  animationPreview,
+  registerNodeRef,
 }: {
   component: Extract<MobileComponent, { type: 'accordion' }>;
   editable?: boolean;
@@ -398,6 +442,9 @@ function AccordionRuntime({
   onAction?: (action: MobileInteractionAction) => void;
   onImageClick?: (src: string) => void;
   onAllergensOpen?: (payload: { dishTitle: string; allergens: string[] }) => void;
+  previewPlay?: AnimationPreviewPlay | null;
+  animationPreview?: { componentId: string; nonce: number } | null;
+  registerNodeRef?: (id: string, el: HTMLDivElement | null) => void;
 }) {
   const [open, setOpen] = useState(component.defaultOpen === true);
 
@@ -410,6 +457,10 @@ function AccordionRuntime({
   const showChevron = component.showChevron !== false;
   const chevronColor = component.chevronColor?.trim() || '#64748b';
   const chevronThickness = Math.max(1, Math.min(8, component.chevronThickness ?? 2));
+  const chevronAnimation =
+    component.chevronAnimation === 'rotate' || !component.chevronAnimation
+      ? 'none'
+      : component.chevronAnimation;
   const headerIsSection = header?.type === 'section';
   const selectedBodyChildId =
     editable && selectedId && body.some((child) => child.id === selectedId) ? selectedId : null;
@@ -418,6 +469,15 @@ function AccordionRuntime({
   useEffect(() => {
     if (selectedBodyChildId) setOpen(true);
   }, [selectedBodyChildId]);
+
+  // Abrir el panel antes del preview si el objetivo es un hijo.
+  useEffect(() => {
+    const targetId = animationPreview?.componentId ?? previewPlay?.componentId;
+    if (!targetId) return;
+    if (component.children.some((child, index) => index > 0 && child.id === targetId)) {
+      setOpen(true);
+    }
+  }, [animationPreview, previewPlay, component.children]);
 
   function toggle() {
     setOpen((current) => !current);
@@ -460,7 +520,9 @@ function AccordionRuntime({
         </div>
         {showChevron && (
           <span
-            className={`mobile-accordion-chevron${open ? ' is-open' : ''}`}
+            className={`mobile-accordion-chevron mobile-accordion-chevron--${chevronAnimation}${
+              open ? ' is-open' : ''
+            }`}
             aria-hidden="true"
             style={{ color: chevronColor }}
           >
@@ -483,13 +545,30 @@ function AccordionRuntime({
       >
         {body.map((child) => {
           const isChildSelected = editable && selectedId === child.id;
+          const childPreviewClasses = previewVisibilityClasses(
+            child.id,
+            previewPlay ?? null,
+            !!editable,
+          );
           return (
             <div
               key={child.id}
-              className={`mobile-accordion-child${isChildSelected ? ' is-selected' : ''}${
-                editable && child.hidden === true ? ' is-hidden-public' : ''
-              }`}
+              ref={(el) => registerNodeRef?.(child.id, el)}
+              className={[
+                'mobile-accordion-child',
+                'mobile-runtime-node',
+                isChildSelected ? 'is-selected' : '',
+                editable && child.hidden === true ? 'is-hidden-public' : '',
+                ...childPreviewClasses,
+              ]
+                .filter(Boolean)
+                .join(' ')}
+              data-component-id={child.id}
               data-accordion-child-id={child.id}
+              data-anim-preset={child.animation?.preset ?? 'none'}
+              data-anim-trigger={child.animation?.trigger ?? 'on_view'}
+              data-anim-intensity={child.animation?.intensity ?? 1}
+              style={animationStyleVars(child)}
               role={editable ? 'button' : undefined}
               tabIndex={editable ? 0 : undefined}
               onClick={
@@ -534,94 +613,6 @@ function AccordionRuntime({
   );
 }
 
-function playNodeAnimationPreview(node: HTMLElement) {
-  const preset = node.dataset.animPreset ?? 'none';
-  const trigger = node.dataset.animTrigger ?? 'on_view';
-  if (preset === 'none') return () => undefined;
-
-  const durationMs = Number.parseInt(node.style.getPropertyValue('--mobile-anim-duration') || '450', 10) || 450;
-  const delayMs = Number.parseInt(node.style.getPropertyValue('--mobile-anim-delay') || '0', 10) || 0;
-  const timers: number[] = [];
-
-  node.classList.remove(
-    'is-anim-preview-tap',
-    'is-anim-preview-parallax',
-    'is-anim-preview-lottie',
-    'is-anim-preview-reveal',
-  );
-
-  const cleanup = () => {
-    for (const timer of timers) window.clearTimeout(timer);
-    node.classList.remove(
-      'is-anim-preview-tap',
-      'is-anim-preview-parallax',
-      'is-anim-preview-lottie',
-      'is-anim-preview-reveal',
-    );
-    node.classList.add('is-anim-visible');
-  };
-
-  // El trigger decide cómo se previsualiza.
-  if (trigger === 'on_tap') {
-    void node.offsetWidth;
-    node.classList.add('is-anim-preview-tap');
-    timers.push(
-      window.setTimeout(() => node.classList.remove('is-anim-preview-tap'), Math.max(220, durationMs)),
-    );
-    return cleanup;
-  }
-
-  // on_load / on_view: reproducen el preset como aparición.
-  if (preset === 'reveal') {
-    node.classList.remove('is-anim-visible');
-    node.classList.add('is-anim-preview-reveal');
-    void node.offsetWidth;
-    timers.push(
-      window.setTimeout(() => {
-        node.classList.add('is-anim-visible');
-        timers.push(
-          window.setTimeout(() => node.classList.remove('is-anim-preview-reveal'), Math.max(durationMs, 300)),
-        );
-      }, Math.max(40, delayMs)),
-    );
-    return cleanup;
-  }
-
-  if (preset === 'tap') {
-    void node.offsetWidth;
-    node.classList.add('is-anim-preview-tap');
-    timers.push(
-      window.setTimeout(() => node.classList.remove('is-anim-preview-tap'), Math.max(220, durationMs)),
-    );
-    return cleanup;
-  }
-
-  if (preset === 'parallax') {
-    void node.offsetWidth;
-    node.classList.add('is-anim-preview-parallax');
-    timers.push(
-      window.setTimeout(
-        () => node.classList.remove('is-anim-preview-parallax'),
-        Math.max(700, durationMs * 2),
-      ),
-    );
-    return cleanup;
-  }
-
-  if (preset === 'lottie') {
-    void node.offsetWidth;
-    node.classList.add('is-anim-preview-lottie');
-    timers.push(
-      window.setTimeout(
-        () => node.classList.remove('is-anim-preview-lottie'),
-        Math.max(900, durationMs * 2),
-      ),
-    );
-  }
-
-  return cleanup;
-}
-
 export function MobileRuntimeRenderer({
   document,
   editable = false,
@@ -643,6 +634,7 @@ export function MobileRuntimeRenderer({
   );
   const [dragActiveId, setDragActiveId] = useState<string | null>(null);
   const [dragOrderIds, setDragOrderIds] = useState<string[] | null>(null);
+  const [previewPlay, setPreviewPlay] = useState<AnimationPreviewPlay | null>(null);
 
   const dragActiveIdRef = useRef<string | null>(null);
   const dragOrderIdsRef = useRef<string[] | null>(null);
@@ -1014,25 +1006,69 @@ export function MobileRuntimeRenderer({
     if (!editable || !animationPreview) return;
     const root = rootRef.current;
     if (!root) return;
-    const node = root.querySelector<HTMLElement>(
-      `[data-component-id="${animationPreview.componentId}"]`,
-    );
-    if (!node) return;
-    node.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-    let cleanupPreview: (() => void) | undefined;
-    const timer = window.setTimeout(() => {
-      cleanupPreview = playNodeAnimationPreview(node);
+
+    const componentId = animationPreview.componentId;
+    const nonce = animationPreview.nonce;
+
+    const findNode = () =>
+      nodeRefs.current.get(componentId) ??
+      root.querySelector<HTMLElement>(`[data-component-id="${componentId}"]`);
+
+    // Esperar un frame por si el acordeón debe abrirse al montar el hijo.
+    let delayTimer = 0;
+    let revealTimer = 0;
+    let endTimer = 0;
+    const startTimer = window.setTimeout(() => {
+      const node = findNode();
+      if (!node) return;
+
+      const preset = node.dataset.animPreset ?? 'none';
+      const trigger = node.dataset.animTrigger ?? 'on_view';
+      const previewClass = resolvePreviewClassName(preset, trigger);
+      if (!previewClass) return;
+
+      const durationRaw = node.style.getPropertyValue('--mobile-anim-duration') || '450';
+      const delayRaw = node.style.getPropertyValue('--mobile-anim-delay') || '0';
+      const durationMs = Number.parseInt(durationRaw, 10) || 450;
+      const delayMs = Number.parseInt(delayRaw, 10) || 0;
+
+      node.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+      setPreviewPlay({
+        componentId,
+        nonce,
+        className: previewClass,
+        revealVisible: false,
+      });
+
+      if (previewClass === 'is-anim-preview-reveal') {
+        revealTimer = window.setTimeout(() => {
+          setPreviewPlay((current) =>
+            current && current.nonce === nonce ? { ...current, revealVisible: true } : current,
+          );
+        }, Math.max(40, delayMs));
+        endTimer = window.setTimeout(
+          () => {
+            setPreviewPlay((current) => (current && current.nonce === nonce ? null : current));
+          },
+          Math.max(40, delayMs) + Math.max(durationMs, 300) + 80,
+        );
+      } else {
+        const holdMs =
+          previewClass === 'is-anim-preview-parallax' || previewClass === 'is-anim-preview-lottie'
+            ? Math.max(700, durationMs * 2)
+            : Math.max(220, durationMs);
+        endTimer = window.setTimeout(() => {
+          setPreviewPlay((current) => (current && current.nonce === nonce ? null : current));
+        }, holdMs + Math.max(0, delayMs));
+      }
     }, 80);
+
     return () => {
-      window.clearTimeout(timer);
-      cleanupPreview?.();
-      node.classList.add('is-anim-visible');
-      node.classList.remove(
-        'is-anim-preview-tap',
-        'is-anim-preview-parallax',
-        'is-anim-preview-lottie',
-        'is-anim-preview-reveal',
-      );
+      window.clearTimeout(startTimer);
+      window.clearTimeout(delayTimer);
+      window.clearTimeout(revealTimer);
+      window.clearTimeout(endTimer);
+      setPreviewPlay((current) => (current && current.nonce === nonce ? null : current));
     };
   }, [animationPreview, editable]);
 
@@ -1098,7 +1134,7 @@ export function MobileRuntimeRenderer({
             'mobile-runtime-node',
             isSelected ? 'is-selected' : '',
             isMulti ? 'is-multi-selected' : '',
-            editable ? 'is-anim-visible' : '',
+            ...previewVisibilityClasses(component.id, previewPlay, editable),
             editable && component.hidden === true ? 'is-hidden-public' : '',
             dragActiveId === component.id ? 'is-dragging' : '',
             effectClassName(component.effect),
@@ -1112,9 +1148,7 @@ export function MobileRuntimeRenderer({
           data-effect-anim={buildEffectAnimation(component.effect)}
           style={
             {
-              ['--mobile-anim-duration' as string]: `${component.animation?.durationMs ?? 450}ms`,
-              ['--mobile-anim-delay' as string]: `${component.animation?.delayMs ?? 0}ms`,
-              ['--mobile-intensity' as string]: String(component.animation?.intensity ?? 1),
+              ...animationStyleVars(component),
               ...effectStyle(component.effect),
             } as CSSProperties
           }
@@ -1162,6 +1196,15 @@ export function MobileRuntimeRenderer({
               onAction={!editable ? (action) => runAction(action) : undefined}
               onImageClick={!editable ? (src) => setLightboxSrc(src) : undefined}
               onAllergensOpen={!editable ? (payload) => setAllergensModal(payload) : undefined}
+              previewPlay={previewPlay}
+              animationPreview={animationPreview}
+              registerNodeRef={(id, el) => {
+                if (!el) {
+                  nodeRefs.current.delete(id);
+                  return;
+                }
+                nodeRefs.current.set(id, el);
+              }}
             />
           ) : (
             renderComponent(
