@@ -326,20 +326,28 @@ export async function deleteAssetRow(
   return (result.meta.changes ?? 0) > 0;
 }
 
-/** Cuenta menús del usuario (opcionalmente excluyendo uno) que aún referencian la URL en canvas_data */
+/** Cuenta menús del usuario (opcionalmente excluyendo uno) que referencian la URL */
 export async function countMenusReferencingAssetUrl(
   db: D1Database,
   userId: string,
   url: string,
   excludeMenuId?: string,
 ): Promise<number> {
+  const like = `%${url}%`;
   if (excludeMenuId) {
     const row = await db
       .prepare(
         `SELECT COUNT(*) as c FROM menus
-         WHERE user_id = ? AND id != ? AND canvas_data LIKE ?`,
+         WHERE user_id = ? AND id != ?
+           AND (
+             canvas_data LIKE ?
+             OR IFNULL(mobile_document, '') LIKE ?
+             OR IFNULL(menu_document, '') LIKE ?
+             OR IFNULL(thumbnail_url, '') LIKE ?
+             OR IFNULL(export_png_url, '') LIKE ?
+           )`,
       )
-      .bind(userId, excludeMenuId, `%${url}%`)
+      .bind(userId, excludeMenuId, like, like, like, like, like)
       .first<{ c: number }>();
     return row?.c ?? 0;
   }
@@ -347,9 +355,16 @@ export async function countMenusReferencingAssetUrl(
   const row = await db
     .prepare(
       `SELECT COUNT(*) as c FROM menus
-       WHERE user_id = ? AND canvas_data LIKE ?`,
+       WHERE user_id = ?
+         AND (
+           canvas_data LIKE ?
+           OR IFNULL(mobile_document, '') LIKE ?
+           OR IFNULL(menu_document, '') LIKE ?
+           OR IFNULL(thumbnail_url, '') LIKE ?
+           OR IFNULL(export_png_url, '') LIKE ?
+         )`,
     )
-    .bind(userId, `%${url}%`)
+    .bind(userId, like, like, like, like, like)
     .first<{ c: number }>();
   return row?.c ?? 0;
 }

@@ -1,15 +1,48 @@
 import imageCompression from 'browser-image-compression';
 
+export type ImageCompressProfile = 'default' | 'mobile';
+
+const PROFILE_OPTIONS: Record<
+  ImageCompressProfile,
+  {
+    maxSizeMB: number;
+    maxWidthOrHeight: number;
+    initialQuality: number;
+  }
+> = {
+  // Editor clásico / impresión en pantalla grande
+  default: {
+    maxSizeMB: 1,
+    maxWidthOrHeight: 1920,
+    initialQuality: 0.8,
+  },
+  // Cartas móviles: ~3x DPR en ~430css ≈ 1290px; 1400 deja margen sin sobredimensionar
+  mobile: {
+    maxSizeMB: 0.4,
+    maxWidthOrHeight: 1400,
+    initialQuality: 0.82,
+  },
+};
+
 export async function compressImage(
   file: File,
   onProgress?: (percent: number) => void,
+  profile: ImageCompressProfile = 'default',
 ): Promise<File> {
+  const preset = PROFILE_OPTIONS[profile];
   const options = {
-    maxSizeMB: 1,
-    maxWidthOrHeight: 1920,
+    maxSizeMB: preset.maxSizeMB,
+    maxWidthOrHeight: preset.maxWidthOrHeight,
     useWebWorker: true,
-    fileType: file.type === 'image/png' ? 'image/png' : 'image/webp',
-    initialQuality: 0.8,
+    // WebP: buena nitidez a menor peso; alpha OK (fondos/sección).
+    // En default conservamos PNG si el original lo es (plantillas/transparencias del lienzo).
+    fileType:
+      profile === 'mobile'
+        ? 'image/webp'
+        : file.type === 'image/png'
+          ? 'image/png'
+          : 'image/webp',
+    initialQuality: preset.initialQuality,
     onProgress: onProgress
       ? (progress: number) => {
           onProgress(Math.max(0, Math.min(100, Math.round(progress))));
@@ -18,7 +51,13 @@ export async function compressImage(
   };
 
   try {
-    return await imageCompression(file, options);
+    const compressed = await imageCompression(file, options);
+    // Si no reduce, devolver original (evita subir basura peor)
+    if (compressed.size >= file.size && file.type === compressed.type) {
+      onProgress?.(100);
+      return file;
+    }
+    return compressed;
   } catch {
     onProgress?.(100);
     return file;

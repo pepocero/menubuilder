@@ -5,8 +5,11 @@ import {
   findAssetByR2Key,
   findAssetByUrl,
   listAssetsByUser,
-  countMenusReferencingAssetUrl,
 } from '../../lib/db';
+import {
+  countMenusReferencingAsset,
+  deleteAssetIfUnreferenced,
+} from '../../lib/asset-refs';
 import {
   buildR2Key,
   deleteFromR2,
@@ -17,8 +20,42 @@ import {
 } from '../../lib/r2';
 import { errorResponse, jsonResponse, parseJson } from '../../lib/types';
 
+/** Assets recién creados (p. ej. stock a mitad de optimizar) no se borran aún. */
+const ORPHAN_GRACE_MS = 5 * 60 * 1000;
+
+function assetAgeMs(createdAt: string): number {
+  const normalized = createdAt.includes('T') ? createdAt : createdAt.replace(' ', 'T');
+  const ts = Date.parse(normalized.endsWith('Z') ? normalized : `${normalized}Z`);
+  if (Number.isNaN(ts)) return ORPHAN_GRACE_MS;
+  return Math.max(0, Date.now() - ts);
+}
+
+/** Borra del usuario archivos en R2/D1 que no referencia ningún menú (con gracia). */
+async function garbageCollectOrphanAssets(env: Env, userId: string): Promise<number> {
+  const assets = await listAssetsByUser(env.DB, userId);
+  let deleted = 0;
+  for (const asset of assets) {
+    if (assetAgeMs(asset.created_at) < ORPHAN_GRACE_MS) continue;
+    const refs = await countMenusReferencingAsset(env.DB, userId, asset);
+    if (refs > 0) continue;
+    try {
+      if (env.MEDIA) await deleteFromR2(env.MEDIA, asset.r2_key);
+      await deleteAssetRow(env.DB, asset.id, userId);
+      deleted += 1;
+    } catch (err) {
+      console.error('GC huérfano falló', asset.id, err);
+    }
+  }
+  return deleted;
+}
+
 export const onRequestGet: PagesFunction<Env> = async (context) => {
   const userId = context.data.userId as string;
+  try {
+    await garbageCollectOrphanAssets(context.env, userId);
+  } catch (err) {
+    console.error('GC huérfanos en listado falló', err);
+  }
   const assets = await listAssetsByUser(context.env.DB, userId);
 
   return jsonResponse({
@@ -65,20 +102,10 @@ interface DeleteAssetBody {
   id?: string;
   url?: string;
   r2_key?: string;
-  /** Menú desde el que se acaba de quitar la imagen (no cuenta como referencia) */
   exclude_menu_id?: string;
-  /**
-   * Si true, elimina siempre de R2 y D1 aunque otros menús lo referencien
-   * (gestor de archivos / acción explícita del usuario).
-   */
   force?: boolean;
 }
 
-/**
- * Elimina un asset del usuario en D1 y R2.
- * Sin force: solo si ya no lo usa ningún otro menú.
- * Con force: siempre borra R2+D1 (solo el dueño vía JWT).
- */
 export const onRequestDelete: PagesFunction<Env> = async (context) => {
   const { request, env } = context;
   const userId = context.data.userId as string;
@@ -95,58 +122,32 @@ export const onRequestDelete: PagesFunction<Env> = async (context) => {
 
   if (!asset && body.url) {
     const key = parseR2KeyFromAssetUrl(body.url);
-    if (key) {
-      asset = await findAssetByR2Key(env.DB, userId, key);
-    }
+    if (key) asset = await findAssetByR2Key(env.DB, userId, key);
   }
 
   if (!asset || asset.user_id !== userId) {
     return errorResponse('Recurso no encontrado', 404);
   }
 
-  if (!body.force) {
-    const urlToCheck = asset.url ?? body.url ?? '';
-    const refs = await countMenusReferencingAssetUrl(
-      env.DB,
-      userId,
-      urlToCheck,
-      body.exclude_menu_id,
-    );
+  const url =
+    body.url ?? asset.url ?? `/api/assets/file?key=${encodeURIComponent(asset.r2_key)}`;
 
-    let refsEncoded = 0;
-    let refsQuery = 0;
-    if (asset.r2_key) {
-      const encodedPath = `/api/assets/file/${encodeURIComponent(asset.r2_key)}`;
-      if (encodedPath !== urlToCheck) {
-        refsEncoded = await countMenusReferencingAssetUrl(
-          env.DB,
-          userId,
-          encodedPath,
-          body.exclude_menu_id,
-        );
-      }
-      const queryPath = `/api/assets/file?key=${encodeURIComponent(asset.r2_key)}`;
-      if (queryPath !== urlToCheck) {
-        refsQuery = await countMenusReferencingAssetUrl(
-          env.DB,
-          userId,
-          queryPath,
-          body.exclude_menu_id,
-        );
-      }
-    }
+  const result = await deleteAssetIfUnreferenced(env, userId, url, {
+    excludeMenuId: body.exclude_menu_id,
+    force: body.force,
+  });
 
-    if (refs + refsEncoded + refsQuery > 0) {
-      return jsonResponse({
-        deleted: false,
-        kept: true,
-        reason: 'La imagen sigue usándose en otro menú',
-      });
-    }
+  if (result.reason === 'not_found') {
+    return errorResponse('Recurso no encontrado', 404);
   }
 
-  await deleteFromR2(env.MEDIA, asset.r2_key);
-  await deleteAssetRow(env.DB, asset.id, userId);
+  if (!result.deleted) {
+    return jsonResponse({
+      deleted: false,
+      kept: true,
+      reason: result.reason ?? 'La imagen sigue usándose en otro menú',
+    });
+  }
 
   return jsonResponse({
     deleted: true,

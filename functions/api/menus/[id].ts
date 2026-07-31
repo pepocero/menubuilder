@@ -1,14 +1,10 @@
+import { deleteMenu, getMenuById, updateMenu } from '../../lib/db';
 import {
-  countMenusReferencingAssetUrl,
-  deleteAssetRow,
-  deleteMenu,
-  findAssetByR2Key,
-  findAssetByUrl,
-  getMenuById,
-  updateMenu,
-} from '../../lib/db';
+  collectAssetUrlsFromMenuRow,
+  garbageCollectRemovedAssetUrls,
+} from '../../lib/asset-refs';
 import { deleteMenuExportPng, uploadMenuExportPng } from '../../lib/menu-export';
-import { deleteFromR2, getAssetPublicUrl, parseR2KeyFromAssetUrl } from '../../lib/r2';
+import { getAssetPublicUrl } from '../../lib/r2';
 import { errorResponse, jsonResponse, parseJson } from '../../lib/types';
 import {
   canvasDataToMenuDocument,
@@ -47,31 +43,6 @@ function validateCanvasData(data: unknown): string | null {
   }
 
   return null;
-}
-
-function extractAssetUrls(canvasDataJson: string): string[] {
-  try {
-    const data = JSON.parse(canvasDataJson) as {
-      layers?: Array<{ type?: string; src?: string }>;
-      pages?: Array<{ layers?: Array<{ type?: string; src?: string }> }>;
-    };
-    const urls = new Set<string>();
-    const collect = (layers?: Array<{ type?: string; src?: string }>) => {
-      for (const layer of layers ?? []) {
-        if (layer.type === 'image' && layer.src?.includes('/api/assets/file/')) {
-          urls.add(layer.src);
-        }
-      }
-    };
-    if (Array.isArray(data.pages)) {
-      for (const page of data.pages) collect(page.layers);
-    } else {
-      collect(data.layers);
-    }
-    return [...urls];
-  } catch {
-    return [];
-  }
 }
 
 export const onRequestGet: PagesFunction<Env> = async (context) => {
@@ -114,6 +85,8 @@ export const onRequestPut: PagesFunction<Env> = async (context) => {
   if (!body) {
     return errorResponse('Cuerpo inválido');
   }
+
+  const urlsBefore = collectAssetUrlsFromMenuRow(menu);
 
   const title = body.title?.trim() || menu.title;
   const editorKind: 'canvas' | 'mobile' =
@@ -185,6 +158,23 @@ export const onRequestPut: PagesFunction<Env> = async (context) => {
     return errorResponse('No se pudo actualizar', 500);
   }
 
+  const urlsAfter = collectAssetUrlsFromMenuRow({
+    canvas_data: canvasData,
+    mobile_document: mobileDocument,
+    menu_document: menuDocumentJson,
+    thumbnail_url: thumbnailUrl,
+    export_png_url: exportPngUrl,
+  });
+  const removed: string[] = [];
+  for (const url of urlsBefore) {
+    if (!urlsAfter.has(url)) removed.push(url);
+  }
+  try {
+    await garbageCollectRemovedAssetUrls(env, userId, removed);
+  } catch (err) {
+    console.error('GC assets tras update menú falló', menuId, err);
+  }
+
   return jsonResponse({
     menu: {
       id: menuId,
@@ -207,7 +197,7 @@ export const onRequestDelete: PagesFunction<Env> = async (context) => {
     return errorResponse('Menú no encontrado', 404);
   }
 
-  const assetUrls = extractAssetUrls(menu.canvas_data);
+  const assetUrls = collectAssetUrlsFromMenuRow(menu);
 
   // Borrar el menú primero: es la operación que el usuario espera.
   // La limpieza de R2/assets es secundaria y no debe hacer fallar la petición
@@ -218,26 +208,7 @@ export const onRequestDelete: PagesFunction<Env> = async (context) => {
   }
 
   try {
-    for (const url of assetUrls) {
-      try {
-        const refs = await countMenusReferencingAssetUrl(env.DB, userId, url);
-        if (refs > 0) continue;
-
-        let asset = await findAssetByUrl(env.DB, userId, url);
-        if (!asset) {
-          const key = parseR2KeyFromAssetUrl(url);
-          if (key) asset = await findAssetByR2Key(env.DB, userId, key);
-        }
-        if (!asset) continue;
-
-        if (env.MEDIA) {
-          await deleteFromR2(env.MEDIA, asset.r2_key);
-        }
-        await deleteAssetRow(env.DB, asset.id, userId);
-      } catch (err) {
-        console.error('No se pudo limpiar asset tras borrar menú', menuId, url, err);
-      }
-    }
+    await garbageCollectRemovedAssetUrls(env, userId, assetUrls);
 
     if (env.MEDIA) {
       await deleteMenuExportPng(env.MEDIA, userId, menuId);

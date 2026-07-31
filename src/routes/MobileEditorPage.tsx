@@ -22,7 +22,17 @@ import {
 import { prepareImageForVisionOcr } from '@/lib/vision-menu-import';
 import { ensureEditorFontLoaded } from '@/lib/google-fonts';
 import { renderMobileDocumentThumbnail } from '@/lib/menu-thumbnail';
-import { ApiError, getMenu, recognizeMenuWithVision, updateMenu, uploadAsset } from '@/lib/api';
+import {
+  ApiError,
+  deleteAsset,
+  getMenu,
+  importStockImage,
+  recognizeMenuWithVision,
+  updateMenu,
+  uploadAsset,
+} from '@/lib/api';
+import { compressImage } from '@/lib/image-compress';
+import type { StockImage } from '@shared/stock';
 import {
   MOBILE_COMPONENT_LIBRARY,
   MOBILE_DEVICE_PRESETS,
@@ -528,6 +538,18 @@ export function MobileEditorPage() {
     }
   }
 
+  /** Si se sustituye/quita una imagen y ya no se usa en esta carta ni en otras, liberar R2. */
+  async function releaseAssetUrlIfUnused(previousUrl: string | undefined | null) {
+    if (!previousUrl || !menuId || !previousUrl.includes('/api/assets/file')) return;
+    const stillInDoc = JSON.stringify(documentRef.current).includes(previousUrl);
+    if (stillInDoc) return;
+    try {
+      await deleteAsset({ url: previousUrl, exclude_menu_id: menuId });
+    } catch {
+      /* El GC del guardado en servidor actúa como red de seguridad */
+    }
+  }
+
   function openImagePicker(target: 'image' | 'menuImage' | 'sectionBg', mode: 'stock' | 'assets' | 'upload') {
     setImagePickerTarget(target);
     if (mode === 'stock') {
@@ -544,11 +566,59 @@ export function MobileEditorPage() {
     if (!file) return;
     e.target.value = '';
     setUploading(true);
+    setAssetsError('');
     try {
-      const { asset } = await uploadAsset(file);
+      const compressed = await compressImage(file, undefined, 'mobile');
+      const { asset } = await uploadAsset(compressed);
       applyPickedImageUrl(asset.url);
     } catch (err) {
       setAssetsError(err instanceof ApiError ? err.message : 'Error al subir la imagen');
+    } finally {
+      setUploading(false);
+    }
+  }
+
+  async function handleStockSelect(image: StockImage) {
+    if (uploading) return;
+    setUploading(true);
+    setAssetsError('');
+    let importedId: string | undefined;
+    try {
+      // 1) Descargar Pixabay → R2 (URLs de Pixabay caducan / no hotlink)
+      const { asset } = await importStockImage({
+        stockImageId: image.id,
+        fullUrl: image.fullUrl,
+        provider: image.provider,
+      });
+      importedId = asset.id;
+
+      // 2) Recomprimir en cliente a perfil móvil (WebP ~1400px) y sustituir en R2
+      const remote = await fetch(asset.url, { credentials: 'include' });
+      if (!remote.ok) {
+        applyPickedImageUrl(asset.url);
+        setStockModalOpen(false);
+        return;
+      }
+      const blob = await remote.blob();
+      const input = new File(
+        [blob],
+        `stock-${image.id}.${blob.type.includes('png') ? 'png' : 'jpg'}`,
+        { type: blob.type || 'image/jpeg' },
+      );
+      const compressed = await compressImage(input, undefined, 'mobile');
+      const { asset: optimized } = await uploadAsset(compressed);
+      applyPickedImageUrl(optimized.url);
+      setStockModalOpen(false);
+
+      if (importedId && importedId !== optimized.id) {
+        try {
+          await deleteAsset({ id: importedId, force: true });
+        } catch {
+          // La optimizada ya está en uso; el original huérfano se puede limpiar luego
+        }
+      }
+    } catch (err) {
+      setAssetsError(err instanceof ApiError ? err.message : 'Error al importar la imagen de stock');
     } finally {
       setUploading(false);
     }
@@ -812,6 +882,14 @@ export function MobileEditorPage() {
 
   function updateSelectedField(field: string, value: string) {
     if (!propsComponentId) return;
+    const previousSrc =
+      field === 'src'
+        ? (() => {
+            const found = findMobileComponentById(documentRef.current.components, propsComponentId);
+            const comp = found?.component;
+            return comp && 'src' in comp && typeof comp.src === 'string' ? comp.src : undefined;
+          })()
+        : undefined;
     updateDoc((current) => ({
       ...current,
       components: updateMobileComponentById(current.components, propsComponentId, (component) => {
@@ -819,6 +897,9 @@ export function MobileEditorPage() {
         return { ...component, [field]: value } as typeof component;
       }),
     }));
+    if (field === 'src' && previousSrc && previousSrc !== value) {
+      void releaseAssetUrlIfUnused(previousSrc);
+    }
   }
 
   function updateSelectedTextListStyle(listStyle: 'none' | 'bullet' | 'number') {
@@ -1013,6 +1094,14 @@ export function MobileEditorPage() {
     }>,
   ) {
     if (!propsComponentId) return;
+    const previousSrc =
+      patch.src !== undefined
+        ? (() => {
+            const found = findMobileComponentById(documentRef.current.components, propsComponentId);
+            const comp = found?.component;
+            return comp?.type === 'menuItem' ? comp.menuImage?.src : undefined;
+          })()
+        : undefined;
     updateDoc((current) => ({
       ...current,
       components: updateMobileComponentById(current.components, propsComponentId, (component) => {
@@ -1033,6 +1122,9 @@ export function MobileEditorPage() {
         return { ...component, menuImage: next };
       }),
     }));
+    if (patch.src !== undefined && previousSrc && previousSrc !== patch.src) {
+      void releaseAssetUrlIfUnused(previousSrc);
+    }
   }
 
   function updateSelectedSectionBackground(
@@ -1043,6 +1135,14 @@ export function MobileEditorPage() {
     }>,
   ) {
     if (!propsComponentId) return;
+    const previousSrc =
+      patch.src !== undefined
+        ? (() => {
+            const found = findMobileComponentById(documentRef.current.components, propsComponentId);
+            const comp = found?.component;
+            return comp?.type === 'section' ? comp.backgroundImage?.src : undefined;
+          })()
+        : undefined;
     updateDoc((current) => ({
       ...current,
       components: updateMobileComponentById(current.components, propsComponentId, (component) => {
@@ -1061,6 +1161,9 @@ export function MobileEditorPage() {
         };
       }),
     }));
+    if (patch.src !== undefined && previousSrc && previousSrc !== patch.src) {
+      void releaseAssetUrlIfUnused(previousSrc);
+    }
   }
 
   function updateSelectedSectionSize(size: MobileSectionSize) {
@@ -2777,11 +2880,11 @@ export function MobileEditorPage() {
       {/* Stock image search modal */}
       <StockImageSearch
         open={stockModalOpen}
-        onClose={() => setStockModalOpen(false)}
+        onClose={() => !uploading && setStockModalOpen(false)}
         onSelect={(img) => {
-          applyPickedImageUrl(img.fullUrl);
-          setStockModalOpen(false);
+          void handleStockSelect(img);
         }}
+        busy={uploading}
       />
 
       {/* Asset manager modal */}
