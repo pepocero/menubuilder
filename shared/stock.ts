@@ -5,6 +5,8 @@ export interface StockImage {
   provider: StockProvider;
   previewUrl: string;
   fullUrl: string;
+  /** Candidatos de descarga (p. ej. CDN Pixabay a varios tamaños). */
+  downloadUrls?: string[];
   width: number;
   height: number;
   alt?: string;

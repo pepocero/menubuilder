@@ -1292,6 +1292,7 @@ export function EditorPage() {
         stockImageId: image.id,
         fullUrl: image.fullUrl,
         provider: image.provider,
+        fallbackUrls: image.downloadUrls,
       });
 
       const maxW = 280;

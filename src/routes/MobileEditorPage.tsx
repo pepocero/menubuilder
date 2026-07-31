@@ -529,6 +529,16 @@ export function MobileEditorPage() {
 
   /** Apply a picked image URL to the correct target field */
   function applyPickedImageUrl(url: string) {
+    // Nunca persistir hotlinks de stock (caducan / ToS). Solo URLs propias de R2.
+    if (
+      !url.includes('/api/assets/file') &&
+      /pixabay\.com|pexels\.com|images\.unsplash\.com/i.test(url)
+    ) {
+      setAssetsError(
+        'La imagen de stock no se guardó en tu cuenta. Inténtalo de nuevo o súbela como archivo.',
+      );
+      return;
+    }
     if (imagePickerTarget === 'menuImage') {
       updateSelectedMenuItemImage({ src: url });
     } else if (imagePickerTarget === 'sectionBg') {
@@ -585,17 +595,56 @@ export function MobileEditorPage() {
     let importedId: string | undefined;
     try {
       // 1) Descargar Pixabay → R2 (URLs de Pixabay caducan / no hotlink)
-      const { asset } = await importStockImage({
-        stockImageId: image.id,
-        fullUrl: image.fullUrl,
-        provider: image.provider,
-      });
-      importedId = asset.id;
+      let assetUrl: string | undefined;
+      try {
+        const { asset } = await importStockImage({
+          stockImageId: image.id,
+          fullUrl: image.fullUrl,
+          provider: image.provider,
+          fallbackUrls: image.downloadUrls,
+        });
+        importedId = asset.id;
+        assetUrl = asset.url;
+      } catch (serverErr) {
+        // Fallback: el navegador del usuario a veces sí puede bajar la imagen
+        const tryUrls = [
+          ...(image.downloadUrls ?? []),
+          image.fullUrl,
+          image.previewUrl,
+        ].filter(Boolean);
+        let uploaded: { asset: { id: string; url: string } } | null = null;
+        for (const tryUrl of tryUrls) {
+          try {
+            const res = await fetch(tryUrl, { mode: 'cors', credentials: 'omit' });
+            if (!res.ok) continue;
+            const blob = await res.blob();
+            if (!blob.type.startsWith('image/') || blob.size < 100) continue;
+            const file = new File(
+              [blob],
+              `stock-${image.id}.${blob.type.includes('png') ? 'png' : 'jpg'}`,
+              { type: blob.type || 'image/jpeg' },
+            );
+            const compressed = await compressImage(file, undefined, 'mobile');
+            uploaded = await uploadAsset(compressed);
+            break;
+          } catch {
+            /* probar siguiente URL */
+          }
+        }
+        if (!uploaded) {
+          throw serverErr instanceof Error
+            ? serverErr
+            : new Error('No se pudo importar la imagen de stock');
+        }
+        applyPickedImageUrl(uploaded.asset.url);
+        setStockModalOpen(false);
+        return;
+      }
 
       // 2) Recomprimir en cliente a perfil móvil (WebP ~1400px) y sustituir en R2
-      const remote = await fetch(asset.url, { credentials: 'include' });
+      const remote = await fetch(assetUrl!, { credentials: 'include' });
       if (!remote.ok) {
-        applyPickedImageUrl(asset.url);
+        applyPickedImageUrl(assetUrl!);
         setStockModalOpen(false);
         return;
       }

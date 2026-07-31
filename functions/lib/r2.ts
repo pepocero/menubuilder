@@ -76,22 +76,46 @@ export async function fetchRemoteImage(
 ): Promise<{ buffer: ArrayBuffer; contentType: string } | null> {
   try {
     const response = await fetch(url, {
-      headers: { 'User-Agent': 'MenuBuilder/1.0' },
+      headers: {
+        'User-Agent':
+          'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
+        Accept: 'image/avif,image/webp,image/apng,image/jpeg,image/png,image/*,*/*;q=0.8',
+        Referer: 'https://pixabay.com/',
+      },
+      redirect: 'follow',
     });
     if (!response.ok) return null;
 
     const contentType = response.headers.get('Content-Type') ?? 'image/jpeg';
-    if (!ALLOWED_MIME_TYPES.has(contentType.split(';')[0].trim())) {
+    const mime = contentType.split(';')[0].trim();
+    if (!ALLOWED_MIME_TYPES.has(mime)) {
       return null;
     }
 
     const buffer = await response.arrayBuffer();
     if (buffer.byteLength > MAX_FILE_SIZE) return null;
+    if (buffer.byteLength < 100) return null;
 
-    return { buffer, contentType: contentType.split(';')[0].trim() };
+    return { buffer, contentType: mime };
   } catch {
     return null;
   }
+}
+
+/** Prueba varias URLs hasta obtener una imagen válida. */
+export async function fetchRemoteImageFromCandidates(
+  urls: string[],
+): Promise<{ buffer: ArrayBuffer; contentType: string; sourceUrl: string } | null> {
+  const seen = new Set<string>();
+  for (const url of urls) {
+    if (!url || seen.has(url)) continue;
+    seen.add(url);
+    const remote = await fetchRemoteImage(url);
+    if (remote) {
+      return { ...remote, sourceUrl: url };
+    }
+  }
+  return null;
 }
 
 export function getAssetPublicUrl(_request: Request, r2Key: string): string {

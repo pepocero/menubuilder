@@ -477,6 +477,7 @@ export async function importStockImage(data: {
   stockImageId: string;
   fullUrl: string;
   provider?: string;
+  fallbackUrls?: string[];
 }): Promise<{ asset: { id: string; url: string } }> {
   return api.post('/api/assets/import-stock', data);
 }
