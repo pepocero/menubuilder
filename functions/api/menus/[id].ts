@@ -75,134 +75,146 @@ export const onRequestPut: PagesFunction<Env> = async (context) => {
   const { request, env } = context;
   const userId = context.data.userId as string;
   const menuId = context.params.id as string;
-  const menu = await getMenuById(env.DB, menuId);
 
-  if (!menu || menu.user_id !== userId) {
-    return errorResponse('Menú no encontrado', 404);
-  }
+  try {
+    const menu = await getMenuById(env.DB, menuId);
 
-  const body = await parseJson<UpdateMenuBody>(request);
-  if (!body) {
-    return errorResponse('Cuerpo inválido');
-  }
-
-  const urlsBefore = collectAssetUrlsFromMenuRow(menu);
-
-  const title = body.title?.trim() || menu.title;
-  const editorKind: 'canvas' | 'mobile' =
-    body.editor_kind === 'mobile' || (!body.editor_kind && menu.editor_kind === 'mobile')
-      ? 'mobile'
-      : 'canvas';
-  let canvasData = menu.canvas_data;
-  let mobileDocument = menu.mobile_document;
-
-  if (body.canvas_data !== undefined) {
-    const validated = validateCanvasData(body.canvas_data);
-    if (!validated) {
-      return errorResponse('canvas_data inválido');
+    if (!menu || menu.user_id !== userId) {
+      return errorResponse('Menú no encontrado', 404);
     }
-    canvasData = validated;
-  }
 
-  if (body.mobile_document !== undefined) {
-    const parsed = parseMobileMenuDocument(body.mobile_document);
-    if (!parsed) return errorResponse('mobile_document inválido');
-    mobileDocument = JSON.stringify(parsed);
-  }
+    const body = await parseJson<UpdateMenuBody>(request);
+    if (!body) {
+      return errorResponse('Cuerpo inválido');
+    }
 
-  const thumbnailUrl =
-    body.thumbnail_url !== undefined ? body.thumbnail_url : menu.thumbnail_url;
+    const urlsBefore = collectAssetUrlsFromMenuRow(menu);
 
-  const menuDocumentJson =
-    editorKind === 'canvas'
-      ? (() => {
-          const parsedCanvas = JSON.parse(canvasData);
-          const menuDoc = canvasDataToMenuDocument(parsedCanvas, {
-            title,
-            sourceMenuId: menuId,
-          });
-          return menuDoc ? serializeMenuDocument(menuDoc) : null;
-        })()
-      : null;
+    const title = body.title?.trim() || menu.title;
+    const editorKind: 'canvas' | 'mobile' =
+      body.editor_kind === 'mobile' || (!body.editor_kind && menu.editor_kind === 'mobile')
+        ? 'mobile'
+        : 'canvas';
+    let canvasData = menu.canvas_data;
+    let mobileDocument = menu.mobile_document;
 
-  let exportPngUrl = menu.export_png_url;
-  if (
-    typeof thumbnailUrl === 'string' &&
-    thumbnailUrl.startsWith('data:image/png')
-  ) {
-    const uploaded = await uploadMenuExportPng(
-      env.MEDIA,
-      userId,
+    if (body.canvas_data !== undefined) {
+      const validated = validateCanvasData(body.canvas_data);
+      if (!validated) {
+        return errorResponse('canvas_data inválido');
+      }
+      canvasData = validated;
+    }
+
+    if (body.mobile_document !== undefined) {
+      const parsed = parseMobileMenuDocument(body.mobile_document);
+      if (!parsed) return errorResponse('mobile_document inválido');
+      mobileDocument = JSON.stringify(parsed);
+    }
+
+    const thumbnailUrl =
+      body.thumbnail_url !== undefined ? body.thumbnail_url : menu.thumbnail_url;
+
+    const menuDocumentJson =
+      editorKind === 'canvas'
+        ? (() => {
+            const parsedCanvas = JSON.parse(canvasData);
+            const menuDoc = canvasDataToMenuDocument(parsedCanvas, {
+              title,
+              sourceMenuId: menuId,
+            });
+            return menuDoc ? serializeMenuDocument(menuDoc) : null;
+          })()
+        : null;
+
+    let exportPngUrl = menu.export_png_url;
+    if (
+      typeof thumbnailUrl === 'string' &&
+      thumbnailUrl.startsWith('data:image/png') &&
+      env.MEDIA
+    ) {
+      try {
+        const uploaded = await uploadMenuExportPng(
+          env.MEDIA,
+          userId,
+          menuId,
+          thumbnailUrl,
+          (key) => getAssetPublicUrl(request, key),
+        );
+        if (uploaded) {
+          exportPngUrl = uploaded;
+        }
+      } catch (err) {
+        console.error('uploadMenuExportPng falló (se continúa el guardado)', menuId, err);
+      }
+    }
+
+    // No guardar data-URL enorme en thumbnail_url de D1 (rompe el UPDATE → 500).
+    const thumbnailForDb =
+      typeof thumbnailUrl === 'string' && thumbnailUrl.startsWith('data:')
+        ? (exportPngUrl ?? menu.thumbnail_url ?? null)
+        : thumbnailUrl;
+
+    const updated = await updateMenu(
+      env.DB,
       menuId,
-      thumbnailUrl,
-      (key) => getAssetPublicUrl(request, key),
-    );
-    if (uploaded) {
-      exportPngUrl = uploaded;
-    }
-  }
-
-  const updated = await updateMenu(
-    env.DB,
-    menuId,
-    userId,
-    title,
-    canvasData,
-    editorKind,
-    mobileDocument,
-    thumbnailUrl,
-    menuDocumentJson,
-    exportPngUrl,
-  );
-  if (!updated) {
-    return errorResponse('No se pudo actualizar', 500);
-  }
-
-  const urlsAfter = collectAssetUrlsFromMenuRow({
-    canvas_data: canvasData,
-    mobile_document: mobileDocument,
-    menu_document: menuDocumentJson,
-    thumbnail_url: thumbnailUrl,
-    export_png_url: exportPngUrl,
-  });
-  const removed: string[] = [];
-  for (const url of urlsBefore) {
-    if (!urlsAfter.has(url)) removed.push(url);
-  }
-
-  // GC en segundo plano: no debe hacer fallar el guardado (límites CPU/tiempo).
-  const gcPromise = garbageCollectRemovedAssetUrls(env, userId, removed).catch((err) => {
-    console.error('GC assets tras update menú falló', menuId, err);
-  });
-  try {
-    context.waitUntil(gcPromise);
-  } catch {
-    // waitUntil no disponible en algunos runtimes locales
-  }
-
-  let parsedCanvas: unknown = null;
-  let parsedMobile: unknown = null;
-  try {
-    parsedCanvas = JSON.parse(canvasData);
-  } catch {
-    parsedCanvas = null;
-  }
-  try {
-    parsedMobile = mobileDocument ? JSON.parse(mobileDocument) : null;
-  } catch {
-    parsedMobile = null;
-  }
-
-  return jsonResponse({
-    menu: {
-      id: menuId,
+      userId,
       title,
-      editor_kind: editorKind,
-      canvas_data: parsedCanvas,
-      mobile_document: parsedMobile,
-      thumbnail_url: thumbnailUrl,
-    },
-  });
+      canvasData,
+      editorKind,
+      mobileDocument,
+      thumbnailForDb,
+      menuDocumentJson,
+      exportPngUrl,
+    );
+    if (!updated) {
+      return errorResponse('No se pudo actualizar', 500);
+    }
+
+    const urlsAfter = collectAssetUrlsFromMenuRow({
+      canvas_data: canvasData,
+      mobile_document: mobileDocument,
+      menu_document: menuDocumentJson,
+      thumbnail_url: thumbnailForDb,
+      export_png_url: exportPngUrl,
+    });
+    const removed: string[] = [];
+    for (const url of urlsBefore) {
+      if (!urlsAfter.has(url)) removed.push(url);
+    }
+
+    void garbageCollectRemovedAssetUrls(env, userId, removed).catch((err) => {
+      console.error('GC assets tras update menú falló', menuId, err);
+    });
+
+    let parsedCanvas: unknown = null;
+    let parsedMobile: unknown = null;
+    try {
+      parsedCanvas = JSON.parse(canvasData);
+    } catch {
+      parsedCanvas = null;
+    }
+    try {
+      parsedMobile = mobileDocument ? JSON.parse(mobileDocument) : null;
+    } catch {
+      parsedMobile = null;
+    }
+
+    return jsonResponse({
+      menu: {
+        id: menuId,
+        title,
+        editor_kind: editorKind,
+        canvas_data: parsedCanvas,
+        mobile_document: parsedMobile,
+        thumbnail_url: thumbnailForDb,
+      },
+    });
+  } catch (err) {
+    console.error('PUT /api/menus falló', menuId, err);
+    const message = err instanceof Error ? err.message : 'No se pudo actualizar';
+    return errorResponse(message, 500);
+  }
 };
 
 export const onRequestDelete: PagesFunction<Env> = async (context) => {

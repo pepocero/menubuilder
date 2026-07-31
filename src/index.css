@@ -5192,7 +5192,7 @@ textarea {
   font-size: 0.82rem;
 }
 
-.mobile-props-form input:not([type='color']):not([type='range']),
+.mobile-props-form input:not([type='color']):not([type='range']):not([type='checkbox']):not([type='radio']),
 .mobile-props-form select,
 .mobile-props-form textarea {
   width: 100%;
@@ -5205,6 +5205,35 @@ textarea {
 
 .mobile-props-form select {
   padding-right: 1.65rem;
+}
+
+.mobile-props-checkbox {
+  display: flex !important;
+  flex-direction: row !important;
+  align-items: center;
+  gap: 0.55rem;
+  width: 100%;
+  cursor: pointer;
+  user-select: none;
+}
+
+.mobile-props-checkbox input[type='checkbox'] {
+  width: 1.1rem !important;
+  height: 1.1rem !important;
+  min-height: 0 !important;
+  min-width: 1.1rem;
+  margin: 0;
+  padding: 0 !important;
+  flex-shrink: 0;
+  accent-color: var(--color-primary, #1a3329);
+  -webkit-appearance: auto !important;
+  appearance: auto !important;
+  cursor: pointer;
+}
+
+.mobile-props-checkbox-label {
+  font-size: inherit;
+  line-height: 1.3;
 }
 
 .wysiwyg-align-group {
@@ -5670,7 +5699,7 @@ textarea {
   gap: 0.35rem;
 }
 
-.mobile-editor-page--phone .mobile-props-form input:not([type='color']):not([type='range']),
+.mobile-editor-page--phone .mobile-props-form input:not([type='color']):not([type='range']):not([type='checkbox']):not([type='radio']),
 .mobile-editor-page--phone .mobile-props-form select,
 .mobile-editor-page--phone .mobile-props-form textarea {
   width: 100%;

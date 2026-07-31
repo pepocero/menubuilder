@@ -571,6 +571,12 @@ export function MobileEditorPage() {
     }
   }
 
+  /** Gestor de archivos (ver / eliminar), sin destino de imagen forzado. */
+  function openAssetsManager() {
+    setImagePickerTarget(null);
+    setAssetModalOpen(true);
+  }
+
   async function handleFileUpload(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -1417,6 +1423,15 @@ export function MobileEditorPage() {
               disabled={loading || ocrBusy}
             >
               Importar con IA
+            </button>
+            <button
+              type="button"
+              className="btn-secondary mobile-editor-desktop-only"
+              onClick={openAssetsManager}
+              disabled={loading || uploading}
+              title="Ver y eliminar archivos subidos"
+            >
+              Archivos
             </button>
             <Link
               to={menuId ? `/editor/${menuId}` : '/dashboard'}
@@ -2368,7 +2383,7 @@ export function MobileEditorPage() {
                   </label>
                   {selected.type === 'section' && (
                     <>
-                      <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                      <label className="mobile-props-checkbox">
                         <input
                           type="checkbox"
                           checked={selected.typography?.textShadow === true}
@@ -2384,7 +2399,7 @@ export function MobileEditorPage() {
                             )
                           }
                         />
-                        Sombra del título
+                        <span className="mobile-props-checkbox-label">Sombra de texto</span>
                       </label>
                       {selected.typography?.textShadow === true && (
                         <label>
@@ -2839,6 +2854,18 @@ export function MobileEditorPage() {
               </button>
               <button
                 type="button"
+                className="btn-secondary"
+                disabled={uploading}
+                onClick={() => {
+                  setPhoneSheet(null);
+                  openAssetsManager();
+                }}
+                title="Ver y eliminar archivos subidos"
+              >
+                Archivos
+              </button>
+              <button
+                type="button"
                 className="btn-primary"
                 disabled={!menuId}
                 onClick={() => {
@@ -2985,8 +3012,24 @@ export function MobileEditorPage() {
         onClose={() => setAssetModalOpen(false)}
         menuId={menuId}
         onUseOnPage={(asset) => {
-          if (asset.url) {
+          if (!asset.url) {
+            throw new Error('El archivo no tiene una URL válida');
+          }
+          if (imagePickerTarget) {
             applyPickedImageUrl(asset.url);
+            setAssetModalOpen(false);
+            return;
+          }
+          if (selected?.type === 'image') {
+            updateSelectedField('src', asset.url);
+          } else if (selected?.type === 'section') {
+            updateSelectedSectionBackground({ src: asset.url });
+          } else if (selected?.type === 'menuItem') {
+            updateSelectedMenuItemImage({ src: asset.url });
+          } else {
+            throw new Error(
+              'Selecciona una imagen, una sección o un plato para aplicar el archivo, o ábrelo desde «Mis archivos» en propiedades.',
+            );
           }
           setAssetModalOpen(false);
         }}
