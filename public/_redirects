@@ -1,3 +1,3 @@
-# Sin catch-all SPA aquí: si /* → index.html, los /assets/*.js faltantes
-# devolvían HTML (MIME text/html) y rompían la app.
-# El fallback SPA lo hace functions/_middleware.ts (excluye /assets y /fonts).
+# Sin catch-all /* → index.html (rompe MIME de .js/.css si falta un asset).
+# Assets: functions/_middleware.ts via ASSETS.fetch (404 text/plain si faltan).
+# SPA: functions/_middleware.ts para el resto de rutas.

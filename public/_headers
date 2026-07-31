@@ -8,10 +8,9 @@
 /index.html
   Cache-Control: no-cache, no-store, must-revalidate
 
-# Sin "immutable": si alguna vez se sirvió HTML por error bajo /assets,
-# immutable lo dejaba envenenado en el navegador durante un año.
+# Caché corta: si un 404/HTML se colara bajo /assets, no envenena un año.
 /assets/*
-  Cache-Control: public, max-age=86400
+  Cache-Control: public, max-age=3600, must-revalidate
 
 /fonts/*
   Cache-Control: public, max-age=31536000, immutable

@@ -195,7 +195,7 @@ export function PublicMenuPage() {
           </figure>
         )}
 
-        {!loading && !error && !showPages && !showDocument && !showPng && (
+        {!loading && !error && !showPages && !showMobile && !showDocument && !showPng && (
           <p className="public-menu-status">Esta carta no tiene contenido para mostrar.</p>
         )}
       </main>

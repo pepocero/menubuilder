@@ -18,6 +18,17 @@ function looksLikeHtml(response: Response): boolean {
   return ct.includes('text/html');
 }
 
+function notFoundAsset(): Response {
+  return new Response('Not Found', {
+    status: 404,
+    headers: {
+      'Content-Type': 'text/plain; charset=utf-8',
+      'Cache-Control': 'no-store',
+      'X-Content-Type-Options': 'nosniff',
+    },
+  });
+}
+
 export const onRequest: PagesFunction<Env> = async (context) => {
   const { request, env, next } = context;
   const url = new URL(request.url);
@@ -42,22 +53,21 @@ export const onRequest: PagesFunction<Env> = async (context) => {
     return next();
   }
 
-  const response = await next();
-
-  // Cloudflare Pages puede devolver index.html (SPA) para /assets/* faltantes.
-  // Eso llega al navegador como module script con MIME text/html → pantalla en blanco.
-  if (isAssetOrFontPath(url.pathname) && looksLikeHtml(response)) {
-    return new Response('Not Found', {
-      status: 404,
-      headers: {
-        'Content-Type': 'text/plain; charset=utf-8',
-        'Cache-Control': 'no-store',
-        'X-Content-Type-Options': 'nosniff',
-      },
-    });
+  // Servir assets/fonts vía ASSETS (no next()): evita SPA HTML con MIME text/html
+  // y el fallo de next() con bundles JS grandes.
+  if (isAssetOrFontPath(url.pathname)) {
+    const assets = env.ASSETS;
+    if (!assets) return notFoundAsset();
+    const assetResponse = await assets.fetch(request);
+    if (!assetResponse.ok || looksLikeHtml(assetResponse)) {
+      return notFoundAsset();
+    }
+    return assetResponse;
   }
 
-  // Fallback SPA explícito por si el proyecto no reescribe solo.
+  const response = await next();
+
+  // Fallback SPA para rutas de la app (/p/..., /mis-cartas, etc.).
   if (response.status === 404 && isSpaNavigation(request, url.pathname)) {
     const assets = env.ASSETS;
     if (assets) {

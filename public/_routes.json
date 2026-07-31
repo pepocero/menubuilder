@@ -1,5 +1,14 @@
 {
   "version": 1,
   "include": ["/*"],
-  "exclude": []
+  "exclude": [
+    "/menuico.png",
+    "/favicon.svg",
+    "/icons.svg",
+    "/robots.txt",
+    "/sitemap.xml",
+    "/templates/*",
+    "/landing/*",
+    "/asset-404.txt"
+  ]
 }
