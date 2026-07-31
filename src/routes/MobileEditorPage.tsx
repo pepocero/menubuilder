@@ -442,15 +442,31 @@ export function MobileEditorPage() {
     () => (selectedId ? findMobileComponentById(document.components, selectedId) : null),
     [document.components, selectedId],
   );
-  /** Nodo seleccionado en el lienzo (acordeón completo o componente suelto). */
+  /** Nodo seleccionado (acordeón, hijo dentro de acordeón, o componente suelto). */
   const selectedNode = selectedLocation?.component ?? null;
+  const parentAccordionId = selectedLocation?.parentAccordionId ?? null;
+  const parentAccordion = useMemo(() => {
+    if (!parentAccordionId) return null;
+    const found = findMobileComponentById(document.components, parentAccordionId);
+    return found?.component.type === 'accordion' ? found.component : null;
+  }, [document.components, parentAccordionId]);
+  /**
+   * Props de acordeón solo si está seleccionado el contenedor (cabecera),
+   * no cuando se edita un hijo del cuerpo.
+   */
   const selectedAccordion = selectedNode?.type === 'accordion' ? selectedNode : null;
   /**
-   * Objetivo de las props de contenido: cabecera del acordeón, o el propio componente.
-   * Así el formulario existente sigue usando `selected` sin cambios masivos.
+   * Objetivo de las props de contenido:
+   * - acordeón seleccionado → cabecera (primer hijo)
+   * - hijo del cuerpo / componente suelto → él mismo
    */
   const selected = selectedAccordion ? selectedAccordion.children[0] ?? null : selectedNode;
   const propsComponentId = selected?.id ?? null;
+  /** Índice del hijo en el cuerpo (para etiqueta); -1 = cabecera o no aplica. */
+  const selectedAccordionChildIndex =
+    parentAccordion && selectedNode
+      ? parentAccordion.children.findIndex((c) => c.id === selectedNode.id)
+      : -1;
 
   const selectedMenuItemFieldTypo = useMemo(() => {
     if (!selected || selected.type !== 'menuItem') return null;
@@ -1417,8 +1433,8 @@ export function MobileEditorPage() {
                     <>
                       <h4>Acordeón</h4>
                       <small className="panel-hint">
-                        El primer componente es la cabecera. Tócalo en preview para expandir o
-                        contraer. Abajo editas las propiedades de esa cabecera.
+                        Cabecera seleccionada: editas el acordeón y el primer componente. Para
+                        editar un plato u otro contenido, abre el acordeón y tócalo.
                       </small>
                       <label>
                         Al cargar
@@ -1482,6 +1498,24 @@ export function MobileEditorPage() {
                       </button>
                       <h4>Cabecera</h4>
                     </>
+                  )}
+                  {parentAccordion && selectedAccordionChildIndex > 0 && (
+                    <div className="mobile-accordion-child-context">
+                      <small className="panel-hint">
+                        Contenido del acordeón (ítem {selectedAccordionChildIndex} de{' '}
+                        {Math.max(0, parentAccordion.children.length - 1)}).
+                      </small>
+                      <button
+                        type="button"
+                        className="btn-secondary"
+                        onClick={() => {
+                          if (!parentAccordionId) return;
+                          handleSelectComponent(parentAccordionId);
+                        }}
+                      >
+                        Ir a cabecera / opciones del acordeón
+                      </button>
+                    </div>
                   )}
                   {selected && (
                     <>

@@ -4375,6 +4375,26 @@ textarea {
 
 .mobile-accordion-child {
   min-width: 0;
+  position: relative;
+  border-radius: 10px;
+}
+
+.mobile-accordion-child.is-selected {
+  outline: 2px solid #38bdf8;
+  outline-offset: 2px;
+}
+
+.mobile-runtime-root.is-editable .mobile-accordion-child {
+  cursor: pointer;
+}
+
+.mobile-accordion-child-context {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  padding-bottom: 0.5rem;
+  margin-bottom: 0.25rem;
+  border-bottom: 1px solid var(--color-border);
 }
 
 .mobile-selection-tools {

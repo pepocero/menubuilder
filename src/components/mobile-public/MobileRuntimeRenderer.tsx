@@ -370,14 +370,18 @@ function renderComponent(
 function AccordionRuntime({
   component,
   editable = false,
+  selectedId = null,
   onSelectAccordion,
+  onSelectChild,
   onAction,
   onImageClick,
   onAllergensOpen,
 }: {
   component: Extract<MobileComponent, { type: 'accordion' }>;
   editable?: boolean;
+  selectedId?: string | null;
   onSelectAccordion?: () => void;
+  onSelectChild?: (id: string) => void;
   onAction?: (action: MobileInteractionAction) => void;
   onImageClick?: (src: string) => void;
   onAllergensOpen?: (payload: { dishTitle: string; allergens: string[] }) => void;
@@ -394,6 +398,13 @@ function AccordionRuntime({
   const chevronColor = component.chevronColor?.trim() || '#64748b';
   const chevronThickness = Math.max(1, Math.min(8, component.chevronThickness ?? 2));
   const headerIsSection = header?.type === 'section';
+  const selectedBodyChildId =
+    editable && selectedId && body.some((child) => child.id === selectedId) ? selectedId : null;
+
+  // Si se selecciona un hijo del cuerpo, abrir el acordeón para verlo/editarlo.
+  useEffect(() => {
+    if (selectedBodyChildId) setOpen(true);
+  }, [selectedBodyChildId]);
 
   function toggle() {
     setOpen((current) => !current);
@@ -457,16 +468,54 @@ function AccordionRuntime({
         hidden={!open}
         aria-hidden={!open}
       >
-        {body.map((child) => (
-          <div key={child.id} className="mobile-accordion-child" data-accordion-child-id={child.id}>
-            {renderComponent(
-              child,
-              !editable ? onAction : undefined,
-              !editable ? onImageClick : undefined,
-              !editable ? onAllergensOpen : undefined,
-            )}
-          </div>
-        ))}
+        {body.map((child) => {
+          const isChildSelected = editable && selectedId === child.id;
+          return (
+            <div
+              key={child.id}
+              className={`mobile-accordion-child${isChildSelected ? ' is-selected' : ''}${
+                editable && child.hidden === true ? ' is-hidden-public' : ''
+              }`}
+              data-accordion-child-id={child.id}
+              role={editable ? 'button' : undefined}
+              tabIndex={editable ? 0 : undefined}
+              onClick={
+                editable
+                  ? (e) => {
+                      e.stopPropagation();
+                      onSelectChild?.(child.id);
+                    }
+                  : undefined
+              }
+              onPointerDown={
+                editable
+                  ? (e) => {
+                      // Evita que el drag del acordeón padre capture el toque del hijo.
+                      e.stopPropagation();
+                    }
+                  : undefined
+              }
+              onKeyDown={
+                editable
+                  ? (e) => {
+                      if (e.key === 'Enter' || e.key === ' ') {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        onSelectChild?.(child.id);
+                      }
+                    }
+                  : undefined
+              }
+            >
+              {renderComponent(
+                child,
+                !editable ? onAction : undefined,
+                !editable ? onImageClick : undefined,
+                !editable ? onAllergensOpen : undefined,
+              )}
+            </div>
+          );
+        })}
       </div>
     </div>
   );
@@ -1094,7 +1143,9 @@ export function MobileRuntimeRenderer({
             <AccordionRuntime
               component={component}
               editable={editable}
+              selectedId={selectedId}
               onSelectAccordion={editable ? () => onSelect?.(component.id) : undefined}
+              onSelectChild={editable ? (id) => onSelect?.(id) : undefined}
               onAction={!editable ? (action) => runAction(action) : undefined}
               onImageClick={!editable ? (src) => setLightboxSrc(src) : undefined}
               onAllergensOpen={!editable ? (payload) => setAllergensModal(payload) : undefined}
