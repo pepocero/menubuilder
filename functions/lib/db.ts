@@ -333,18 +333,20 @@ export async function countMenusReferencingAssetUrl(
   url: string,
   excludeMenuId?: string,
 ): Promise<number> {
-  const like = `%${url}%`;
+  // Escapar comodines de LIKE: las URLs de R2 llevan %2F, etc.
+  const escaped = url.replace(/\\/g, '\\\\').replace(/%/g, '\\%').replace(/_/g, '\\_');
+  const like = `%${escaped}%`;
   if (excludeMenuId) {
     const row = await db
       .prepare(
         `SELECT COUNT(*) as c FROM menus
          WHERE user_id = ? AND id != ?
            AND (
-             canvas_data LIKE ?
-             OR IFNULL(mobile_document, '') LIKE ?
-             OR IFNULL(menu_document, '') LIKE ?
-             OR IFNULL(thumbnail_url, '') LIKE ?
-             OR IFNULL(export_png_url, '') LIKE ?
+             canvas_data LIKE ? ESCAPE '\\'
+             OR IFNULL(mobile_document, '') LIKE ? ESCAPE '\\'
+             OR IFNULL(menu_document, '') LIKE ? ESCAPE '\\'
+             OR IFNULL(thumbnail_url, '') LIKE ? ESCAPE '\\'
+             OR IFNULL(export_png_url, '') LIKE ? ESCAPE '\\'
            )`,
       )
       .bind(userId, excludeMenuId, like, like, like, like, like)
@@ -357,11 +359,11 @@ export async function countMenusReferencingAssetUrl(
       `SELECT COUNT(*) as c FROM menus
        WHERE user_id = ?
          AND (
-           canvas_data LIKE ?
-           OR IFNULL(mobile_document, '') LIKE ?
-           OR IFNULL(menu_document, '') LIKE ?
-           OR IFNULL(thumbnail_url, '') LIKE ?
-           OR IFNULL(export_png_url, '') LIKE ?
+           canvas_data LIKE ? ESCAPE '\\'
+           OR IFNULL(mobile_document, '') LIKE ? ESCAPE '\\'
+           OR IFNULL(menu_document, '') LIKE ? ESCAPE '\\'
+           OR IFNULL(thumbnail_url, '') LIKE ? ESCAPE '\\'
+           OR IFNULL(export_png_url, '') LIKE ? ESCAPE '\\'
          )`,
     )
     .bind(userId, like, like, like, like, like)

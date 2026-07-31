@@ -109,50 +109,56 @@ interface DeleteAssetBody {
 export const onRequestDelete: PagesFunction<Env> = async (context) => {
   const { request, env } = context;
   const userId = context.data.userId as string;
-  const body = await parseJson<DeleteAssetBody>(request);
 
-  if (!body?.id && !body?.url && !body?.r2_key) {
-    return errorResponse('id, url o r2_key requeridos');
-  }
+  try {
+    const body = await parseJson<DeleteAssetBody>(request);
 
-  let asset =
-    (body.id ? await findAssetById(env.DB, userId, body.id) : null) ??
-    (body.url ? await findAssetByUrl(env.DB, userId, body.url) : null) ??
-    (body.r2_key ? await findAssetByR2Key(env.DB, userId, body.r2_key) : null);
+    if (!body?.id && !body?.url && !body?.r2_key) {
+      return errorResponse('id, url o r2_key requeridos');
+    }
 
-  if (!asset && body.url) {
-    const key = parseR2KeyFromAssetUrl(body.url);
-    if (key) asset = await findAssetByR2Key(env.DB, userId, key);
-  }
+    let asset =
+      (body.id ? await findAssetById(env.DB, userId, body.id) : null) ??
+      (body.url ? await findAssetByUrl(env.DB, userId, body.url) : null) ??
+      (body.r2_key ? await findAssetByR2Key(env.DB, userId, body.r2_key) : null);
 
-  if (!asset || asset.user_id !== userId) {
-    return errorResponse('Recurso no encontrado', 404);
-  }
+    if (!asset && body.url) {
+      const key = parseR2KeyFromAssetUrl(body.url);
+      if (key) asset = await findAssetByR2Key(env.DB, userId, key);
+    }
 
-  const url =
-    body.url ?? asset.url ?? `/api/assets/file?key=${encodeURIComponent(asset.r2_key)}`;
+    if (!asset || asset.user_id !== userId) {
+      return errorResponse('Recurso no encontrado', 404);
+    }
 
-  const result = await deleteAssetIfUnreferenced(env, userId, url, {
-    excludeMenuId: body.exclude_menu_id,
-    force: body.force,
-  });
+    const url =
+      body.url ?? asset.url ?? `/api/assets/file?key=${encodeURIComponent(asset.r2_key)}`;
 
-  if (result.reason === 'not_found') {
-    return errorResponse('Recurso no encontrado', 404);
-  }
-
-  if (!result.deleted) {
-    return jsonResponse({
-      deleted: false,
-      kept: true,
-      reason: result.reason ?? 'La imagen sigue usándose en otro menú',
+    const result = await deleteAssetIfUnreferenced(env, userId, url, {
+      excludeMenuId: body.exclude_menu_id,
+      force: body.force,
     });
-  }
 
-  return jsonResponse({
-    deleted: true,
-    id: asset.id,
-    url: asset.url,
-    r2_key: asset.r2_key,
-  });
+    if (result.reason === 'not_found') {
+      return errorResponse('Recurso no encontrado', 404);
+    }
+
+    if (!result.deleted) {
+      return jsonResponse({
+        deleted: false,
+        kept: true,
+        reason: result.reason ?? 'La imagen sigue usándose en otro menú',
+      });
+    }
+
+    return jsonResponse({
+      deleted: true,
+      id: asset.id,
+      url: asset.url,
+      r2_key: asset.r2_key,
+    });
+  } catch (err) {
+    console.error('DELETE /api/assets falló', err);
+    return errorResponse('No se pudo eliminar el archivo', 500);
+  }
 };

@@ -82,6 +82,10 @@ export interface MobileTypographyConfig {
   lineHeight: number;
   letterSpacing: number;
   color: string;
+  /** Sombra de texto opcional (p. ej. título de sección sobre foto). */
+  textShadow?: boolean;
+  /** Intensidad 1–10. Solo aplica si textShadow es true. */
+  textShadowIntensity?: number;
 }
 
 export interface MobileComponentBase {

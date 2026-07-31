@@ -136,7 +136,11 @@ export async function deleteAssetIfUnreferenced(
   }
 
   if (env.MEDIA) {
-    await deleteFromR2(env.MEDIA, asset.r2_key);
+    try {
+      await deleteFromR2(env.MEDIA, asset.r2_key);
+    } catch (err) {
+      console.error('R2 delete falló (se continúa borrando fila D1)', asset.r2_key, err);
+    }
   }
   await deleteAssetRow(env.DB, asset.id, userId);
   return { deleted: true, assetId: asset.id };

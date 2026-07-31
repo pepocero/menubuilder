@@ -169,10 +169,28 @@ export const onRequestPut: PagesFunction<Env> = async (context) => {
   for (const url of urlsBefore) {
     if (!urlsAfter.has(url)) removed.push(url);
   }
-  try {
-    await garbageCollectRemovedAssetUrls(env, userId, removed);
-  } catch (err) {
+
+  // GC en segundo plano: no debe hacer fallar el guardado (límites CPU/tiempo).
+  const gcPromise = garbageCollectRemovedAssetUrls(env, userId, removed).catch((err) => {
     console.error('GC assets tras update menú falló', menuId, err);
+  });
+  try {
+    context.waitUntil(gcPromise);
+  } catch {
+    // waitUntil no disponible en algunos runtimes locales
+  }
+
+  let parsedCanvas: unknown = null;
+  let parsedMobile: unknown = null;
+  try {
+    parsedCanvas = JSON.parse(canvasData);
+  } catch {
+    parsedCanvas = null;
+  }
+  try {
+    parsedMobile = mobileDocument ? JSON.parse(mobileDocument) : null;
+  } catch {
+    parsedMobile = null;
   }
 
   return jsonResponse({
@@ -180,8 +198,8 @@ export const onRequestPut: PagesFunction<Env> = async (context) => {
       id: menuId,
       title,
       editor_kind: editorKind,
-      canvas_data: JSON.parse(canvasData),
-      mobile_document: mobileDocument ? JSON.parse(mobileDocument) : null,
+      canvas_data: parsedCanvas,
+      mobile_document: parsedMobile,
       thumbnail_url: thumbnailUrl,
     },
   });

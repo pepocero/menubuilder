@@ -1099,7 +1099,11 @@ export function MobileEditorPage() {
           letterSpacing: 0,
           color: '#111827',
         };
-        const nextTypography = { ...base, ...patch };
+        const nextTypography: MobileTypographyConfig = { ...base, ...patch };
+        if (patch.textShadow === false) {
+          delete nextTypography.textShadow;
+          delete nextTypography.textShadowIntensity;
+        }
         if (nextTypography.fontFamily) ensureEditorFontLoaded(nextTypography.fontFamily);
         return { ...component, typography: nextTypography };
       }),
@@ -2364,6 +2368,45 @@ export function MobileEditorPage() {
                   </label>
                   {selected.type === 'section' && (
                     <>
+                      <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                        <input
+                          type="checkbox"
+                          checked={selected.typography?.textShadow === true}
+                          onChange={(e) =>
+                            updateSelectedTypography(
+                              e.target.checked
+                                ? {
+                                    textShadow: true,
+                                    textShadowIntensity:
+                                      selected.typography?.textShadowIntensity ?? 4,
+                                  }
+                                : { textShadow: false },
+                            )
+                          }
+                        />
+                        Sombra del título
+                      </label>
+                      {selected.typography?.textShadow === true && (
+                        <label>
+                          Intensidad de la sombra
+                          <input
+                            type="range"
+                            min={1}
+                            max={10}
+                            step={1}
+                            value={selected.typography?.textShadowIntensity ?? 4}
+                            onChange={(e) =>
+                              updateSelectedTypography({
+                                textShadow: true,
+                                textShadowIntensity: Number(e.target.value),
+                              })
+                            }
+                          />
+                          <span className="panel-hint">
+                            {selected.typography?.textShadowIntensity ?? 4} / 10
+                          </span>
+                        </label>
+                      )}
                       <label>
                         Margen izquierdo (px)
                         <input

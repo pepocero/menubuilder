@@ -41,6 +41,18 @@ function typographyStyle(component: MobileComponent): CSSProperties {
     lineHeight: String(t.lineHeight),
     letterSpacing: `${t.letterSpacing}px`,
     color: t.color,
+    ...textShadowStyle(t),
+  };
+}
+
+function textShadowStyle(t: MobileTypographyConfig): CSSProperties {
+  if (!t.textShadow) return {};
+  const intensity = Math.max(1, Math.min(10, t.textShadowIntensity ?? 4));
+  const y = Math.max(1, Math.round(intensity * 0.45));
+  const blur = Math.max(2, Math.round(intensity * 1.2));
+  const alpha = Math.min(0.9, 0.2 + intensity * 0.07);
+  return {
+    textShadow: `0 ${y}px ${blur}px rgba(0, 0, 0, ${alpha.toFixed(2)})`,
   };
 }
 
@@ -56,6 +68,7 @@ function typographyConfigToStyle(t: MobileTypographyConfig): CSSProperties {
     lineHeight: String(t.lineHeight),
     letterSpacing: `${t.letterSpacing}px`,
     color: t.color,
+    ...textShadowStyle(t),
   };
 }
 

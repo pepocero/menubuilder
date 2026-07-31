@@ -88,6 +88,10 @@ function parseTypography(value: unknown): MobileComponent['typography'] {
   ) {
     return undefined;
   }
+  const textShadow = value.textShadow === true;
+  const textShadowIntensity = isNumber(value.textShadowIntensity)
+    ? Math.max(1, Math.min(10, Math.round(value.textShadowIntensity)))
+    : undefined;
   return {
     fontFamily,
     fontSize: Math.max(8, Math.min(96, Math.round(value.fontSize))),
@@ -99,6 +103,8 @@ function parseTypography(value: unknown): MobileComponent['typography'] {
     lineHeight: Math.max(1, Math.min(3, value.lineHeight)),
     letterSpacing: Math.max(-2, Math.min(12, value.letterSpacing)),
     color: value.color,
+    ...(textShadow ? { textShadow: true } : {}),
+    ...(textShadow && textShadowIntensity != null ? { textShadowIntensity } : {}),
   };
 }
 
