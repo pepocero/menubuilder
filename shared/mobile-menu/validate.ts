@@ -3,6 +3,7 @@ import {
   MOBILE_MENU_VERSION,
   migrateLegacySectionBorder,
   type MobileAccordionChevronAnimation,
+  type MobileAccordionChevronDirection,
   type MobileComponent,
   type MobileMenuDocument,
   type MobileSectionBorderLine,
@@ -30,10 +31,22 @@ const ACCORDION_CHEVRON_ANIMATIONS: readonly MobileAccordionChevronAnimation[] =
   'none',
 ];
 
+const ACCORDION_CHEVRON_DIRECTIONS: readonly MobileAccordionChevronDirection[] = [
+  'down',
+  'right',
+];
+
 function parseChevronAnimation(value: unknown): MobileAccordionChevronAnimation | undefined {
   if (!isString(value)) return undefined;
   return (ACCORDION_CHEVRON_ANIMATIONS as readonly string[]).includes(value)
     ? (value as MobileAccordionChevronAnimation)
+    : undefined;
+}
+
+function parseChevronDirection(value: unknown): MobileAccordionChevronDirection | undefined {
+  if (!isString(value)) return undefined;
+  return (ACCORDION_CHEVRON_DIRECTIONS as readonly string[]).includes(value)
+    ? (value as MobileAccordionChevronDirection)
     : undefined;
 }
 
@@ -429,6 +442,7 @@ function parseComponent(value: unknown): MobileComponent | null {
         ? Math.max(1, Math.min(8, Math.round(value.chevronThickness)))
         : undefined,
       chevronAnimation: parseChevronAnimation(value.chevronAnimation),
+      chevronDirection: parseChevronDirection(value.chevronDirection),
       animation: parseAnimation(value.animation),
       effect: parseEffect(value.effect),
       typography: parseTypography(value.typography),

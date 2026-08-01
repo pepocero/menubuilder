@@ -315,7 +315,7 @@ export interface MobileSpacerComponent extends MobileComponentBase {
   height: number;
 }
 
-/** Animación de la flecha en reposo (colapsado). Al abrir/cerrar siempre gira 180°. */
+/** Animación de la flecha en reposo (colapsado). */
 export type MobileAccordionChevronAnimation =
   | 'none'
   | 'rotate' // legado: equivale a `none` (sin animación en reposo)
@@ -323,6 +323,9 @@ export type MobileAccordionChevronAnimation =
   | 'flip'
   | 'spin'
   | 'pulse';
+
+/** Orientación de la flecha. Por defecto: `down` (abajo → arriba al abrir). */
+export type MobileAccordionChevronDirection = 'down' | 'right';
 
 /**
  * Contenedor acordeón: el primer hijo es la cabecera (clic para expandir/contraer);
@@ -339,8 +342,14 @@ export interface MobileAccordionComponent extends MobileComponentBase {
   chevronColor?: string;
   /** Grosor de línea de la flecha (1–8). Por defecto: 2. */
   chevronThickness?: number;
-  /** Animación de la flecha en reposo (colapsado). Al abrir siempre gira 180°. Por defecto: `none`. */
+  /** Animación de la flecha en reposo (colapsado). Por defecto: `none`. */
   chevronAnimation?: MobileAccordionChevronAnimation;
+  /**
+   * Sentido de la flecha.
+   * - `down` (default): colapsada ↓, abierta ↑ (giro 180°).
+   * - `right`: colapsada →, abierta ↓ (giro 90°).
+   */
+  chevronDirection?: MobileAccordionChevronDirection;
 }
 
 /** Hijos válidos de un acordeón (cualquier componente excepto otro acordeón). */

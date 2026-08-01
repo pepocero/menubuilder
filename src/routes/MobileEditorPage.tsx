@@ -61,6 +61,7 @@ import {
   type MobileEffectTrigger,
   type DevicePresetId,
   type MobileAccordionChevronAnimation,
+  type MobileAccordionChevronDirection,
   type MobileInteractionAction,
   type MobileInteractionActionType,
   type MobileMenuDocument,
@@ -1292,6 +1293,7 @@ export function MobileEditorPage() {
     chevronColor?: string;
     chevronThickness?: number;
     chevronAnimation?: MobileAccordionChevronAnimation;
+    chevronDirection?: MobileAccordionChevronDirection;
   }) {
     if (!selectedId || selectedNode?.type !== 'accordion') return;
     updateDoc((current) => ({
@@ -1309,6 +1311,9 @@ export function MobileEditorPage() {
         }
         if (patch.chevronAnimation !== undefined) {
           next.chevronAnimation = patch.chevronAnimation;
+        }
+        if (patch.chevronDirection !== undefined) {
+          next.chevronDirection = patch.chevronDirection;
         }
         return next;
       }),
@@ -1666,6 +1671,20 @@ export function MobileEditorPage() {
                             />
                           </label>
                           <label>
+                            Sentido de la flecha
+                            <select
+                              value={selectedAccordion.chevronDirection ?? 'down'}
+                              onChange={(e) =>
+                                updateSelectedAccordion({
+                                  chevronDirection: e.target.value as MobileAccordionChevronDirection,
+                                })
+                              }
+                            >
+                              <option value="down">Abajo → arriba (180°)</option>
+                              <option value="right">Derecha → abajo (90°)</option>
+                            </select>
+                          </label>
+                          <label>
                             Animación en reposo
                             <select
                               value={
@@ -1689,7 +1708,8 @@ export function MobileEditorPage() {
                             </select>
                           </label>
                           <small className="panel-hint">
-                            Se reproduce con el acordeón colapsado. Al abrir, la flecha siempre gira 180°.
+                            La animación en reposo solo actúa con el acordeón colapsado. Al abrir/cerrar
+                            gira según el sentido elegido.
                           </small>
                         </>
                       )}

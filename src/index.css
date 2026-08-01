@@ -4352,14 +4352,27 @@ textarea {
   height: 2.25rem;
   color: #64748b;
   pointer-events: none;
-  transform: translateY(-50%);
+  --chevron-rest: 0deg;
+  --chevron-open: 180deg;
+  transform: translateY(-50%) rotate(var(--chevron-rest));
   transition: transform 0.2s ease;
   filter: drop-shadow(0 1px 2px rgb(15 23 42 / 25%));
 }
 
-/* Apertura/cierre: siempre giro 180° (comportamiento estándar del acordeón). */
+/* Sentido: abajo (default) → al abrir gira 180° y apunta arriba. */
+.mobile-accordion-chevron--dir-down {
+  --chevron-rest: 0deg;
+  --chevron-open: 180deg;
+}
+
+/* Sentido: derecha → al abrir gira 90° y apunta abajo. */
+.mobile-accordion-chevron--dir-right {
+  --chevron-rest: -90deg;
+  --chevron-open: 0deg;
+}
+
 .mobile-accordion-chevron.is-open {
-  transform: translateY(-50%) rotate(180deg);
+  transform: translateY(-50%) rotate(var(--chevron-open));
   animation: none;
 }
 
@@ -4384,21 +4397,21 @@ textarea {
 @keyframes mobile-accordion-chevron-idle-bounce {
   0%,
   100% {
-    transform: translateY(-50%);
+    transform: translateY(-50%) rotate(var(--chevron-rest, 0deg));
   }
   50% {
-    transform: translateY(calc(-50% + 6px));
+    transform: translateY(calc(-50% + 6px)) rotate(var(--chevron-rest, 0deg));
   }
 }
 
 @keyframes mobile-accordion-chevron-idle-pulse {
   0%,
   100% {
-    transform: translateY(-50%) scale(1);
+    transform: translateY(-50%) rotate(var(--chevron-rest, 0deg)) scale(1);
     opacity: 1;
   }
   50% {
-    transform: translateY(-50%) scale(1.2);
+    transform: translateY(-50%) rotate(var(--chevron-rest, 0deg)) scale(1.2);
     opacity: 0.8;
   }
 }
@@ -4406,23 +4419,23 @@ textarea {
 @keyframes mobile-accordion-chevron-idle-flip {
   0%,
   100% {
-    transform: translateY(-50%) perspective(180px) rotateY(0deg);
+    transform: translateY(-50%) rotate(var(--chevron-rest, 0deg)) perspective(180px) rotateY(0deg);
   }
   50% {
-    transform: translateY(-50%) perspective(180px) rotateY(42deg);
+    transform: translateY(-50%) rotate(var(--chevron-rest, 0deg)) perspective(180px) rotateY(42deg);
   }
 }
 
 @keyframes mobile-accordion-chevron-idle-spin {
   0%,
   100% {
-    transform: translateY(-50%) rotate(0deg);
+    transform: translateY(-50%) rotate(var(--chevron-rest, 0deg));
   }
   25% {
-    transform: translateY(-50%) rotate(-14deg);
+    transform: translateY(-50%) rotate(calc(var(--chevron-rest, 0deg) - 14deg));
   }
   75% {
-    transform: translateY(-50%) rotate(14deg);
+    transform: translateY(-50%) rotate(calc(var(--chevron-rest, 0deg) + 14deg));
   }
 }
 

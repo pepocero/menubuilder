@@ -461,6 +461,7 @@ function AccordionRuntime({
     component.chevronAnimation === 'rotate' || !component.chevronAnimation
       ? 'none'
       : component.chevronAnimation;
+  const chevronDirection = component.chevronDirection === 'right' ? 'right' : 'down';
   const headerIsSection = header?.type === 'section';
   const selectedBodyChildId =
     editable && selectedId && body.some((child) => child.id === selectedId) ? selectedId : null;
@@ -520,7 +521,7 @@ function AccordionRuntime({
         </div>
         {showChevron && (
           <span
-            className={`mobile-accordion-chevron mobile-accordion-chevron--${chevronAnimation}${
+            className={`mobile-accordion-chevron mobile-accordion-chevron--dir-${chevronDirection} mobile-accordion-chevron--${chevronAnimation}${
               open ? ' is-open' : ''
             }`}
             aria-hidden="true"
