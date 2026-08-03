@@ -108,15 +108,18 @@ function buildEffectAnimation(effect?: MobileEffectConfig): string {
   return `${name} ${effect.durationMs}ms ease ${effect.delayMs}ms ${iteration} both`;
 }
 
-function effectStyle(effect?: MobileEffectConfig): CSSProperties {
+function effectStyle(effect?: MobileEffectConfig, editable = false): CSSProperties {
   if (!effect || effect.type === 'none') return {};
-  if (effect.trigger === 'on_view') return {};
+  // En el editor, on_view se reproduce al momento para poder previsualizar.
+  if (effect.trigger === 'on_view' && !editable) return {};
   const anim = buildEffectAnimation(effect);
   return anim ? { animation: anim } : {};
 }
 
 function effectClassName(effect?: MobileEffectConfig): string {
-  if (effect?.type === 'shimmer') return 'mob-effect-shimmer-bg';
+  if (!effect || effect.type === 'none') return '';
+  if (effect.type === 'shimmer') return 'mob-effect-shimmer-bg';
+  if (effect.type === 'glow') return 'mob-effect-glow-host';
   return '';
 }
 
@@ -282,6 +285,9 @@ function renderComponent(
           className={`mobile-block mobile-block-menu-item${
             hasMenuImage ? ` has-image image-${imagePosition}` : ''
           }`}
+          style={{
+            backgroundColor: component.backgroundColor?.trim() || '#ffffff',
+          }}
         >
           {hasMenuImage && (
             <img
@@ -1150,7 +1156,7 @@ export function MobileRuntimeRenderer({
           style={
             {
               ...animationStyleVars(component),
-              ...effectStyle(component.effect),
+              ...effectStyle(component.effect, editable),
             } as CSSProperties
           }
           onPointerDown={editable && onReorder ? (e) => onNodePointerDown(component.id, e) : undefined}

@@ -373,6 +373,10 @@ function parseComponent(value: unknown): MobileComponent | null {
       price: value.price,
       ingredients: value.ingredients,
       allergens: isString(value.allergens) ? value.allergens : '',
+      backgroundColor:
+        isString(value.backgroundColor) && value.backgroundColor.trim()
+          ? value.backgroundColor.trim().slice(0, 64)
+          : '#ffffff',
       menuImage: parseMenuItemImage(value.menuImage),
       animation: parseAnimation(value.animation),
       effect: parseEffect(value.effect),

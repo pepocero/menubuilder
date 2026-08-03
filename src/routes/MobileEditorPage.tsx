@@ -46,12 +46,17 @@ import {
   isAllergenSelected,
   normalizeMobileMenuDocument,
   toggleAllergenTag,
+  addAllergenTag,
+  removeAllergenTag,
+  listCustomAllergenTags,
   findMobileComponentById,
   updateMobileComponentById,
   removeMobileComponentById,
   createAccordionFromTopLevelIds,
   ungroupAccordionById,
   areTopLevelIdsConsecutive,
+  mapAllMobileComponents,
+  countMobileComponentsByType,
   type MobileAnimationConfig,
   type MobileAnimationPreset,
   type MobileAnimationTrigger,
@@ -388,11 +393,16 @@ export function MobileEditorPage() {
     percent: number;
     detail?: string;
   } | null>(null);
+  const [customAllergenDraft, setCustomAllergenDraft] = useState('');
   const ocrInFlightRef = useRef(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const documentRef = useRef(document);
   const persistTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   documentRef.current = document;
+
+  useEffect(() => {
+    setCustomAllergenDraft('');
+  }, [selectedId]);
 
   useEffect(() => {
     return () => {
@@ -1147,6 +1157,145 @@ export function MobileEditorPage() {
     }), options);
   }
 
+  async function applySelectedMenuItemStyleToAll() {
+    if (!selected || selected.type !== 'menuItem') return;
+    const total = countMobileComponentsByType(documentRef.current.components, 'menuItem');
+    if (total < 2) return;
+    const confirmed = await appConfirm(
+      `¿Aplicar el estilo de este plato a los ${total} platos de la carta?\n\nSe copiarán tipografías (nombre, descripción, precio, ingredientes), color de fondo y formato de imagen (posición, ancho y radio). No se copian textos, alérgenos ni la foto.`,
+      {
+        title: 'Aplicar estilo a todos los platos',
+        confirmText: 'Aplicar a todos',
+      },
+    );
+    if (!confirmed) return;
+
+    const source = selected;
+    const styleTypography = {
+      title: {
+        ...defaultMenuItemFieldTypography('title'),
+        ...source.menuTypography?.title,
+      },
+      description: {
+        ...defaultMenuItemFieldTypography('description'),
+        ...source.menuTypography?.description,
+      },
+      price: {
+        ...defaultMenuItemFieldTypography('price'),
+        ...source.menuTypography?.price,
+      },
+      ingredients: {
+        ...defaultMenuItemFieldTypography('ingredients'),
+        ...source.menuTypography?.ingredients,
+      },
+    };
+    const imageLayout = {
+      position: (source.menuImage?.position === 'right' ? 'right' : 'left') as 'left' | 'right',
+      width: source.menuImage?.width ?? 92,
+      radius: source.menuImage?.radius ?? 10,
+    };
+    const backgroundColor = source.backgroundColor?.trim() || '#ffffff';
+
+    for (const field of ['title', 'description', 'price', 'ingredients'] as const) {
+      const family = styleTypography[field].fontFamily;
+      if (family) ensureEditorFontLoaded(family);
+    }
+
+    updateDoc((current) => ({
+      ...current,
+      components: mapAllMobileComponents(current.components, (component) => {
+        if (component.type !== 'menuItem') return component;
+        return {
+          ...component,
+          backgroundColor,
+          menuTypography: {
+            title: { ...styleTypography.title },
+            description: { ...styleTypography.description },
+            price: { ...styleTypography.price },
+            ingredients: { ...styleTypography.ingredients },
+          },
+          menuImage: {
+            src: component.menuImage?.src ?? '',
+            alt: component.menuImage?.alt ?? 'Imagen del plato',
+            position: imageLayout.position,
+            width: imageLayout.width,
+            radius: imageLayout.radius,
+          },
+        };
+      }),
+    }));
+  }
+
+  async function applySelectedSectionStyleToAll() {
+    if (!selected || selected.type !== 'section') return;
+    const total = countMobileComponentsByType(documentRef.current.components, 'section');
+    if (total < 2) return;
+    const confirmed = await appConfirm(
+      `¿Aplicar el estilo de esta sección a las ${total} secciones de la carta?\n\nSe copiarán tipografía, color de fondo, tamaño, padding, bordes, márgenes del título y formato de imagen de fondo (alineación y estirado). No se copian el título ni la imagen de fondo.`,
+      {
+        title: 'Aplicar estilo a todas las secciones',
+        confirmText: 'Aplicar a todos',
+      },
+    );
+    if (!confirmed) return;
+
+    const source = selected;
+    const styleTypography = source.typography
+      ? {
+          fontFamily: source.typography.fontFamily,
+          fontSize: source.typography.fontSize,
+          fontWeight: source.typography.fontWeight,
+          fontStyle: source.typography.fontStyle,
+          textDecoration: source.typography.textDecoration,
+          textTransform: source.typography.textTransform,
+          textAlign: source.typography.textAlign,
+          lineHeight: source.typography.lineHeight,
+          letterSpacing: source.typography.letterSpacing,
+          color: source.typography.color,
+          textShadow: source.typography.textShadow,
+          textShadowIntensity: source.typography.textShadowIntensity,
+        }
+      : undefined;
+    const backgroundColor = source.backgroundColor?.trim() || '#ffffff';
+    const padding = Math.max(0, Math.round(source.padding ?? 16));
+    const size = source.size ?? 's';
+    const borderLine = source.borderLine ?? 'thin';
+    const borderRound = source.borderRound ?? 'md';
+    const textOffsetX = Math.round(source.textOffsetX ?? 0);
+    const textOffsetY = Math.round(source.textOffsetY ?? 0);
+    const imageLayout = {
+      align: (source.backgroundImage?.align === 'left' || source.backgroundImage?.align === 'right'
+        ? source.backgroundImage.align
+        : 'center') as 'left' | 'center' | 'right',
+      stretch: source.backgroundImage?.stretch !== false,
+    };
+
+    if (styleTypography?.fontFamily) ensureEditorFontLoaded(styleTypography.fontFamily);
+
+    updateDoc((current) => ({
+      ...current,
+      components: mapAllMobileComponents(current.components, (component) => {
+        if (component.type !== 'section') return component;
+        return {
+          ...component,
+          backgroundColor,
+          padding,
+          size,
+          borderLine,
+          borderRound,
+          textOffsetX,
+          textOffsetY,
+          ...(styleTypography ? { typography: { ...styleTypography } } : {}),
+          backgroundImage: {
+            src: component.backgroundImage?.src ?? '',
+            align: imageLayout.align,
+            stretch: imageLayout.stretch,
+          },
+        };
+      }),
+    }));
+  }
+
   function updateSelectedMenuItemImage(
     patch: Partial<{
       src: string;
@@ -1870,13 +2019,101 @@ export function MobileEditorPage() {
                           );
                         })}
                       </div>
+                      {(() => {
+                        const customTags = listCustomAllergenTags(selected.allergens);
+                        if (customTags.length === 0) return null;
+                        return (
+                          <div
+                            className="allergen-tags allergen-tags--custom"
+                            role="list"
+                            aria-label="Alérgenos personalizados"
+                          >
+                            {customTags.map((allergen) => (
+                              <span key={allergen} className="allergen-tag-custom" role="listitem">
+                                {allergen}
+                                <button
+                                  type="button"
+                                  className="allergen-tag-remove"
+                                  title={`Quitar ${allergen}`}
+                                  aria-label={`Quitar ${allergen}`}
+                                  onClick={() =>
+                                    updateSelectedField(
+                                      'allergens',
+                                      removeAllergenTag(selected.allergens, allergen),
+                                    )
+                                  }
+                                >
+                                  ✕
+                                </button>
+                              </span>
+                            ))}
+                          </div>
+                        );
+                      })()}
+                      <div className="allergen-add-row">
+                        <input
+                          type="text"
+                          value={customAllergenDraft}
+                          maxLength={64}
+                          placeholder="Otro alérgeno…"
+                          aria-label="Nuevo alérgeno personalizado"
+                          autoComplete="off"
+                          autoCorrect="off"
+                          autoCapitalize="sentences"
+                          enterKeyHint="done"
+                          onChange={(e) => setCustomAllergenDraft(e.target.value)}
+                          onKeyDown={(e) => {
+                            if (e.key !== 'Enter') return;
+                            e.preventDefault();
+                            const next = addAllergenTag(selected.allergens, customAllergenDraft);
+                            if (next === selected.allergens) return;
+                            updateSelectedField('allergens', next);
+                            setCustomAllergenDraft('');
+                          }}
+                        />
+                        <button
+                          type="button"
+                          className="btn-secondary allergen-add-btn"
+                          disabled={!customAllergenDraft.trim()}
+                          onClick={() => {
+                            const next = addAllergenTag(selected.allergens, customAllergenDraft);
+                            if (next === selected.allergens) return;
+                            updateSelectedField('allergens', next);
+                            setCustomAllergenDraft('');
+                          }}
+                        >
+                          Añadir
+                        </button>
+                      </div>
                       <small className="panel-hint">
-                        Pulsa para activar o desactivar. Sin selección, el plato no muestra alérgenos.
+                        Pulsa las etiquetas para activar o desactivar. Puedes añadir otras y quitarlas
+                        con ✕. Se guardan con el menú y se ven en la carta pública.
                       </small>
                     </div>
                   )}
                   {selected.type === 'menuItem' && (
                     <>
+                      <label>
+                        Color de fondo
+                        <input
+                          type="color"
+                          value={selected.backgroundColor || '#ffffff'}
+                          onChange={(e) => {
+                            if (!propsComponentId) return;
+                            updateDoc((current) => ({
+                              ...current,
+                              components: updateMobileComponentById(
+                                current.components,
+                                propsComponentId,
+                                (component) => {
+                                  if (component.type !== 'menuItem') return component;
+                                  return { ...component, backgroundColor: e.target.value };
+                                },
+                              ),
+                            }));
+                          }}
+                        />
+                      </label>
                       <h4>Imagen del plato</h4>
                       <div className="image-picker-field">
                         {selected.menuImage?.src ? (
@@ -2004,6 +2241,14 @@ export function MobileEditorPage() {
                             </option>
                           ))}
                         </select>
+                      </label>
+                      <label>
+                        Color de fondo
+                        <input
+                          type="color"
+                          value={selected.backgroundColor || '#ffffff'}
+                          onChange={(e) => updateSelectedField('backgroundColor', e.target.value)}
+                        />
                       </label>
                       <h4>Imagen de fondo</h4>
                       <div className="image-picker-field">
@@ -2541,6 +2786,18 @@ export function MobileEditorPage() {
                       <small className="panel-hint">
                         Negativo mueve el texto a la izquierda / arriba. Positivo a la derecha / abajo.
                       </small>
+                      <button
+                        type="button"
+                        className="btn btn-secondary"
+                        disabled={countMobileComponentsByType(document.components, 'section') < 2}
+                        onClick={() => void applySelectedSectionStyleToAll()}
+                      >
+                        Aplicar estilo a todas las secciones
+                      </button>
+                      <small className="panel-hint">
+                        Copia tipografía, fondo, tamaño, bordes, márgenes y formato de imagen de fondo
+                        a todas las secciones. No cambia títulos ni imágenes.
+                      </small>
                     </>
                   )}
                     </>
@@ -2701,6 +2958,18 @@ export function MobileEditorPage() {
                           }
                         />
                       </label>
+                      <button
+                        type="button"
+                        className="btn-secondary"
+                        disabled={countMobileComponentsByType(document.components, 'menuItem') < 2}
+                        onClick={() => void applySelectedMenuItemStyleToAll()}
+                      >
+                        Aplicar estilo a todos los platos
+                      </button>
+                      <small className="panel-hint">
+                        Copia tipografías, color de fondo y formato de imagen de este plato al resto de
+                        platos. No cambia textos, alérgenos ni fotos.
+                      </small>
                     </>
                   )}
                   <h4>Efecto visual</h4>

@@ -60,6 +60,46 @@ export function updateMobileComponentById(
   });
 }
 
+/** Recorre todos los componentes (incluidos hijos de acordeón). */
+export function mapAllMobileComponents(
+  components: MobileComponent[],
+  mapper: (component: MobileComponent) => MobileComponent,
+): MobileComponent[] {
+  return components.map((component) => {
+    const next = mapper(component);
+    if (next.type === 'accordion') {
+      const children = next.children.map((child) => {
+        const mapped = mapper(child);
+        return mapped.type === 'accordion' ? child : (mapped as MobileAccordionChild);
+      });
+      return { ...next, children };
+    }
+    return next;
+  });
+}
+
+/** Cuenta componentes de un tipo (top-level y dentro de acordeones). */
+export function countMobileComponentsByType(
+  components: MobileComponent[],
+  type: MobileComponent['type'],
+): number {
+  let count = 0;
+  for (const component of components) {
+    if (component.type === type) count += 1;
+    if (component.type === 'accordion') {
+      for (const child of component.children) {
+        if (child.type === type) count += 1;
+      }
+    }
+  }
+  return count;
+}
+
+/** Cuenta platos en el documento (top-level y dentro de acordeones). */
+export function countMobileMenuItems(components: MobileComponent[]): number {
+  return countMobileComponentsByType(components, 'menuItem');
+}
+
 /** Elimina un componente por id. Si queda un acordeón sin hijos, se elimina el acordeón. */
 export function removeMobileComponentById(
   components: MobileComponent[],

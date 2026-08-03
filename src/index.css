@@ -4755,7 +4755,7 @@ textarea {
 }
 
 .mobile-block-menu-item {
-  background: #ffffffcc;
+  background: #ffffff;
   border: 1px solid #e5e7eb;
   border-radius: 10px;
   padding: 10px;
@@ -4878,25 +4878,34 @@ textarea {
 .allergen-tags {
   display: flex;
   flex-wrap: wrap;
-  gap: 0.35rem;
+  gap: 0.4rem;
 }
 
 .allergen-tags button {
-  padding: 0.35rem 0.65rem;
+  min-height: 2rem;
+  padding: 0.4rem 0.7rem;
   border: 1px solid var(--color-border);
   border-radius: 999px;
   background: var(--color-surface);
   color: var(--color-text);
-  font-size: 0.78rem;
+  font-size: 0.8rem;
   font-weight: 500;
   line-height: 1.2;
   cursor: pointer;
   -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
 }
 
-.allergen-tags button:hover {
-  border-color: #f59e0b;
-  background: #fffbeb;
+@media (hover: hover) {
+  .allergen-tags button:hover {
+    border-color: #f59e0b;
+    background: #fffbeb;
+  }
+}
+
+.allergen-tags button:active {
+  border-color: #d97706;
+  background: #fef3c7;
 }
 
 .allergen-tags button.is-active {
@@ -4906,12 +4915,81 @@ textarea {
   font-weight: 600;
 }
 
+.allergen-tags--custom {
+  margin-top: 0.15rem;
+}
+
+.allergen-tag-custom {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.15rem;
+  min-height: 2rem;
+  padding: 0.25rem 0.25rem 0.25rem 0.7rem;
+  border: 1px solid #d97706;
+  border-radius: 999px;
+  background: #fef3c7;
+  color: #78350f;
+  font-size: 0.8rem;
+  font-weight: 600;
+  line-height: 1.2;
+}
+
+.allergen-tag-remove {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  width: 1.75rem;
+  height: 1.75rem;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: #92400e;
+  font-size: 0.75rem;
+  line-height: 1;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
+}
+
+@media (hover: hover) {
+  .allergen-tag-remove:hover {
+    background: #fde68a;
+  }
+}
+
+.allergen-tag-remove:active {
+  background: #fcd34d;
+}
+
+.allergen-add-row {
+  display: flex;
+  align-items: stretch;
+  gap: 0.45rem;
+  width: 100%;
+}
+
+.allergen-add-row input {
+  flex: 1;
+  min-width: 0;
+  box-sizing: border-box;
+}
+
+.allergen-add-btn {
+  flex-shrink: 0;
+  white-space: nowrap;
+  touch-action: manipulation;
+}
+
 .mobile-menu-allergens-btn {
   display: inline-flex;
   align-items: center;
   gap: 0.3rem;
   margin-top: 0.45rem;
-  padding: 0.25rem 0.55rem;
+  min-height: 2rem;
+  padding: 0.35rem 0.65rem;
   border: 1px solid #fcd34d;
   border-radius: 999px;
   background: #fffbeb;
@@ -4921,10 +4999,17 @@ textarea {
   line-height: 1;
   cursor: pointer;
   -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
 }
 
-.mobile-menu-allergens-btn:hover {
-  background: #fef3c7;
+@media (hover: hover) {
+  .mobile-menu-allergens-btn:hover {
+    background: #fef3c7;
+  }
+}
+
+.mobile-menu-allergens-btn:active {
+  background: #fde68a;
 }
 
 .mobile-allergens-modal .mobile-allergens-dish {
@@ -4942,6 +5027,7 @@ textarea {
   gap: 0.4rem;
   max-height: min(50vh, 320px);
   overflow: auto;
+  -webkit-overflow-scrolling: touch;
 }
 
 .mobile-allergens-list li {
@@ -4952,6 +5038,26 @@ textarea {
   color: #78350f;
   font-size: 0.9rem;
   font-weight: 500;
+}
+
+@media (max-width: 900px) {
+  .mobile-menu-allergens-btn {
+    min-height: 2.35rem;
+    padding: 0.45rem 0.8rem;
+    font-size: 0.8rem;
+  }
+
+  .mobile-allergens-list {
+    max-height: min(55dvh, 360px);
+  }
+
+  .mobile-allergens-list li {
+    min-height: 2.5rem;
+    display: flex;
+    align-items: center;
+    padding: 0.65rem 0.8rem;
+    font-size: 0.95rem;
+  }
 }
 
 .mobile-block-button {
@@ -5095,8 +5201,25 @@ textarea {
   90% { transform: translateY(-3px); }
 }
 @keyframes mob-effect-glow {
-  0%, 100% { box-shadow: 0 0 4px rgba(255,200,0,0.2); }
-  50% { box-shadow: 0 0 18px 4px rgba(255,200,0,0.55); }
+  0%,
+  100% {
+    box-shadow:
+      0 0 0 0 rgba(245, 158, 11, 0),
+      0 0 10px 2px rgba(251, 191, 36, 0.25);
+    filter: brightness(1);
+  }
+  50% {
+    box-shadow:
+      0 0 0 3px rgba(245, 158, 11, 0.55),
+      0 0 28px 8px rgba(251, 191, 36, 0.65);
+    filter: brightness(1.1);
+  }
+}
+
+.mob-effect-glow-host {
+  overflow: visible;
+  border-radius: 10px;
+  z-index: 1;
 }
 @keyframes mob-effect-shimmer {
   0% { background-position: -200% 0; }
@@ -5824,6 +5947,51 @@ textarea {
 .mobile-editor-page--phone .mobile-props-form h4 {
   margin: 0.35rem 0 0;
   font-size: 0.92rem;
+}
+
+.mobile-editor-page--phone .allergen-tags-field {
+  gap: 0.55rem;
+}
+
+.mobile-editor-page--phone .allergen-tags {
+  gap: 0.45rem;
+}
+
+.mobile-editor-page--phone .allergen-tags button {
+  min-height: 2.4rem;
+  padding: 0.5rem 0.8rem;
+  font-size: 0.88rem;
+}
+
+.mobile-editor-page--phone .allergen-tag-custom {
+  min-height: 2.4rem;
+  padding: 0.3rem 0.3rem 0.3rem 0.75rem;
+  font-size: 0.88rem;
+}
+
+.mobile-editor-page--phone .allergen-tag-remove {
+  width: 2.15rem;
+  height: 2.15rem;
+  font-size: 0.9rem;
+}
+
+.mobile-editor-page--phone .allergen-add-row {
+  gap: 0.5rem;
+}
+
+.mobile-editor-page--phone .allergen-add-row input {
+  min-height: 2.5rem;
+  padding: 0.45rem 0.7rem;
+  font-size: 1rem;
+  line-height: 1.25;
+  -webkit-appearance: none;
+  appearance: none;
+}
+
+.mobile-editor-page--phone .allergen-add-btn {
+  min-height: 2.5rem;
+  padding: 0 0.95rem;
+  font-size: 0.95rem;
 }
 
 .mobile-editor-page--phone .mobile-editor-props-pane {
