@@ -4525,15 +4525,15 @@ textarea {
 
 .mobile-runtime-node-delete {
   position: absolute;
-  top: 3px;
-  right: 3px;
+  top: 2px;
+  right: 2px;
   z-index: 5;
-  width: 1.2rem;
-  height: 1.2rem;
+  width: 1.7rem;
+  height: 1.7rem;
   padding: 0;
   border: none;
   border-radius: 999px;
-  background: rgb(15 23 42 / 66%);
+  background: transparent;
   color: #fff;
   font-size: 0.68rem;
   line-height: 1;
@@ -4542,7 +4542,19 @@ textarea {
   place-items: center;
 }
 
+.mobile-runtime-node-delete svg {
+  width: 11px;
+  height: 11px;
+  border-radius: 999px;
+  background: rgb(15 23 42 / 66%);
+  padding: 1px;
+}
+
 .mobile-runtime-node-delete:hover {
+  color: #fee2e2;
+}
+
+.mobile-runtime-node-delete:hover svg {
   background: #b91c1c;
 }
 
