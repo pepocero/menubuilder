@@ -250,11 +250,11 @@ export function DashboardPage() {
             <Link to="/templates" className="btn-secondary">
               Desde plantilla
             </Link>
-            <button type="button" className="btn-secondary" onClick={handleNewMobile}>
-              Nueva carta móvil
-            </button>
-            <button type="button" className="btn-primary" onClick={handleNewBlank}>
+            <button type="button" className="btn-secondary" onClick={handleNewBlank}>
               Nuevo menú en blanco
+            </button>
+            <button type="button" className="btn-primary" onClick={handleNewMobile}>
+              Nueva carta móvil
             </button>
           </div>
         </div>

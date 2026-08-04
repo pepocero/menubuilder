@@ -13,6 +13,7 @@ import {
   QR_ERROR_LEVEL,
   QR_PREVIEW_SIZE,
 } from '@/lib/qr-download';
+import { absoluteUrl } from '@/lib/seo';
 
 interface PublishQrModalProps {
   open: boolean;
@@ -58,7 +59,7 @@ export function PublishQrModal({
   if (!open) return null;
 
   const publicPath = slug ? `/p/${slug}` : null;
-  const publicUrl = publicPath ? `${window.location.origin}${publicPath}` : null;
+  const publicUrl = publicPath ? absoluteUrl(publicPath) : null;
   const filenameBase = `qr-${slug || menuId}`;
   const hasLink = Boolean(publicUrl);
 

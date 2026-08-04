@@ -73,7 +73,7 @@ async function renderOffscreenQrCanvas(value: string): Promise<HTMLCanvasElement
   document.body.appendChild(host);
 
   const root = createRoot(host);
-  const canvasId = `menubuilder-qr-png-${crypto.randomUUID()}`;
+  const canvasId = `papertomenu-qr-png-${crypto.randomUUID()}`;
   root.render(
     createElement(QRCodeCanvas, {
       value,
@@ -116,7 +116,7 @@ async function renderOffscreenQrSvg(value: string): Promise<SVGSVGElement> {
   document.body.appendChild(host);
 
   const root = createRoot(host);
-  const svgId = `menubuilder-qr-svg-${crypto.randomUUID()}`;
+  const svgId = `papertomenu-qr-svg-${crypto.randomUUID()}`;
   root.render(
     createElement(QRCodeSVG, {
       value,

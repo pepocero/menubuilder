@@ -11,4 +11,4 @@ Disallow: /qrs
 Disallow: /editor/
 Disallow: /api/
 
-Sitemap: https://menubuilder.carlinitools.com/sitemap.xml
+Sitemap: https://papertomenu.com/sitemap.xml

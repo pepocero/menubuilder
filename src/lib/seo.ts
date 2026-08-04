@@ -1,10 +1,10 @@
 /** Configuración SEO compartida (meta, Open Graph, JSON-LD). */
 
-export const SITE_NAME = 'MenuBuilder';
+export const SITE_NAME = 'Paper To Menú';
 
 export const SITE_TAGLINE = 'Cartas de menú digitales para restaurantes';
 
-export const DEFAULT_SITE_URL = 'https://menubuilder.carlinitools.com';
+export const DEFAULT_SITE_URL = 'https://papertomenu.com';
 
 export const DEFAULT_DESCRIPTION =
   'Crea y publica cartas de menú digitales para restaurantes, bares y cafeterías. Editor visual, importación con OCR, plantillas, QR en mesa y exportación PNG/PDF.';
@@ -16,7 +16,8 @@ export const DEFAULT_KEYWORDS = [
   'editor carta restaurante',
   'importar menú OCR',
   'menú con código QR',
-  'MenuBuilder',
+  'Paper To Menú',
+  'PaperToMenu',
 ].join(', ');
 
 /** Imagen social relativa al origen del sitio. */
@@ -56,9 +57,8 @@ function ensureLink(rel: string, href: string): void {
 export function getSiteOrigin(): string {
   const fromEnv = import.meta.env.VITE_SITE_URL?.replace(/\/$/, '');
   if (fromEnv) return fromEnv;
-  if (typeof window !== 'undefined' && window.location?.origin) {
-    return window.location.origin;
-  }
+  // Dominio público canónico (QR, enlaces /p/…, SEO). No usar window.location
+  // para no generar URLs de previews (*.pages.dev) u orígenes temporales.
   return DEFAULT_SITE_URL;
 }
 

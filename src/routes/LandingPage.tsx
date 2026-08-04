@@ -51,18 +51,26 @@ const AI_BENEFITS = [
   {
     title: 'De papel a digital en minutos',
     text: 'Fotografía la carta del local o sube un PDF escaneado. La IA lee platos, precios y secciones y te deja un borrador editable. Ideal para cambios de temporada o menús del día.',
+    image: '/landing/ai-photo-menu.jpg',
+    alt: 'Manos fotografiando una carta de menú impresa de restaurante',
   },
   {
     title: 'Bocetos y dibujos a mano',
-    text: '¿Diseñaste la carta en una libreta? Sube el boceto. MenuBuilder interpreta el texto y lo coloca en capas para que pases del papel al QR sin reescribir nada.',
+    text: '¿Diseñaste la carta en una libreta? Sube el boceto. Paper To Menú interpreta el texto y lo coloca en capas para que pases del papel al QR sin reescribir nada.',
+    image: '/landing/ai-handwritten-menu.jpg',
+    alt: 'Manos fotografiando una carta de menú escrita a mano con bolígrafo',
   },
   {
     title: 'Columnas y precios limpios',
     text: 'Detecta layouts a dos columnas, categorías en mayúsculas y precios europeos. Menos errores, menos capas mezcladas y más tiempo para cuidar tipografías y fotos.',
+    image: '/landing/ai-two-column-menu.jpg',
+    alt: 'Carta de menú a dos columnas sobre mesa de restaurante de lujo',
   },
   {
     title: 'Tu estilo, no una plantilla rígida',
     text: 'El resultado es un punto de partida editable: fuentes, colores, imágenes y orden. La IA ahorra el trabajo pesado; tú firmas el acabado profesional.',
+    image: '/landing/personalizacion.png',
+    alt: 'Personalización del estilo de la carta digital',
   },
 ] as const;
 
@@ -100,7 +108,7 @@ export function LandingPage() {
     <div className="landing">
       <header className="landing-top">
         <a href="#inicio" className="landing-brand">
-          MenuBuilder
+          Paper To Menú
         </a>
         <nav className="landing-nav" aria-label="Principal">
           <a href="#funciones">Funciones</a>
@@ -129,11 +137,12 @@ export function LandingPage() {
           <div className="landing-hero-shade" />
         </div>
         <div className="landing-hero-content">
-          <p className="landing-brand-hero">MenuBuilder</p>
-          <h1>La carta digital que vende en mesa</h1>
+          <p className="landing-brand-hero">Paper To Menú</p>
+          <h1>Convierte tus fotos en un menú digital al instante.</h1>
           <p className="landing-hero-lead">
-            Diseña menús que enamoran, importa foto o boceto con IA, publícalos con QR y
-            actualízalos al instante. Menos reimpresiones. Más tickets. Más control.
+            Diseña menús que enamoran! Importa fotos, bocetos o cartas hechas a mano. La IA
+            lo reconoce todo, y te genera una carta digital del menú de tu restaurante. Luego
+            publícalos con QR y actualízalos al instante.
           </p>
           <div className="landing-hero-actions">
             <Link to="/register" className="btn-landing-primary btn-landing-lg">
@@ -177,7 +186,7 @@ export function LandingPage() {
             <h2>Funciones con IA</h2>
             <p className="landing-ocr-lead">
               Sube una carta impresa, una foto del menú del día o incluso un boceto a mano. La IA
-              de MenuBuilder lee el contenido, respeta columnas y precios, y te entrega capas
+              de Paper To Menú lee el contenido, respeta columnas y precios, y te entrega capas
               editables listas para publicar. Digitalizar deja de ser un proyecto: se convierte en
               una ventaja competitiva.
             </p>
@@ -186,8 +195,13 @@ export function LandingPage() {
           <div className="landing-ocr-benefits">
             {AI_BENEFITS.map((b) => (
               <article key={b.title} className="landing-ocr-benefit">
-                <h3>{b.title}</h3>
-                <p>{b.text}</p>
+                <div className="landing-ocr-benefit-media">
+                  <img src={b.image} alt={b.alt} loading="lazy" />
+                </div>
+                <div className="landing-ocr-benefit-body">
+                  <h3>{b.title}</h3>
+                  <p>{b.text}</p>
+                </div>
               </article>
             ))}
           </div>
@@ -239,11 +253,6 @@ export function LandingPage() {
           </div>
 
           <div className="landing-ocr-cta-row">
-            <p className="landing-ocr-note">
-              Resultado editable, no una caja negra: fuentes decorativas o fondos muy recargados
-              pueden pedir un repaso, pero el 80% del trabajo ya está hecho. Ideal para ahorrar
-              tiempo cada vez que cambias la carta.
-            </p>
             <Link to="/register" className="btn-landing-primary btn-landing-lg">
               Probar importación con IA
             </Link>
@@ -253,7 +262,7 @@ export function LandingPage() {
 
       <section className="landing-journey" id="como">
         <header className="landing-section-head landing-section-head--center">
-          <h2>Cómo funciona MenuBuilder</h2>
+          <h2>Cómo funciona Paper To Menú</h2>
           <p>Tres pasos. Cero fricción. El mismo flujo que usan locales que quieren verse premium.</p>
         </header>
 
@@ -297,7 +306,7 @@ export function LandingPage() {
       <footer className="landing-footer">
         <div className="landing-footer-grid">
           <div className="landing-footer-brand">
-            <span className="landing-footer-logo">MenuBuilder</span>
+            <span className="landing-footer-logo">Paper To Menú</span>
             <p>
               Cartas digitales que venden para restaurantes, bares y cafeterías. Diseña, digitaliza
               con IA, publica y actualiza sin reimprimir.
@@ -321,7 +330,7 @@ export function LandingPage() {
           </div>
         </div>
         <div className="landing-footer-bottom">
-          <p>© {new Date().getFullYear()} MenuBuilder</p>
+          <p>© {new Date().getFullYear()} Paper To Menú</p>
           <p className="landing-footer-credit">
             Diseñado por{' '}
             <a href="https://carlinitools.com" target="_blank" rel="noopener noreferrer">

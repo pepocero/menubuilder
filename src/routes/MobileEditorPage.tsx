@@ -2322,14 +2322,6 @@ export function MobileEditorPage() {
                         </div>
                       </div>
                       <label>
-                        Texto alternativo
-                        <input
-                          type="text"
-                          value={selected.menuImage?.alt ?? 'Imagen del plato'}
-                          onChange={(e) => updateSelectedMenuItemImage({ alt: e.target.value })}
-                        />
-                      </label>
-                      <label>
                         Posición de imagen
                         <div className="wysiwyg-align-group" role="group" aria-label="Posición de imagen">
                           <button

@@ -3,7 +3,7 @@ import react from '@vitejs/plugin-react';
 import fs from 'node:fs';
 import path from 'node:path';
 
-const DEFAULT_SITE_URL = 'https://menubuilder.carlinitools.com';
+const DEFAULT_SITE_URL = 'https://papertomenu.com';
 
 function resolveSiteUrl(mode: string): string {
   const env = loadEnv(mode, process.cwd(), '');

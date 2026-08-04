@@ -54,11 +54,15 @@ function importPhaseLabel(phase: string): string {
 
 type SourceTab = 'upload' | 'library';
 
-const OCR_PROVIDER_STORAGE_KEY = 'menubuilder.ocrProvider';
+const OCR_PROVIDER_STORAGE_KEY = 'papertomenu.ocrProvider';
+const OCR_PROVIDER_STORAGE_KEY_LEGACY = 'menubuilder.ocrProvider';
 
 function readStoredOcrProvider(): MenuOcrProviderChoice {
   try {
-    return parseOcrProviderChoice(localStorage.getItem(OCR_PROVIDER_STORAGE_KEY));
+    return parseOcrProviderChoice(
+      localStorage.getItem(OCR_PROVIDER_STORAGE_KEY) ??
+        localStorage.getItem(OCR_PROVIDER_STORAGE_KEY_LEGACY),
+    );
   } catch {
     return DEFAULT_OCR_PROVIDER;
   }

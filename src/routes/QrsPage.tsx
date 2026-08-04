@@ -16,6 +16,7 @@ import {
   QR_ERROR_LEVEL,
   QR_PREVIEW_SIZE,
 } from '@/lib/qr-download';
+import { absoluteUrl } from '@/lib/seo';
 
 export function QrsPage() {
   const [menus, setMenus] = useState<PublishedQr[]>([]);
@@ -98,10 +99,6 @@ export function QrsPage() {
     }
   }
 
-  function absoluteUrl(path: string): string {
-    return `${window.location.origin}${path}`;
-  }
-
   async function handleDownloadPng(menu: PublishedQr) {
     const url = absoluteUrl(menu.public_url);
     setDownloadingId(menu.id);
@@ -170,7 +167,7 @@ export function QrsPage() {
                     {menu.is_public ? 'Activo' : 'Inactivo'}
                   </span>
                 </div>
-                <a href={menu.public_url} target="_blank" rel="noreferrer" className="qr-card-link">
+                <a href={url} target="_blank" rel="noreferrer" className="qr-card-link">
                   {url}
                 </a>
                 <div className="qr-card-actions">
@@ -197,7 +194,7 @@ export function QrsPage() {
                   </Link>
                   {menu.is_public ? (
                     <a
-                      href={menu.public_url}
+                      href={url}
                       target="_blank"
                       rel="noreferrer"
                       className="btn-secondary"

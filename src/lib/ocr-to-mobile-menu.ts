@@ -60,10 +60,11 @@ function createText(text: string): MobileTextComponent {
 
 function createFooterNoteHeading(text: string): MobileTextComponent {
   const base = createText(text);
+  const typography = base.typography!;
   return {
     ...base,
     typography: {
-      ...base.typography,
+      ...typography,
       fontSize: 14,
       fontWeight: 700,
       textAlign: 'center',
@@ -75,10 +76,11 @@ function createFooterNoteHeading(text: string): MobileTextComponent {
 
 function createFooterNoteLine(text: string): MobileTextComponent {
   const base = createText(text);
+  const typography = base.typography!;
   return {
     ...base,
     typography: {
-      ...base.typography,
+      ...typography,
       fontSize: 13,
       fontWeight: 500,
       textAlign: 'center',
