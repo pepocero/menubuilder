@@ -53,7 +53,7 @@ export async function parseMenuImportFile(
   const imported = importJsonToCanvasData(raw);
   if (!imported) {
     throw new Error(
-      'JSON no reconocido. Usa un menu.json exportado desde Paper To Menú o un documento de lienzo válido.',
+      'JSON no reconocido. Usa un menu.json exportado desde Paper To Menu o un documento de lienzo válido.',
     );
   }
 

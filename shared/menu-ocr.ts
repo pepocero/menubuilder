@@ -16,6 +16,11 @@ export interface MenuOcrBox {
 export interface MenuOcrSection {
   /** Categoría (TAPES, BIKINIS…). Vacío si es bloque sin título. */
   title: string;
+  /**
+   * Subtítulo bajo el título de categoría (no es plato ni ingredientes).
+   * Vacío si no hay. Ej.: «Para compartir», «Nuestros clásicos».
+   */
+  subtitle?: string;
   column: MenuOcrColumn;
   /** Orden vertical dentro de la columna (1 = arriba). */
   order: number;
@@ -24,6 +29,7 @@ export interface MenuOcrSection {
  * Patrones admitidos:
  * - "Nombre — 8,00 €" y ingredientes/descripción en la línea siguiente.
  * - "Nombre" + línea(s) de descripción con el precio al final (p. ej. "… 13,50€").
+ * No incluir aquí el título ni el subtítulo de la categoría.
  */
   body: string;
   /** Caja del título de sección (si existe). */
@@ -71,6 +77,7 @@ export const MENU_OCR_JSON_SCHEMA = {
         additionalProperties: false,
         properties: {
           title: { type: 'string' },
+          subtitle: { type: 'string' },
           column: { type: 'string', enum: ['left', 'right', 'full'] },
           order: { type: 'number' },
           body: { type: 'string' },
@@ -78,7 +85,7 @@ export const MENU_OCR_JSON_SCHEMA = {
           bodyBox: OCR_BOX_SCHEMA,
           box: OCR_BOX_SCHEMA,
         },
-        required: ['title', 'column', 'order', 'body', 'titleBox', 'bodyBox', 'box'],
+        required: ['title', 'subtitle', 'column', 'order', 'body', 'titleBox', 'bodyBox', 'box'],
       },
     },
   },
@@ -107,21 +114,40 @@ Reglas de texto:
 - No inventes platos, precios ni secciones que no estén en la imagen.
 - Respeta acentos y ortografía catalana (caramel·litzada, Tomàquet, Escàlivada, amanides, entrepans, etc.).
 - Precios en formato europeo con coma decimal: "8,00 €". NUNCA juntes el 8 y los ceros como "800€".
-- Puede haber varios bloques en una misma página con este patrón repetido: TÍTULO de sección, SUBTÍTULO opcional, lista de platos; luego otro TÍTULO/SUBTÍTULO y otra lista.
+- Bloque de categoría MÁS FRECUENTE (respétalo SIEMPRE):
+  1) TÍTULO de sección en MAYÚSCULAS (o tipografía destacada) → sections[].title
+  2) SUBTÍTULO opcional justo debajo (frase corta, NO es plato, SIN precio) → sections[].subtitle
+  3) Lista de platos → sections[].body
+  Ejemplo visual:
+    ENTRANTES
+    Para compartir
+    Croquetas de jamón
+    jamón ibérico, bechamel
+    8,00 €
+  En ese ejemplo: title="ENTRANTES", subtitle="Para compartir", body empieza en "Croquetas…".
+- subtitle NUNCA debe ser un nombre de plato ni una lista de ingredientes. Si no hay subtítulo visible, "".
+- title y subtitle NO deben repetirse dentro de body.
+- Puede haber varios bloques en una misma página con este patrón repetido: TÍTULO, SUBTÍTULO opcional, lista de platos; luego otro TÍTULO/SUBTÍTULO y otra lista.
 - Cuando aparezcan títulos/subtítulos intermedios, crea otra entrada en sections en ese mismo punto; NO los conviertas en plato y NO los muevas de sitio.
 - Si al final hay notas legales/comerciales (p. ej. "IVA INCLUIDO", "Suplemento Terraza 5%"), inclúyelas SIEMPRE al final del último body visible o como sección final; NO las omitas aunque no tengan precio.
 - Layout de dos columnas: izquierda → "left"; derecha → "right"; cabeceras a ancho completo → "full".
 - order: 1 para la sección más arriba de cada columna, luego 2, 3…
 - title: SOLO el nombre de categoría tal como aparece. Si no hay título, "".
+- subtitle: SOLO el subtítulo bajo el título. Si no hay, "".
 - body: un plato por bloque de líneas. Detecta y normaliza ESTOS patrones (elige el que veas en la imagen):
 
   Patrón A (nombre y precio en la misma línea; ingredientes debajo):
   Nombre del plato — 8,00 €
-  Ingredientes o lista corta
+  Ingredientes o lista corta (separados por comas, guiones u otro símbolo)
 
   Patrón B (nombre en una línea; descripción prosaica debajo; precio AL FINAL de la descripción):
   Nombre del plato
   Descripción del plato 8,00 €
+
+  Patrón C (nombre en negrita/destacado; debajo descripción o ingredientes; precio en línea propia o al final):
+  Nombre del plato
+  ingrediente, ingrediente - ingrediente
+  12,50 €
 
   Si la descripción del patrón B ocupa varias líneas, únelas en el body así:
   Nombre del plato
@@ -131,20 +157,20 @@ Reglas de texto:
   En el patrón B el precio NO va en la línea del nombre: va al final del texto descriptivo.
   No conviertas la descripción en “ingredientes” si es una frase prosaica (p. ej. «Espinacas con Tomate y Queso Casero Indio 13,50€»).
 - NO mezcles platos de columnas distintas en el mismo body.
-- headerTitle: nombre del local. headerSubtitle: eslogan bajo el título.
-- headerTitle/headerSubtitle son SOLO para la cabecera principal superior de la carta. Los títulos/subtítulos del medio siempre van en sections.
+- headerTitle: nombre del local (marca). headerSubtitle: eslogan bajo el nombre del local.
+- headerTitle/headerSubtitle son SOLO para la cabecera principal superior de la carta (nombre del restaurante). Los títulos/subtítulos de categorías del medio SIEMPRE van en sections[].title / sections[].subtitle, NUNCA en header*.
 - Mantén el orden global visual exacto de arriba abajo (y de izquierda a derecha si comparten altura). Nunca reordenes bloques por similitud semántica.
 
 Cajas (OBLIGATORIO, coordenadas en % 0–100 respecto a ANCHO/ALTO de la imagen completa):
 - headerTitleBox / headerSubtitleBox: posición del nombre y del eslogan.
 - titleBox: caja del título de categoría en la imagen.
-- bodyBox: caja que cubre los platos de ESA sección (debajo de su título).
+- bodyBox: caja que cubre los platos de ESA sección (debajo de su título/subtítulo).
 - box: unión aproximada de titleBox+bodyBox (o del bloque entero si no hay título).
 - Si un campo de texto está vacío, pon la caja en {x:0,y:0,w:0,h:0}.
 - MIDE cada caja sobre la foto: x/y = esquina superior izquierda real; w/h = tamaño real del texto/bloque.
 - PROHIBIDO repartir secciones en una rejilla genérica (p. ej. izquierda siempre x≈5, derecha x≈55, alturas iguales).
 - PROHIBIDO apilar secciones con el mismo alto inventado: si un bloque es más largo en la foto, su h debe ser mayor.
-- titleBox y bodyBox de la misma sección deben quedar juntos: body justo debajo del title, misma columna (x/w similares).
+- titleBox y bodyBox de la misma sección deben quedar juntos: body justo debajo del title (y subtítulo si hay), misma columna (x/w similares).
 - Si hay dos columnas, los x de left deben ser claramente menores que los de right (como en la imagen).
 
 Responde ÚNICAMENTE con JSON válido según el esquema.`;
@@ -157,6 +183,7 @@ Las cajas (x,y,w,h) son porcentajes 0-100 del ANCHO/ALTO de la imagen.
 titleBox y bodyBox de cada sección = ubicación REAL; body debajo de su título.
 No uses una plantilla de columnas inventada: copia márgenes, anchos y huecos verticales de la foto.
 No inventes platos. Precios con coma decimal (8,00 €).
+Patrón frecuente: TÍTULO EN MAYÚSCULAS → title; frase debajo sin precio → subtitle; luego platos (nombre, descripción/ingredientes, precio) → body. No metas title/subtitle dentro de body.
 Si ves nombre en una línea y descripción+precio debajo, transcribe ese patrón B (no fuerces el precio a la línea del nombre).
 Si aparecen títulos/subtítulos intermedios, respeta su posición y crea nuevas sections en ese punto, sin mover texto de lugar.
 Si al final aparecen textos como "IVA incluido" o líneas con "%", transcríbelos también (no los omitas) y mantenlos en su posición final.`;

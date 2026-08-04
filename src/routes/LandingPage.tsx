@@ -4,44 +4,44 @@ import { useAuth } from '@/lib/auth-context';
 /** Imágenes de Pixabay descargadas en /public/landing (uso libre, atribución en pie). */
 const FEATURES = [
   {
-    title: 'Editor visual de capas',
-    text: 'Control total como en un estudio profesional: tipografías, colores, opacidad, bloqueo y reordenación. Cada plato, precio e imagen es una capa que puedes afinar al milímetro. Tu marca, tu estilo, tu carta.',
+    title: 'Editor visual',
+    text: 'Edita textos, precios, imágenes, colores y tipografías con un editor visual por capas. Todo se puede mover, modificar y reorganizar en segundos.',
     image: '/landing/editor-layers.jpg',
     alt: 'Espacio de trabajo digital para diseñar',
   },
   {
     title: 'IA que lee tu carta',
-    text: '¿Foto de la carta, boceto a mano o captura? La IA reconoce texto, columnas y precios y los convierte en capas editables. Dejas de teclear plato a plato y ganas horas cada temporada.',
+    text: 'Haz una foto de cualquier carta, un PDF o un menú escrito a mano. La IA detecta automáticamente platos, categorías y precios y los convierte en elementos editables. Olvídate de copiar el contenido manualmente.',
     image: '/landing/import-ocr.jpg',
     alt: 'Foto de platos lista para digitalizar',
   },
   {
-    title: 'Varias páginas A4',
-    text: 'Tapas, cartas, postres, vinos: tantas páginas como necesites. El cliente abre el QR y hace scroll por la carta completa, exactamente como la diseñaste. Sin PDFs sueltos ni apps.',
+    title: 'Varias páginas',
+    text: 'Crea cartas de tantas páginas como necesites. El cliente las visualizará desde un único QR con una experiencia fluida.',
     image: '/landing/menu-pages.jpg',
     alt: 'Carta de restaurante multipágina',
   },
   {
-    title: 'Plantillas que venden',
-    text: 'Italiana, mexicana, bar, cafetería, fast food o fine dining. Empieza con un diseño que ya transmite calidad, cambia textos y fotos, y deja tu marca lista en minutos — no en días.',
+    title: 'Plantillas profesionales',
+    text: 'Empieza con un diseño profesional para bares, restaurantes o cafeterías. Personalízalo en minutos con tus colores, platos e imágenes.',
     image: '/landing/templates.jpg',
     alt: 'Pizarra de menú tipo plantilla',
   },
   {
-    title: 'Fotos que dan hambre',
-    text: 'Sube tus platos (compresión automática) o elige stock gastronómico integrado. Imágenes nítidas que elevan el ticket medio y se quedan en tu espacio privado, multitenant.',
+    title: 'Fotos personalizadas',
+    text: 'Añade tus propias fotografías o utiliza imágenes de stock gastronómicas de alta calidad para crear una carta mucho más atractiva.',
     image: '/landing/stock-food.jpg',
     alt: 'Fotografía gastronómica para la carta',
   },
   {
     title: 'QR siempre actualizado',
-    text: 'Publica con un clic y pon el QR en mesa o escaparate. Cambias un precio a las 13:00 y a las 13:01 el comensal ya lo ve. Cero reimpresiones. Cero menús desfasados.',
+    text: 'Publica tu menú con un solo clic. Imprime el QR una única vez y actualiza precios o platos siempre que quieras. Tus clientes verán automáticamente la versión más reciente.',
     image: '/landing/qr-code.jpg',
     alt: 'Código QR para escanear en mesa',
   },
   {
-    title: 'Exporta y comparte',
-    text: 'PNG para redes, PDF multipágina para imprimir, JSON para respaldar o clonar diseños. Tu carta sale del editor lista para WhatsApp, Instagram o la impresora.',
+    title: 'Exporta tu menú',
+    text: 'Exporta tu carta en PNG, PDF o JSON para imprimir, compartir o crear copias de seguridad.',
     image: '/landing/export-print.jpg',
     alt: 'Documento listo para imprimir o exportar',
   },
@@ -56,18 +56,18 @@ const AI_BENEFITS = [
   },
   {
     title: 'Bocetos y dibujos a mano',
-    text: '¿Diseñaste la carta en una libreta? Sube el boceto. Paper To Menú interpreta el texto y lo coloca en capas para que pases del papel al QR sin reescribir nada.',
+    text: '¿Has dibujado tu carta en una libreta? Sube el boceto. Paper To Menu interpreta el texto y lo coloca en capas para que pases del papel al QR sin reescribir nada.',
     image: '/landing/ai-handwritten-menu.jpg',
     alt: 'Manos fotografiando una carta de menú escrita a mano con bolígrafo',
   },
   {
     title: 'Columnas y precios limpios',
-    text: 'Detecta layouts a dos columnas, categorías en mayúsculas y precios europeos. Menos errores, menos capas mezcladas y más tiempo para cuidar tipografías y fotos.',
+    text: 'Detecta automáticamente columnas, categorías y precios para mantener la estructura original de tu carta.',
     image: '/landing/ai-two-column-menu.jpg',
     alt: 'Carta de menú a dos columnas sobre mesa de restaurante de lujo',
   },
   {
-    title: 'Tu estilo, no una plantilla rígida',
+    title: 'La IA hace el trabajo pesado. Tú decides el diseño.',
     text: 'El resultado es un punto de partida editable: fuentes, colores, imágenes y orden. La IA ahorra el trabajo pesado; tú firmas el acabado profesional.',
     image: '/landing/personalizacion.png',
     alt: 'Personalización del estilo de la carta digital',
@@ -78,7 +78,7 @@ const STEPS = [
   {
     n: '01',
     title: 'Empieza con ventaja',
-    text: 'Elige una plantilla que venda tu tipo de local, parte de un lienzo en blanco o importa foto, boceto o carta en papel con IA. En un clic ya tienes menú en marcha.',
+    text: 'Elige una plantilla que refleje tu tipo de local, parte de un lienzo en blanco o importa foto, boceto o carta en papel con IA. En un clic ya tienes menú en marcha.',
     image: '/landing/step-blank.jpg',
     alt: 'Mesa de restaurante como punto de partida',
     points: ['Plantillas por estilo de negocio', 'Importar con IA desde imagen o boceto', 'Crear menú en un clic'],
@@ -93,11 +93,11 @@ const STEPS = [
   },
   {
     n: '03',
-    title: 'Publica y cobra la atención',
-    text: 'Activa el enlace público, descarga el QR y colócalo donde el cliente decide. Actualizas precios o platos y el mismo QR muestra la carta nueva al instante. Exporta PNG o PDF cuando lo necesites.',
+    title: 'Publica y llama la atención',
+    text: 'Activa el enlace público, descarga el QR y colócalo donde el cliente pueda verlo. Actualizas precios o platos y el mismo QR muestra la carta nueva al instante. Exporta PNG o PDF cuando lo necesites.',
     image: '/landing/step-publish.jpg',
     alt: 'QR listo para publicar la carta',
-    points: ['QR listo para imprimir', 'Enlace público /p/…', 'Export PNG, PDF y JSON'],
+    points: ['QR listo para imprimir', 'Enlace público y compartible.', 'Exporta a PNG, PDF y JSON'],
   },
 ] as const;
 
@@ -108,7 +108,7 @@ export function LandingPage() {
     <div className="landing">
       <header className="landing-top">
         <a href="#inicio" className="landing-brand">
-          Paper To Menú
+          Paper To Menu
         </a>
         <nav className="landing-nav" aria-label="Principal">
           <a href="#funciones">Funciones</a>
@@ -137,12 +137,12 @@ export function LandingPage() {
           <div className="landing-hero-shade" />
         </div>
         <div className="landing-hero-content">
-          <p className="landing-brand-hero">Paper To Menú</p>
-          <h1>Convierte tus fotos en un menú digital al instante.</h1>
+          <p className="landing-brand-hero">Paper To Menu</p>
+          <h1>Convierte cualquier carta en un menú digital con IA.</h1>
           <p className="landing-hero-lead">
-            Diseña menús que enamoran! Importa fotos, bocetos o cartas hechas a mano. La IA
-            lo reconoce todo, y te genera una carta digital del menú de tu restaurante. Luego
-            publícalos con QR y actualízalos al instante.
+            Haz una foto de tu carta, un PDF o incluso un boceto a mano. La IA lo convierte en un
+            menú completamente editable. Publícalo con un código QR y actualízalo cuando quieras,
+            sin volver a imprimir.
           </p>
           <div className="landing-hero-actions">
             <Link to="/register" className="btn-landing-primary btn-landing-lg">
@@ -157,10 +157,10 @@ export function LandingPage() {
 
       <section className="landing-showcase" id="funciones">
         <header className="landing-section-head landing-section-head--center">
-          <h2>Todo lo que tu local necesita para destacar</h2>
+          <h2>Todo lo que necesitas para crear y mantener tu carta digital.</h2>
           <p>
-            Del primer boceto al QR en la mesa: un flujo pensado para hostelería que quiere
-            verse profesional y moverse rápido.
+            Desde el boceto hasta el QR en la mesa. Para locales que quieren una carta
+            profesional y no tienen tiempo que perder.
           </p>
         </header>
 
@@ -185,10 +185,9 @@ export function LandingPage() {
             <p className="landing-ocr-eyebrow">Potencia con inteligencia artificial</p>
             <h2>Funciones con IA</h2>
             <p className="landing-ocr-lead">
-              Sube una carta impresa, una foto del menú del día o incluso un boceto a mano. La IA
-              de Paper To Menú lee el contenido, respeta columnas y precios, y te entrega capas
-              editables listas para publicar. Digitalizar deja de ser un proyecto: se convierte en
-              una ventaja competitiva.
+              Convierte cualquier carta en un menú editable en cuestión de segundos. Paper To Menu
+              reconoce automáticamente títulos, categorías, platos, ingredientes y precios para que
+              solo tengas que revisar el resultado.
             </p>
           </header>
 
@@ -262,7 +261,7 @@ export function LandingPage() {
 
       <section className="landing-journey" id="como">
         <header className="landing-section-head landing-section-head--center">
-          <h2>Cómo funciona Paper To Menú</h2>
+          <h2>Cómo funciona Paper To Menu</h2>
           <p>Tres pasos. Cero fricción. El mismo flujo que usan locales que quieren verse premium.</p>
         </header>
 
@@ -292,13 +291,13 @@ export function LandingPage() {
 
       <section className="landing-cta">
         <div className="landing-cta-inner">
-          <h2>Tu próxima carta puede estar online hoy</h2>
+          <h2>Tu nueva carta digital está a menos de cinco minutos.</h2>
           <p>
-            Crea la cuenta, importa con IA o parte de una plantilla, y publica el QR antes de
-            abrir. Editor, IA, plantillas, stock y exportación incluidos.
+            Crea una cuenta gratuita, importa una foto y publica tu menú mediante un código QR.
+            Sin conocimientos técnicos.
           </p>
           <Link to="/register" className="btn-landing-primary btn-landing-lg">
-            Crear cuenta gratis
+            Crear mi menú gratis
           </Link>
         </div>
       </section>
@@ -306,10 +305,10 @@ export function LandingPage() {
       <footer className="landing-footer">
         <div className="landing-footer-grid">
           <div className="landing-footer-brand">
-            <span className="landing-footer-logo">Paper To Menú</span>
+            <span className="landing-footer-logo">Paper To Menu</span>
             <p>
-              Cartas digitales que venden para restaurantes, bares y cafeterías. Diseña, digitaliza
-              con IA, publica y actualiza sin reimprimir.
+              Cartas digitales para restaurantes, bares y cafeterías. Digitaliza
+              con IA y publica. Si cambias algo, se actualiza automáticamente.
             </p>
           </div>
           <div className="landing-footer-col">
@@ -330,7 +329,7 @@ export function LandingPage() {
           </div>
         </div>
         <div className="landing-footer-bottom">
-          <p>© {new Date().getFullYear()} Paper To Menú</p>
+          <p>© {new Date().getFullYear()} Paper To Menu</p>
           <p className="landing-footer-credit">
             Diseñado por{' '}
             <a href="https://carlinitools.com" target="_blank" rel="noopener noreferrer">

@@ -85,6 +85,7 @@ function parseMenuOcrJson(raw: string): MenuOcrResult {
       const column = section.column;
       const mapped: MenuOcrSection = {
         title: String(section.title ?? '').trim(),
+        subtitle: String(section.subtitle ?? '').trim(),
         column:
           column === 'left' || column === 'right' || column === 'full' ? column : 'full',
         order:

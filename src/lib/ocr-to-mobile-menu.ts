@@ -1,4 +1,4 @@
-import { isUsableOcrBox, type MenuOcrResult } from '@shared/menu-ocr';
+import { isUsableOcrBox, type MenuOcrResult, type MenuOcrSection } from '@shared/menu-ocr';
 import {
   createDefaultMobileComponent,
   type MobileComponent,
@@ -7,7 +7,12 @@ import {
   type MobileHeadingComponent,
   type MobileTextComponent,
 } from '@shared/mobile-menu';
-import { looksLikeSectionTitle, parseMenuTextBlocks } from '@/lib/text-to-menu-line';
+import {
+  looksLikeDishNameOnly,
+  looksLikeSectionSubtitle,
+  looksLikeSectionTitle,
+  parseMenuTextBlocks,
+} from '@/lib/text-to-menu-line';
 
 function sortSections(menu: MenuOcrResult) {
   const sectionAnchor = (section: MenuOcrResult['sections'][number]) => {
@@ -39,7 +44,18 @@ function createSection(title: string): MobileSectionComponent {
   return {
     ...base,
     title,
+    size: 'auto',
+    borderLine: 'none',
+    borderRound: 'md',
+    backgroundColor: '#d21e1e',
     action: { type: 'none' },
+    typography: {
+      ...base.typography!,
+      fontSize: 22,
+      fontWeight: 700,
+      textAlign: 'center',
+      color: '#ffffff',
+    },
   };
 }
 
@@ -55,6 +71,22 @@ function createText(text: string): MobileTextComponent {
     text,
     listStyle: 'none',
     indentPx: 0,
+  };
+}
+
+function createSubtitleText(text: string): MobileTextComponent {
+  const base = createText(text);
+  const typography = base.typography!;
+  return {
+    ...base,
+    typography: {
+      ...typography,
+      fontSize: 15,
+      fontWeight: 500,
+      textAlign: 'center',
+      fontStyle: 'italic',
+      color: '#4b5563',
+    },
   };
 }
 
@@ -99,6 +131,10 @@ function normalizeLine(text: string): string {
   return text.replace(/\s+/g, ' ').trim();
 }
 
+function sameText(a: string, b: string): boolean {
+  return normalizeLine(a).toLocaleLowerCase('es') === normalizeLine(b).toLocaleLowerCase('es');
+}
+
 function isFooterNoteTitle(title: string): boolean {
   return FOOTER_NOTES_TITLE_RE.test(normalizeLine(title));
 }
@@ -137,9 +173,64 @@ function createMenuItem(params: {
 }
 
 /**
+ * Recupera título/subtítulo si el OCR los dejó en body o mezclados.
+ * Devuelve body limpio (sin título/subtítulo) listo para parsear platos.
+ */
+export function resolveSectionTitleSubtitleBody(section: MenuOcrSection): {
+  title: string;
+  subtitle: string;
+  body: string;
+} {
+  let title = section.title?.trim() ?? '';
+  let subtitle = section.subtitle?.trim() ?? '';
+  const rawBody = section.body?.replace(/\r\n/g, '\n').replace(/\r/g, '\n') ?? '';
+  const lines = rawBody.split('\n');
+  let start = 0;
+
+  while (start < lines.length && !normalizeLine(lines[start] ?? '')) start += 1;
+
+  const takeLine = (): string => {
+    const line = normalizeLine(lines[start] ?? '');
+    start += 1;
+    while (start < lines.length && !normalizeLine(lines[start] ?? '')) start += 1;
+    return line;
+  };
+
+  const peekLine = (): string => normalizeLine(lines[start] ?? '');
+
+  // Título faltante o duplicado al inicio del body.
+  if (start < lines.length) {
+    const first = peekLine();
+    if (first) {
+      if (!title && looksLikeSectionTitle(first)) {
+        title = takeLine();
+      } else if (title && sameText(first, title)) {
+        takeLine();
+      }
+    }
+  }
+
+  // Subtítulo explícito o recuperado de la primera línea descriptiva.
+  if (start < lines.length) {
+    const next = peekLine();
+    if (next) {
+      if (subtitle && sameText(next, subtitle)) {
+        takeLine();
+      } else if (!subtitle && looksLikeSectionSubtitle(next)) {
+        subtitle = takeLine();
+      }
+    }
+  }
+
+  const body = lines.slice(start).join('\n').trim();
+  return { title, subtitle, body };
+}
+
+/**
  * Convierte el resultado OCR de visión en componentes del editor móvil.
- * - Secciones → `section`
- * - Platos (nombre + precio + ingredientes si hay) → `menuItem`
+ * - Título de categoría → `section`
+ * - Subtítulo → `text`
+ * - Platos (nombre + precio + ingredientes/descripción) → `menuItem`
  * - Sin alérgenos
  */
 export function menuOcrResultToMobileComponents(menu: MenuOcrResult): MobileComponent[] {
@@ -148,12 +239,19 @@ export function menuOcrResultToMobileComponents(menu: MenuOcrResult): MobileComp
 
   const headerTitle = menu.headerTitle?.trim() ?? '';
   const headerSubtitle = menu.headerSubtitle?.trim() ?? '';
-  if (headerTitle) components.push(createHeading(headerTitle));
-  if (headerSubtitle) components.push(createText(headerSubtitle));
+  // Cabecera del local: si viene en MAYÚSCULAS tipo categoría → Sección; si no, Título.
+  if (headerTitle) {
+    if (looksLikeSectionTitle(headerTitle)) {
+      components.push(createSection(headerTitle));
+    } else {
+      components.push(createHeading(headerTitle));
+    }
+  }
+  if (headerSubtitle) components.push(createSubtitleText(headerSubtitle));
 
   for (const section of sortSections(menu)) {
-    const sectionTitle = section.title?.trim() ?? '';
-    const body = section.body?.replace(/\r\n/g, '\n').replace(/\r/g, '\n').trim() ?? '';
+    const { title: sectionTitle, subtitle: sectionSubtitle, body } =
+      resolveSectionTitleSubtitleBody(section);
     const rows = body ? parseMenuTextBlocks(body) : [];
     const hasMenuItems = rows.some((row) => row.hasPrice);
     const looksLikeFooterNotes =
@@ -164,6 +262,7 @@ export function menuOcrResultToMobileComponents(menu: MenuOcrResult): MobileComp
 
     if (looksLikeFooterNotes) {
       footerNotes.push(sectionTitle);
+      if (sectionSubtitle) footerNotes.push(sectionSubtitle);
       for (const row of rows) {
         const line = row.left.trim();
         if (line) footerNotes.push(line);
@@ -177,6 +276,7 @@ export function menuOcrResultToMobileComponents(menu: MenuOcrResult): MobileComp
     }
 
     if (sectionTitle) components.push(createSection(sectionTitle));
+    if (sectionSubtitle) components.push(createSubtitleText(sectionSubtitle));
     if (!body) continue;
 
     const sectionIsFooterLike = !!sectionTitle && isFooterNoteTitle(sectionTitle);
@@ -192,24 +292,45 @@ export function menuOcrResultToMobileComponents(menu: MenuOcrResult): MobileComp
       const title = row.left.trim();
       if (!title) continue;
 
-      // Evitar duplicar el título de sección si el body lo repite.
+      // Evitar duplicar el título/subtítulo de sección si el body aún los trae.
       if (
         !row.hasPrice &&
         !row.ingredients &&
-        looksLikeSectionTitle(title) &&
-        (!sectionTitle || title.toLocaleLowerCase('es') === sectionTitle.toLocaleLowerCase('es'))
+        !row.description &&
+        ((sectionTitle && sameText(title, sectionTitle)) ||
+          (sectionSubtitle && sameText(title, sectionSubtitle)) ||
+          (looksLikeSectionTitle(title) &&
+            (!sectionTitle || sameText(title, sectionTitle))))
       ) {
         continue;
       }
 
       // Notas legales/comerciales: solo se envían al bloque final si realmente
       // parecen nota (IVA/%, suplemento, etc.) o si están en una sección de notas.
-      const isTrailingInsideFooterSection = !row.hasPrice && sectionIsFooterLike && rowIndex > lastPricedRowIndex;
+      const isTrailingInsideFooterSection =
+        !row.hasPrice && sectionIsFooterLike && rowIndex > lastPricedRowIndex;
       if (
         !row.hasPrice &&
         (isFooterNoteLine(title) || hasPercentSymbol(title) || isTrailingInsideFooterSection)
       ) {
         footerNotes.push(title);
+        continue;
+      }
+
+      // Subtítulos intermedios sin precio → Texto (no Plato).
+      if (
+        !row.hasPrice &&
+        looksLikeSectionSubtitle(title) &&
+        !looksLikeDishNameOnly(title) &&
+        !row.ingredients
+      ) {
+        components.push(createSubtitleText(title));
+        continue;
+      }
+
+      // Títulos intermedios en MAYÚSCULAS dentro del body → nueva Sección.
+      if (!row.hasPrice && looksLikeSectionTitle(title) && !row.ingredients) {
+        components.push(createSection(title));
         continue;
       }
 

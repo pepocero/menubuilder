@@ -15,7 +15,7 @@ export function AppLayout() {
     <div className="app-layout">
       <header className="app-header">
         <Link to="/" className="logo" onClick={() => setMenuOpen(false)}>
-          Paper To Menú
+          Paper To Menu
         </Link>
         <button
           type="button"

@@ -221,4 +221,19 @@ describe('patrón nombre → descripción → precio', () => {
     expect(rows[0].description).toBeUndefined();
     expect(rows[0].ingredients).toBe('Ingrediente 1 - Ingrediente 2 - Ingrediente 3');
   });
+
+  it('empareja nombre + ingredientes + precio en líneas propias', () => {
+    const raw = [
+      'Croquetas de jamón',
+      'jamón ibérico, bechamel',
+      '8,00 €',
+    ].join('\n');
+
+    const rows = parseMenuTextBlocks(raw);
+    expect(rows).toHaveLength(1);
+    expect(rows[0].left).toBe('Croquetas de jamón');
+    expect(rows[0].hasPrice).toBe(true);
+    expect(rows[0].right).toMatch(/8,00/);
+    expect(rows[0].ingredients).toBe('jamón ibérico - bechamel');
+  });
 });

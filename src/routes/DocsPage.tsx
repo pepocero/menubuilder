@@ -27,7 +27,7 @@ export function DocsPage() {
           </p>
           <h1>Guía de uso</h1>
           <p className="docs-lead">
-            Cómo crear y editar cartas digitales en Paper To Menú: textos, líneas de carta, imágenes,
+            Cómo crear y editar cartas digitales en Paper To Menu: textos, líneas de carta, imágenes,
             páginas, publicación con QR y exportación.
           </p>
         </header>

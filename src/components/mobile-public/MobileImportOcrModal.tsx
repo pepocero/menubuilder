@@ -29,16 +29,12 @@ interface MobileImportOcrModalProps {
 type SourceTab = 'upload' | 'library';
 
 const OCR_PROVIDER_STORAGE_KEY = 'papertomenu.ocrProvider';
-const OCR_PROVIDER_STORAGE_KEY_LEGACY = 'menubuilder.ocrProvider';
 const MOBILE_OCR_EXTRA_HINT =
   'Prioriza platos con nombre y precio. Si hay ingredientes bajo el plato, inclúyelos. No hace falta detectar alérgenos. No omitas notas finales como IVA incluido o suplementos con %.';
 
 function readStoredOcrProvider(): MenuOcrProviderChoice {
   try {
-    return parseOcrProviderChoice(
-      localStorage.getItem(OCR_PROVIDER_STORAGE_KEY) ??
-        localStorage.getItem(OCR_PROVIDER_STORAGE_KEY_LEGACY),
-    );
+    return parseOcrProviderChoice(localStorage.getItem(OCR_PROVIDER_STORAGE_KEY));
   } catch {
     return DEFAULT_OCR_PROVIDER;
   }

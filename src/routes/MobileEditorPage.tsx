@@ -2889,7 +2889,7 @@ export function MobileEditorPage() {
                       onChange={(e) => updateSelectedTypography({ letterSpacing: Number(e.target.value) })}
                     />
                   </label>
-                  <label>
+                  <label className="mobile-props-color-picker-label">
                     Color de texto
                     <input
                       type="color"
@@ -3131,7 +3131,7 @@ export function MobileEditorPage() {
                           }
                         />
                       </label>
-                      <label>
+                      <label className="mobile-props-color-picker-label">
                         Color de texto
                         <input
                           type="color"

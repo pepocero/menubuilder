@@ -1,6 +1,6 @@
 /** Configuración SEO compartida (meta, Open Graph, JSON-LD). */
 
-export const SITE_NAME = 'Paper To Menú';
+export const SITE_NAME = 'Paper To Menu';
 
 export const SITE_TAGLINE = 'Cartas de menú digitales para restaurantes';
 
@@ -16,7 +16,7 @@ export const DEFAULT_KEYWORDS = [
   'editor carta restaurante',
   'importar menú OCR',
   'menú con código QR',
-  'Paper To Menú',
+  'Paper To Menu',
   'PaperToMenu',
 ].join(', ');
 

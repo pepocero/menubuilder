@@ -262,7 +262,7 @@ textarea {
   font-size: clamp(1rem, 2.4vw, 1.15rem);
   line-height: 1.55;
   margin: 0 0 1.75rem;
-  max-width: 36ch;
+  max-width: 54ch;
 }
 
 .landing-hero-actions {
@@ -4807,27 +4807,29 @@ textarea {
 }
 
 .mobile-block-menu-item.has-image {
-  display: flex;
-  align-items: flex-start;
-  gap: 0.65rem;
+  display: flow-root;
 }
 
-.mobile-block-menu-item.has-image.image-right {
-  flex-direction: row-reverse;
+.mobile-block-menu-item.has-image .mobile-menu-item-thumb {
+  float: left;
+  margin: 0 0.65rem 0.35rem 0;
+}
+
+.mobile-block-menu-item.has-image.image-right .mobile-menu-item-thumb {
+  float: right;
+  margin: 0 0 0.35rem 0.65rem;
 }
 
 .mobile-menu-item-thumb {
   display: block;
   object-fit: cover;
   aspect-ratio: 1 / 1;
-  flex-shrink: 0;
   background: #e5e7eb;
   border: 1px solid #e2e8f0;
 }
 
 .mobile-menu-item-content {
   min-width: 0;
-  flex: 1;
 }
 
 /* ── Image Picker Field ── */

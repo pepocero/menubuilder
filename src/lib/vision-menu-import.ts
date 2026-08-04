@@ -470,6 +470,41 @@ function buildSectionLayersFallback(
       y = titleLayer.y + titleLayer.height + 6;
     }
 
+    const sectionSubtitle = section.subtitle?.trim() ?? '';
+    if (sectionSubtitle) {
+      const available = SAFE.bottom - y;
+      if (available >= MIN_BODY_H) {
+        const subH = Math.min(estimateTextHeight(1, fonts.body, 2), available);
+        const subtitleLayer = clampTextLayer(
+          {
+            id: `layer_${crypto.randomUUID().slice(0, 8)}`,
+            type: 'text',
+            name: `Subtítulo: ${sectionSubtitle.slice(0, 36)}`,
+            content: sectionSubtitle,
+            x,
+            y,
+            width,
+            height: subH,
+            rotation: 0,
+            zIndex: z++,
+            style: {
+              fontFamily: 'Arial',
+              fontSize: fonts.body,
+              color: '#4b5563',
+              align: 'left',
+              fontWeight: 'normal',
+              fontStyle: 'italic',
+            },
+          },
+          SAFE,
+        );
+        if (subtitleLayer) {
+          layers.push(subtitleLayer);
+          y = subtitleLayer.y + subtitleLayer.height + 6;
+        }
+      }
+    }
+
     if (section.body) {
       const available = SAFE.bottom - y;
       if (available < MIN_BODY_H) {

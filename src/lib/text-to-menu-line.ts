@@ -40,6 +40,9 @@ const PRICE_AT_END = new RegExp(
   'u',
 );
 
+/** Línea que es únicamente un precio (p. ej. «8,00 €»). */
+const PRICE_ONLY_LINE = new RegExp(`^\\s*(${PRICE_AMOUNT})\\s*$`, 'u');
+
 const TRAILING_FILLER = /[\s·.•…\-–—.−‒‑]{1,}$/u;
 
 /** Separador clásico: "Mozzarella - Tomàquet - …". */
@@ -66,6 +69,12 @@ export interface ParsedMenuTextLine {
 export function parseMenuTextLine(rawLine: string): ParsedMenuTextLine | null {
   const line = rawLine.replace(/\u00a0/g, ' ').trim();
   if (!line) return null;
+
+  const onlyPrice = line.match(PRICE_ONLY_LINE);
+  if (onlyPrice) {
+    const right = (onlyPrice[1] ?? '').trim();
+    return { left: '', right, leader: 'dots', hasPrice: true };
+  }
 
   const match = line.match(PRICE_AT_END);
   if (match) {
@@ -164,6 +173,34 @@ export function looksLikeSectionTitle(text: string): boolean {
 }
 
 /**
+ * Subtítulo bajo un título de categoría: frase sin precio, no es plato ni
+ * lista larga de ingredientes.
+ */
+export function looksLikeSectionSubtitle(text: string): boolean {
+  const t = text.replace(/\u00a0/g, ' ').trim();
+  if (!t || t.length < 2 || t.length > 100) return false;
+  if (PRICE_AT_END.test(t)) return false;
+  if (looksLikeSectionTitle(t)) return false;
+  if (looksLikeIngredients(t) && splitIngredientParts(t).length >= 3) return false;
+  const words = t.split(/\s+/).filter(Boolean);
+  // Un solo token corto suele ser nombre de plato, no subtítulo.
+  if (words.length === 1 && t.length < 18) return false;
+  // Nombres de plato cortos (2–4 palabras) no son subtítulos de categoría.
+  if (
+    looksLikeDishNameOnly(t) &&
+    words.length <= 4 &&
+    !/^(para|con|de|del|la|el|les|els|nuest|especial|elige|disfrut|homemade|fresh)/i.test(t)
+  ) {
+    return false;
+  }
+  if (words.length >= 2) return true;
+  if (/^(para|con|de|del|la|el|les|els|nuest|especial|elige|disfrut|homemade|fresh)/i.test(t)) {
+    return true;
+  }
+  return t.length >= 18;
+}
+
+/**
  * Nombre de plato en línea propia (sin precio), típico del patrón
  * «nombre / descripción + precio».
  */
@@ -197,8 +234,25 @@ export function looksLikeDescriptionProse(text: string): boolean {
 }
 
 /**
- * Patrón: nombre en una línea + descripción (1+ líneas) con precio al final.
+ * ¿La línea es solo un precio (p. ej. «8,00 €» en su propia fila)?
+ */
+export function isPriceOnlyLine(line: ParsedMenuTextLine): boolean {
+  if (!line.hasPrice) return false;
+  const left = line.left.trim();
+  const right = line.right.trim();
+  if (!right) return false;
+  if (!left) return true;
+  if (left === right) return true;
+  // parseMenuTextLine rellena left=right cuando no hay texto antes del precio.
+  const stripped = left.replace(/\s+/g, '');
+  const rightStripped = right.replace(/\s+/g, '');
+  return stripped === rightStripped;
+}
+
+/**
+ * Patrón: nombre en una línea + descripción/ingredientes (0+ líneas) + precio.
  * Ej.: «Palak Paneer Wala» / «Espinacas con Tomate … 13,50€»
+ * Ej.: «Croquetas» / «jamón, bechamel» / «8,00 €»
  */
 export function collectNameDescriptionPriceFromTokens(
   tokens: MenuTextToken[],
@@ -206,6 +260,7 @@ export function collectNameDescriptionPriceFromTokens(
   nameLine: ParsedMenuTextLine,
 ): {
   description: string;
+  ingredients?: string;
   price: string;
   leader: MenuLineLeader;
   nextIndex: number;
@@ -217,7 +272,7 @@ export function collectNameDescriptionPriceFromTokens(
   let i = skipBlanks(tokens, startIndex);
   if (i >= tokens.length) return null;
 
-  const descParts: string[] = [];
+  const middleParts: string[] = [];
 
   while (i < tokens.length) {
     if (tokens[i].kind === 'blank') {
@@ -231,25 +286,46 @@ export function collectNameDescriptionPriceFromTokens(
 
     if (line.hasPrice) {
       const beforePrice = line.left.trim();
+      const priceOnly = isPriceOnlyLine(line);
+
       // «NombreA» + «NombreB — 12€» → no es este patrón (el segundo es plato clásico).
       if (
-        descParts.length === 0 &&
+        !priceOnly &&
+        middleParts.length === 0 &&
         beforePrice &&
         looksLikeDishNameOnly(beforePrice) &&
-        !looksLikeDescriptionProse(beforePrice)
+        !looksLikeDescriptionProse(beforePrice) &&
+        !looksLikeIngredients(beforePrice)
       ) {
         return null;
       }
-      if (beforePrice) descParts.push(beforePrice);
+      if (!priceOnly && beforePrice) middleParts.push(beforePrice);
 
-      const description = descParts.join(' ').replace(/\s+/g, ' ').trim();
-      // Exigir descripción prosaica, o solo precio bajo el nombre.
-      if (description && !looksLikeDescriptionProse(description)) {
+      const joined = middleParts.join(' ').replace(/\s+/g, ' ').trim();
+      const multiLineIngredientItems =
+        middleParts.length >= 2 &&
+        middleParts.every(
+          (p) =>
+            (looksLikeIngredients(p) || isPlausibleIngredientLine(p)) &&
+            !looksLikeDescriptionProse(p),
+        );
+      const ingredientSignal = looksLikeIngredients(joined) || multiLineIngredientItems;
+      const descriptionSignal = looksLikeDescriptionProse(joined);
+      // Prosa larga con comas (descripción) gana a “lista de ingredientes”.
+      const asDescription =
+        !!joined && descriptionSignal && (!ingredientSignal || joined.length >= 36);
+      const asIngredients = !!joined && ingredientSignal && !asDescription;
+
+      // Exigir descripción/ingredientes, o solo precio bajo el nombre.
+      if (joined && !asIngredients && !asDescription) {
         return null;
       }
 
       return {
-        description,
+        description: asDescription ? joined : '',
+        ...(asIngredients
+          ? { ingredients: formatIngredientsList(middleParts.flatMap((p) => splitIngredientParts(p))) }
+          : {}),
         price: line.right.trim(),
         leader: line.leader,
         nextIndex: i + 1,
@@ -263,12 +339,23 @@ export function collectNameDescriptionPriceFromTokens(
     }
     if (looksLikeSectionTitle(text)) return null;
     // Siguiente nombre de plato antes de ver precio → abortar.
-    if (looksLikeDishNameOnly(text) && !looksLikeDescriptionProse(text)) {
+    if (
+      looksLikeDishNameOnly(text) &&
+      !looksLikeDescriptionProse(text) &&
+      !looksLikeIngredients(text) &&
+      !isPlausibleIngredientLine(text)
+    ) {
       return null;
     }
-    if (!looksLikeDescriptionProse(text)) return null;
+    if (
+      !looksLikeDescriptionProse(text) &&
+      !looksLikeIngredients(text) &&
+      !isPlausibleIngredientLine(text)
+    ) {
+      return null;
+    }
 
-    descParts.push(text);
+    middleParts.push(text);
     i += 1;
   }
 
@@ -488,7 +575,7 @@ export function parseMenuTextBlocks(raw: string): PairedMenuTextRow[] {
     let description: string | undefined;
     let rowLine = current;
 
-    // Patrón nombre → descripción → precio (antes de tratar la línea suelta).
+    // Patrón nombre → descripción/ingredientes → precio (antes de tratar la línea suelta).
     if (!current.hasPrice) {
       const named = collectNameDescriptionPriceFromTokens(tokens, i, current);
       if (named) {
@@ -499,12 +586,13 @@ export function parseMenuTextBlocks(raw: string): PairedMenuTextRow[] {
           hasPrice: true,
         };
         if (named.description) description = named.description;
+        if (named.ingredients) ingredients = named.ingredients;
         i = named.nextIndex;
       }
     }
 
     // Ingredientes inmediatos (misma línea multi-ítem o varias líneas OCR).
-    if (rowLine.hasPrice && !description) {
+    if (rowLine.hasPrice && !description && !ingredients) {
       const collected = collectIngredientsFromTokens(tokens, i);
       if (collected.ingredients) {
         ingredients = collected.ingredients;
