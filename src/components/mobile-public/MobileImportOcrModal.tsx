@@ -30,7 +30,7 @@ type SourceTab = 'upload' | 'library';
 
 const OCR_PROVIDER_STORAGE_KEY = 'menubuilder.ocrProvider';
 const MOBILE_OCR_EXTRA_HINT =
-  'Prioriza platos con nombre y precio. Si hay ingredientes bajo el plato, inclúyelos. No hace falta detectar alérgenos.';
+  'Prioriza platos con nombre y precio. Si hay ingredientes bajo el plato, inclúyelos. No hace falta detectar alérgenos. No omitas notas finales como IVA incluido o suplementos con %.';
 
 function readStoredOcrProvider(): MenuOcrProviderChoice {
   try {
@@ -99,6 +99,7 @@ export function MobileImportOcrModal({
   const [assetsLoading, setAssetsLoading] = useState(false);
   const [assetsError, setAssetsError] = useState('');
   const [selectedAssetIds, setSelectedAssetIds] = useState<string[]>([]);
+  const [replaceExisting, setReplaceExisting] = useState(false);
 
   const previewUrls = useMemo(
     () => files.map((file) => ({ name: file.name, url: URL.createObjectURL(file) })),
@@ -135,6 +136,7 @@ export function MobileImportOcrModal({
       setTab('upload');
       setSelectedAssetIds([]);
       setAssetsError('');
+      setReplaceExisting(false);
       setPromptExtra(MOBILE_OCR_EXTRA_HINT);
       setProvider(readStoredOcrProvider());
       return;
@@ -198,6 +200,7 @@ export function MobileImportOcrModal({
     const options: ImportMenuOptions = {
       provider,
       promptExtra: promptExtra.trim().slice(0, MENU_OCR_PROMPT_EXTRA_MAX) || undefined,
+      replaceExisting,
     };
 
     if (tab === 'library') {
@@ -288,6 +291,16 @@ export function MobileImportOcrModal({
                 }
                 maxLength={MENU_OCR_PROMPT_EXTRA_MAX}
               />
+            </label>
+            <label className="mobile-props-checkbox">
+              <input
+                type="checkbox"
+                checked={replaceExisting}
+                onChange={(e) => setReplaceExisting(e.target.checked)}
+              />
+              <span className="mobile-props-checkbox-label">
+                Limpiar lienzo antes de importar (reemplazar contenido actual)
+              </span>
             </label>
 
             <div className="import-menu-tabs" role="tablist" aria-label="Origen de la imagen">
@@ -393,7 +406,12 @@ export function MobileImportOcrModal({
             )}
 
             <ul className="import-menu-notes">
-              <li>Los platos se añaden al final de la carta móvil como componentes Plato.</li>
+              <li>
+                Si activas «Limpiar lienzo», se reemplaza todo el contenido actual por lo reconocido.
+              </li>
+              <li>
+                Si lo dejas desactivado, los componentes reconocidos se añaden al final de la carta.
+              </li>
               <li>Los archivos ya subidos se reutilizan; no se vuelven a subir a la biblioteca.</li>
             </ul>
 

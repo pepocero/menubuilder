@@ -21,6 +21,8 @@ export interface ImportMenuOptions {
   provider: MenuOcrProviderChoice;
   /** Apéndice opcional al prompt de OCR (mismo para todos los motores). */
   promptExtra?: string;
+  /** Si true, reemplaza el contenido existente antes de importar. */
+  replaceExisting?: boolean;
 }
 
 interface ImportMenuModalProps {

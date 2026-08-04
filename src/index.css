@@ -4130,6 +4130,11 @@ textarea {
   color: #0369a1;
 }
 
+.mobile-editor-mode-group button:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
 .mobile-editor-mode-text {
   display: none;
 }

@@ -19,10 +19,12 @@ export interface MenuOcrSection {
   column: MenuOcrColumn;
   /** Orden vertical dentro de la columna (1 = arriba). */
   order: number;
-  /**
-   * Contenido de la sección: un plato por línea.
-   * Preferible: "Nombre — 8,00 €" y descripción en la línea siguiente.
-   */
+/**
+ * Contenido de la sección: un plato por bloque de líneas.
+ * Patrones admitidos:
+ * - "Nombre — 8,00 €" y ingredientes/descripción en la línea siguiente.
+ * - "Nombre" + línea(s) de descripción con el precio al final (p. ej. "… 13,50€").
+ */
   body: string;
   /** Caja del título de sección (si existe). */
   titleBox?: MenuOcrBox | null;
@@ -105,14 +107,33 @@ Reglas de texto:
 - No inventes platos, precios ni secciones que no estén en la imagen.
 - Respeta acentos y ortografía catalana (caramel·litzada, Tomàquet, Escàlivada, amanides, entrepans, etc.).
 - Precios en formato europeo con coma decimal: "8,00 €". NUNCA juntes el 8 y los ceros como "800€".
+- Puede haber varios bloques en una misma página con este patrón repetido: TÍTULO de sección, SUBTÍTULO opcional, lista de platos; luego otro TÍTULO/SUBTÍTULO y otra lista.
+- Cuando aparezcan títulos/subtítulos intermedios, crea otra entrada en sections en ese mismo punto; NO los conviertas en plato y NO los muevas de sitio.
+- Si al final hay notas legales/comerciales (p. ej. "IVA INCLUIDO", "Suplemento Terraza 5%"), inclúyelas SIEMPRE al final del último body visible o como sección final; NO las omitas aunque no tengan precio.
 - Layout de dos columnas: izquierda → "left"; derecha → "right"; cabeceras a ancho completo → "full".
 - order: 1 para la sección más arriba de cada columna, luego 2, 3…
 - title: SOLO el nombre de categoría tal como aparece. Si no hay título, "".
-- body: un plato por bloque de líneas. Formato:
+- body: un plato por bloque de líneas. Detecta y normaliza ESTOS patrones (elige el que veas en la imagen):
+
+  Patrón A (nombre y precio en la misma línea; ingredientes debajo):
   Nombre del plato — 8,00 €
-  Ingredientes o descripción
+  Ingredientes o lista corta
+
+  Patrón B (nombre en una línea; descripción prosaica debajo; precio AL FINAL de la descripción):
+  Nombre del plato
+  Descripción del plato 8,00 €
+
+  Si la descripción del patrón B ocupa varias líneas, únelas en el body así:
+  Nombre del plato
+  Primera parte de la descripción
+  Continuación de la descripción 8,00 €
+
+  En el patrón B el precio NO va en la línea del nombre: va al final del texto descriptivo.
+  No conviertas la descripción en “ingredientes” si es una frase prosaica (p. ej. «Espinacas con Tomate y Queso Casero Indio 13,50€»).
 - NO mezcles platos de columnas distintas en el mismo body.
 - headerTitle: nombre del local. headerSubtitle: eslogan bajo el título.
+- headerTitle/headerSubtitle son SOLO para la cabecera principal superior de la carta. Los títulos/subtítulos del medio siempre van en sections.
+- Mantén el orden global visual exacto de arriba abajo (y de izquierda a derecha si comparten altura). Nunca reordenes bloques por similitud semántica.
 
 Cajas (OBLIGATORIO, coordenadas en % 0–100 respecto a ANCHO/ALTO de la imagen completa):
 - headerTitleBox / headerSubtitleBox: posición del nombre y del eslogan.
@@ -135,7 +156,10 @@ El idioma (catalán u otro) no es problema: copia el texto tal cual.
 Las cajas (x,y,w,h) son porcentajes 0-100 del ANCHO/ALTO de la imagen.
 titleBox y bodyBox de cada sección = ubicación REAL; body debajo de su título.
 No uses una plantilla de columnas inventada: copia márgenes, anchos y huecos verticales de la foto.
-No inventes platos. Precios con coma decimal (8,00 €).`;
+No inventes platos. Precios con coma decimal (8,00 €).
+Si ves nombre en una línea y descripción+precio debajo, transcribe ese patrón B (no fuerces el precio a la línea del nombre).
+Si aparecen títulos/subtítulos intermedios, respeta su posición y crea nuevas sections en ese punto, sin mover texto de lugar.
+Si al final aparecen textos como "IVA incluido" o líneas con "%", transcríbelos también (no los omitas) y mantenlos en su posición final.`;
 
 /** Límite de indicaciones extra desde el modal de importación. */
 export const MENU_OCR_PROMPT_EXTRA_MAX = 1000;

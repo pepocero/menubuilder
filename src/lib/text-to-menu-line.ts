@@ -163,6 +163,118 @@ export function looksLikeSectionTitle(text: string): boolean {
   return upper / letters.length >= 0.85;
 }
 
+/**
+ * Nombre de plato en línea propia (sin precio), típico del patrón
+ * «nombre / descripción + precio».
+ */
+export function looksLikeDishNameOnly(text: string): boolean {
+  const t = text.replace(/\u00a0/g, ' ').trim();
+  if (!t || t.length < 2 || t.length > 70) return false;
+  if (looksLikeSectionTitle(t) || looksLikeIngredients(t)) return false;
+  if (PRICE_AT_END.test(t)) return false;
+  if (/[·•…]{2,}|\.{3,}/.test(t)) return false;
+  // Frases largas con coma/punto suelen ser descripción, no nombre.
+  if (t.length > 48 && /[,.;:]/.test(t)) return false;
+  return true;
+}
+
+/**
+ * Prosa de descripción de plato (no lista de ingredientes ni título).
+ */
+export function looksLikeDescriptionProse(text: string): boolean {
+  const t = text.replace(/\u00a0/g, ' ').trim();
+  if (!t || looksLikeSectionTitle(t)) return false;
+  if (looksLikeIngredients(t) && t.length < 40) return false;
+  if (/[·•…]{2,}|\.{3,}/.test(t)) return false;
+  // Descripción: frase relativamente larga, minúscula inicial, o con comas.
+  if (t.length >= 22) return true;
+  if (/^[\p{Ll}]/u.test(t)) return true;
+  if (/,/.test(t) && t.length >= 12) return true;
+  // Varias palabras en minúsculas (p. ej. «curry de Espinacas con Patata»).
+  const words = t.split(/\s+/).filter(Boolean);
+  if (words.length >= 4) return true;
+  return false;
+}
+
+/**
+ * Patrón: nombre en una línea + descripción (1+ líneas) con precio al final.
+ * Ej.: «Palak Paneer Wala» / «Espinacas con Tomate … 13,50€»
+ */
+export function collectNameDescriptionPriceFromTokens(
+  tokens: MenuTextToken[],
+  startIndex: number,
+  nameLine: ParsedMenuTextLine,
+): {
+  description: string;
+  price: string;
+  leader: MenuLineLeader;
+  nextIndex: number;
+} | null {
+  if (nameLine.hasPrice) return null;
+  const name = nameLine.left.trim();
+  if (!name || !looksLikeDishNameOnly(name)) return null;
+
+  let i = skipBlanks(tokens, startIndex);
+  if (i >= tokens.length) return null;
+
+  const descParts: string[] = [];
+
+  while (i < tokens.length) {
+    if (tokens[i].kind === 'blank') {
+      // No cruzar blancos: suelen separar platos.
+      break;
+    }
+
+    const token = tokens[i];
+    if (token.kind !== 'content') break;
+    const line = token.line;
+
+    if (line.hasPrice) {
+      const beforePrice = line.left.trim();
+      // «NombreA» + «NombreB — 12€» → no es este patrón (el segundo es plato clásico).
+      if (
+        descParts.length === 0 &&
+        beforePrice &&
+        looksLikeDishNameOnly(beforePrice) &&
+        !looksLikeDescriptionProse(beforePrice)
+      ) {
+        return null;
+      }
+      if (beforePrice) descParts.push(beforePrice);
+
+      const description = descParts.join(' ').replace(/\s+/g, ' ').trim();
+      // Exigir descripción prosaica, o solo precio bajo el nombre.
+      if (description && !looksLikeDescriptionProse(description)) {
+        return null;
+      }
+
+      return {
+        description,
+        price: line.right.trim(),
+        leader: line.leader,
+        nextIndex: i + 1,
+      };
+    }
+
+    const text = line.left.trim();
+    if (!text) {
+      i += 1;
+      continue;
+    }
+    if (looksLikeSectionTitle(text)) return null;
+    // Siguiente nombre de plato antes de ver precio → abortar.
+    if (looksLikeDishNameOnly(text) && !looksLikeDescriptionProse(text)) {
+      return null;
+    }
+    if (!looksLikeDescriptionProse(text)) return null;
+
+    descParts.push(text);
+    i += 1;
+  }
+
+  return null;
+}
+
 type MenuTextToken =
   | { kind: 'blank' }
   | { kind: 'content'; line: ParsedMenuTextLine };
@@ -335,6 +447,8 @@ export function pairMenuTextLines(
 
 export type PairedMenuTextRow = ParsedMenuTextLine & {
   ingredients?: string;
+  /** Descripción prosaica (patrón nombre → descripción → precio). */
+  description?: string;
   /** Líneas en blanco tras el plato (e ingredientes), antes del siguiente. */
   blankLinesAfter: number;
 };
@@ -342,6 +456,10 @@ export type PairedMenuTextRow = ParsedMenuTextLine & {
 /**
  * Parsea el texto completo conservando líneas en blanco entre platos.
  * Los saltos van después del bloque plato (+ ingredientes si están pegados debajo).
+ *
+ * Patrones de plato:
+ * 1) `Nombre — 8,00 €` (+ ingredientes opcionales debajo)
+ * 2) `Nombre` + `Descripción … 8,00 €` (precio al final de la descripción)
  */
 export function parseMenuTextBlocks(raw: string): PairedMenuTextRow[] {
   const lines = raw.replace(/\r\n/g, '\n').replace(/\r/g, '\n').split('\n');
@@ -367,8 +485,26 @@ export function parseMenuTextBlocks(raw: string): PairedMenuTextRow[] {
     i += 1;
 
     let ingredients: string | undefined;
+    let description: string | undefined;
+    let rowLine = current;
+
+    // Patrón nombre → descripción → precio (antes de tratar la línea suelta).
+    if (!current.hasPrice) {
+      const named = collectNameDescriptionPriceFromTokens(tokens, i, current);
+      if (named) {
+        rowLine = {
+          left: current.left.trim(),
+          right: named.price,
+          leader: named.leader,
+          hasPrice: true,
+        };
+        if (named.description) description = named.description;
+        i = named.nextIndex;
+      }
+    }
+
     // Ingredientes inmediatos (misma línea multi-ítem o varias líneas OCR).
-    if (current.hasPrice) {
+    if (rowLine.hasPrice && !description) {
       const collected = collectIngredientsFromTokens(tokens, i);
       if (collected.ingredients) {
         ingredients = collected.ingredients;
@@ -383,8 +519,9 @@ export function parseMenuTextBlocks(raw: string): PairedMenuTextRow[] {
     }
 
     out.push({
-      ...current,
+      ...rowLine,
       ...(ingredients ? { ingredients } : {}),
+      ...(description ? { description } : {}),
       blankLinesAfter: Math.min(MENU_LINE_MAX_BLANK_LINES, blankLinesAfter),
     });
   }
@@ -447,6 +584,12 @@ export function buildMenuLineLayerFromTextbox(text: Textbox): MenuLineLayer | nu
     if (p.ingredients) {
       row.ingredients = {
         content: p.ingredients,
+        style: { ...ingredientsStyle },
+      };
+    } else if (p.description) {
+      // En línea de carta clásica no hay columna «descripción»: se conserva debajo.
+      row.ingredients = {
+        content: p.description,
         style: { ...ingredientsStyle },
       };
     }

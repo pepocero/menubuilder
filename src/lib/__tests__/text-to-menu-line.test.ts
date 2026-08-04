@@ -164,3 +164,61 @@ describe('parseMenuTextBlocks → campo Ingredientes (no filas Plato)', () => {
     expect(rows[2].hasPrice).toBe(true);
   });
 });
+
+describe('patrón nombre → descripción → precio', () => {
+  it('empareja nombre, descripción prosaica y precio al final', () => {
+    const raw = [
+      'Palak Paneer Wala',
+      'Espinacas con Tomate y Queso Casero Indio 13,50€',
+      'Saag Aloo',
+      'Refrescante y ligero curry de Espinacas con Patata 12,00€',
+      'Aloo Gobi',
+      'Clásico y aromático curry de Coliflor y Patata 12,00€',
+    ].join('\n');
+
+    const rows = parseMenuTextBlocks(raw);
+    expect(rows).toHaveLength(3);
+    expect(rows.map((r) => r.left)).toEqual([
+      'Palak Paneer Wala',
+      'Saag Aloo',
+      'Aloo Gobi',
+    ]);
+    expect(rows[0].description).toBe('Espinacas con Tomate y Queso Casero Indio');
+    expect(rows[0].right).toMatch(/13,50/);
+    expect(rows[0].hasPrice).toBe(true);
+    expect(rows[0].ingredients).toBeUndefined();
+    expect(rows[1].description).toMatch(/Refrescante y ligero curry/i);
+    expect(rows[1].right).toMatch(/12,00/);
+    expect(rows[2].description).toMatch(/Clásico y aromático curry/i);
+  });
+
+  it('une descripción multilínea con el precio en la última línea', () => {
+    const raw = [
+      'Paneer Makhan Wala',
+      'Trozos de Paneer (queso casero indio), en salsa suave y cremosa con Tomate,',
+      'Fenogreco, Hierbas Aromáticas y harina de Anacardos 13,50€',
+    ].join('\n');
+
+    const rows = parseMenuTextBlocks(raw);
+    expect(rows).toHaveLength(1);
+    expect(rows[0].left).toBe('Paneer Makhan Wala');
+    expect(rows[0].hasPrice).toBe(true);
+    expect(rows[0].right).toMatch(/13,50/);
+    expect(rows[0].description).toMatch(/Trozos de Paneer/i);
+    expect(rows[0].description).toMatch(/Anacardos/i);
+    expect(rows[0].description).not.toMatch(/13,50/);
+  });
+
+  it('no confunde el patrón clásico nombre — precio con este', () => {
+    const raw = [
+      'SAMOSA VEGETAL — 3,00 €',
+      'Ingrediente 1, Ingrediente 2, Ingrediente 3',
+    ].join('\n');
+
+    const rows = parseMenuTextBlocks(raw);
+    expect(rows).toHaveLength(1);
+    expect(rows[0].left).toBe('SAMOSA VEGETAL');
+    expect(rows[0].description).toBeUndefined();
+    expect(rows[0].ingredients).toBe('Ingrediente 1 - Ingrediente 2 - Ingrediente 3');
+  });
+});

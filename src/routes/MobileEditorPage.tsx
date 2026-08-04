@@ -32,6 +32,16 @@ import {
   uploadAsset,
 } from '@/lib/api';
 import { compressImage } from '@/lib/image-compress';
+import {
+  canRedoMobileDoc,
+  canUndoMobileDoc,
+  createMobileDocHistory,
+  pushMobileDocHistory,
+  redoMobileDoc,
+  replaceMobileDocHistory,
+  undoMobileDoc,
+  type MobileDocHistoryState,
+} from '@/lib/mobile-document-history';
 import type { StockImage } from '@shared/stock';
 import {
   MOBILE_COMPONENT_LIBRARY,
@@ -159,6 +169,28 @@ function ScrollModeIcon() {
       <path
         fill="currentColor"
         d="M12 3.5 8.5 7h2.25v3.5h2.5V7H15.5L12 3.5zm0 17L15.5 17h-2.25v-3.5h-2.5V17H8.5L12 20.5zM4 11h16v2H4v-2z"
+      />
+    </svg>
+  );
+}
+
+function UndoIcon() {
+  return (
+    <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true">
+      <path
+        fill="currentColor"
+        d="M12.5 8c-2.65 0-5.05.99-6.9 2.6L2 7v9h9l-3.62-3.62c1.39-1.16 3.16-1.88 5.12-1.88 3.54 0 6.55 2.31 7.6 5.5l2.37-.78C21.08 11.03 17.15 8 12.5 8z"
+      />
+    </svg>
+  );
+}
+
+function RedoIcon() {
+  return (
+    <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true">
+      <path
+        fill="currentColor"
+        d="M18.4 10.6C16.55 8.99 14.15 8 11.5 8c-4.65 0-8.58 3.03-9.96 7.22l2.37.78C4.95 13.31 7.96 11 11.5 11c1.97 0 3.73.72 5.12 1.88L13 16.5h9V7.5l-3.6 3.1z"
       />
     </svg>
   );
@@ -363,6 +395,12 @@ export function MobileEditorPage() {
   const [assetsError, setAssetsError] = useState('');
   const [title, setTitle] = useState('Carta móvil');
   const [document, setDocument] = useState<MobileMenuDocument>(createDefaultMobileMenuDocument());
+  const [docHistory, setDocHistory] = useState<MobileDocHistoryState>(() =>
+    createMobileDocHistory(createDefaultMobileMenuDocument()),
+  );
+  const docHistoryRef = useRef(docHistory);
+  docHistoryRef.current = docHistory;
+  const historyCoalesceRef = useRef(false);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [multiSelectMode, setMultiSelectMode] = useState(false);
@@ -443,10 +481,19 @@ export function MobileEditorPage() {
         setIsPublic(menu.is_public);
         setPublicSlug(menu.public_slug);
         if (menu.editor_kind !== 'mobile') {
-          setDocument(createDefaultMobileMenuDocument());
+          const empty = createDefaultMobileMenuDocument();
+          setDocument(empty);
+          const hist = createMobileDocHistory(empty);
+          docHistoryRef.current = hist;
+          setDocHistory(hist);
         } else {
-          setDocument(normalizeMobileMenuDocument(menu.mobile_document));
+          const loaded = normalizeMobileMenuDocument(menu.mobile_document);
+          setDocument(loaded);
+          const hist = createMobileDocHistory(loaded);
+          docHistoryRef.current = hist;
+          setDocHistory(hist);
         }
+        historyCoalesceRef.current = false;
       } catch (err) {
         if (!disposed) {
           setError(err instanceof ApiError ? err.message : 'No se pudo cargar la carta móvil.');
@@ -758,9 +805,10 @@ export function MobileEditorPage() {
       }
 
       setOcrProgress({ phase: 'done', percent: 100, detail: `${sources.length} imagen(es)` });
+      const replaceExisting = options.replaceExisting === true;
       updateDoc((current) => ({
         ...current,
-        components: [...current.components, ...imported],
+        components: replaceExisting ? imported : [...current.components, ...imported],
       }));
       const firstMenuItem = imported.find((c) => c.type === 'menuItem');
       if (firstMenuItem) setSelectedId(firstMenuItem.id);
@@ -842,6 +890,17 @@ export function MobileEditorPage() {
     const next = mutator(documentRef.current);
     documentRef.current = next;
     setDocument(next);
+    setDocHistory((prev) => {
+      const nextHist =
+        options?.debouncePersist && historyCoalesceRef.current
+          ? replaceMobileDocHistory(prev, next)
+          : (() => {
+              historyCoalesceRef.current = !!options?.debouncePersist;
+              return pushMobileDocHistory(prev, next);
+            })();
+      docHistoryRef.current = nextHist;
+      return nextHist;
+    });
     if (options?.debouncePersist) {
       schedulePersist();
       return;
@@ -852,6 +911,62 @@ export function MobileEditorPage() {
     }
     void persist(next);
   }
+
+  function restoreDocumentFromHistory(state: MobileMenuDocument) {
+    documentRef.current = state;
+    setDocument(state);
+    historyCoalesceRef.current = false;
+    schedulePersist();
+  }
+
+  function handleUndo() {
+    const { history, state } = undoMobileDoc(docHistoryRef.current);
+    if (!state) return;
+    docHistoryRef.current = history;
+    setDocHistory(history);
+    restoreDocumentFromHistory(state);
+  }
+
+  function handleRedo() {
+    const { history, state } = redoMobileDoc(docHistoryRef.current);
+    if (!state) return;
+    docHistoryRef.current = history;
+    setDocHistory(history);
+    restoreDocumentFromHistory(state);
+  }
+
+  const canUndo = canUndoMobileDoc(docHistory);
+  const canRedo = canRedoMobileDoc(docHistory);
+
+  useEffect(() => {
+    if (loading || livePreviewOpen || ocrModalOpen || stockModalOpen || assetModalOpen || qrOpen) {
+      return;
+    }
+
+    const onKeyDown = (event: KeyboardEvent) => {
+      const target = event.target as HTMLElement | null;
+      const tag = target?.tagName?.toLowerCase();
+      if (tag === 'input' || tag === 'textarea' || tag === 'select' || target?.isContentEditable) {
+        return;
+      }
+
+      const mod = event.ctrlKey || event.metaKey;
+      if (!mod) return;
+
+      if (event.key === 'z' && !event.shiftKey) {
+        event.preventDefault();
+        handleUndo();
+        return;
+      }
+      if (event.key === 'y' || (event.key === 'z' && event.shiftKey)) {
+        event.preventDefault();
+        handleRedo();
+      }
+    };
+
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [loading, livePreviewOpen, ocrModalOpen, stockModalOpen, assetModalOpen, qrOpen, docHistory]);
 
   function handleDropComponent(type: (typeof MOBILE_COMPONENT_LIBRARY)[number]['type']) {
     if (type === 'accordion') return;
@@ -1550,6 +1665,30 @@ export function MobileEditorPage() {
                 onClick={() => setInteractionMode('scroll')}
               >
                 <ScrollModeIcon />
+              </button>
+            </div>
+            <div
+              className="mobile-editor-mode-group"
+              role="group"
+              aria-label="Historial"
+            >
+              <button
+                type="button"
+                disabled={!canUndo || loading}
+                title="Deshacer (Ctrl+Z)"
+                aria-label="Deshacer"
+                onClick={handleUndo}
+              >
+                <UndoIcon />
+              </button>
+              <button
+                type="button"
+                disabled={!canRedo || loading}
+                title="Rehacer (Ctrl+Y)"
+                aria-label="Rehacer"
+                onClick={handleRedo}
+              >
+                <RedoIcon />
               </button>
             </div>
             <label className="mobile-editor-desktop-only">
@@ -3082,6 +3221,31 @@ export function MobileEditorPage() {
               </button>
             </div>
             <div className="mobile-editor-more-body">
+              <div className="mobile-editor-more-mode">
+                <span className="mobile-editor-more-mode-label">Editar</span>
+                <div className="mobile-editor-mode-group" role="group" aria-label="Historial">
+                  <button
+                    type="button"
+                    disabled={!canUndo}
+                    title="Deshacer (Ctrl+Z)"
+                    aria-label="Deshacer"
+                    onClick={handleUndo}
+                  >
+                    <UndoIcon />
+                    <span className="mobile-editor-mode-text">Deshacer</span>
+                  </button>
+                  <button
+                    type="button"
+                    disabled={!canRedo}
+                    title="Rehacer (Ctrl+Y)"
+                    aria-label="Rehacer"
+                    onClick={handleRedo}
+                  >
+                    <RedoIcon />
+                    <span className="mobile-editor-mode-text">Rehacer</span>
+                  </button>
+                </div>
+              </div>
               <div className="mobile-editor-more-mode">
                 <span className="mobile-editor-more-mode-label">Modo del lienzo</span>
                 <div className="mobile-editor-mode-group" role="group" aria-label="Modo del lienzo">
