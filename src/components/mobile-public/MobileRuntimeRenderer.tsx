@@ -142,6 +142,14 @@ function AllergenIcon() {
   );
 }
 
+function TrashIcon() {
+  return (
+    <svg viewBox="0 0 24 24" width="12" height="12" aria-hidden="true" focusable="false">
+      <path fill="currentColor" d="M9 3h6l1 2h4v2H4V5h4l1-2zm-2 6h2v9H7V9zm4 0h2v9h-2V9zm4 0h2v9h-2V9z" />
+    </svg>
+  );
+}
+
 function SectionBackgroundImage({
   image,
 }: {
@@ -1190,7 +1198,7 @@ export function MobileRuntimeRenderer({
                 onDelete(component.id);
               }}
             >
-              ✕
+              <TrashIcon />
             </button>
           )}
           {component.type === 'accordion' ? (

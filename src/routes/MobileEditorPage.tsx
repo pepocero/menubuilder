@@ -196,6 +196,17 @@ function RedoIcon() {
   );
 }
 
+function TrashIcon() {
+  return (
+    <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true">
+      <path
+        fill="currentColor"
+        d="M9 3h6l1 2h4v2H4V5h4l1-2zm-2 6h2v9H7V9zm4 0h2v9h-2V9zm4 0h2v9h-2V9z"
+      />
+    </svg>
+  );
+}
+
 function BulletListIcon() {
   return (
     <svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true">
@@ -1062,7 +1073,11 @@ export function MobileEditorPage() {
     });
   }
 
-  function updateSelectedField(field: string, value: string) {
+  function updateSelectedField(
+    field: string,
+    value: string,
+    options?: { debouncePersist?: boolean },
+  ) {
     if (!propsComponentId) return;
     const previousSrc =
       field === 'src'
@@ -1072,13 +1087,16 @@ export function MobileEditorPage() {
             return comp && 'src' in comp && typeof comp.src === 'string' ? comp.src : undefined;
           })()
         : undefined;
-    updateDoc((current) => ({
-      ...current,
-      components: updateMobileComponentById(current.components, propsComponentId, (component) => {
-        if (!(field in component)) return component;
-        return { ...component, [field]: value } as typeof component;
+    updateDoc(
+      (current) => ({
+        ...current,
+        components: updateMobileComponentById(current.components, propsComponentId, (component) => {
+          if (!(field in component)) return component;
+          return { ...component, [field]: value } as typeof component;
+        }),
       }),
-    }));
+      options,
+    );
     if (field === 'src' && previousSrc && previousSrc !== value) {
       void releaseAssetUrlIfUnused(previousSrc);
     }
@@ -1622,6 +1640,25 @@ export function MobileEditorPage() {
     if (isPhoneLayout) setPhoneSheet(null);
   }
 
+  async function clearMobileCanvas() {
+    if (documentRef.current.components.length === 0) return;
+    const confirmed = await appConfirm(
+      '¿Limpiar el lienzo móvil?\n\nSe eliminarán todos los componentes de la carta actual. Puedes deshacer con Ctrl+Z.',
+      {
+        title: 'Limpiar lienzo',
+        variant: 'danger',
+        confirmText: 'Limpiar',
+        cancelText: 'Cancelar',
+      },
+    );
+    if (!confirmed) return;
+    updateDoc((current) => ({ ...current, components: [] }));
+    setSelectedId(null);
+    setSelectedIds([]);
+    setAccordionActionError('');
+    if (isPhoneLayout) setPhoneSheet(null);
+  }
+
   function updateSelectedHidden(hidden: boolean) {
     if (!selectedId) return;
     updateDoc((current) => ({
@@ -1633,6 +1670,8 @@ export function MobileEditorPage() {
       }),
     }));
   }
+
+  const canClearCanvas = document.components.length > 0;
 
   return (
     <div className={`mobile-editor-page${isPhoneLayout ? ' mobile-editor-page--phone' : ''}`}>
@@ -1732,6 +1771,16 @@ export function MobileEditorPage() {
               title="Ver y eliminar archivos subidos"
             >
               Archivos
+            </button>
+            <button
+              type="button"
+              className="btn-secondary mobile-editor-desktop-only"
+              onClick={() => void clearMobileCanvas()}
+              disabled={loading || !canClearCanvas}
+              title="Quitar todos los componentes de la carta"
+            >
+              <TrashIcon />
+              Limpiar lienzo
             </button>
             <Link
               to={menuId ? `/editor/${menuId}` : '/dashboard'}
@@ -2232,24 +2281,27 @@ export function MobileEditorPage() {
                   )}
                   {selected.type === 'menuItem' && (
                     <>
-                      <label>
+                      <label className="mobile-props-color-picker-label">
                         Color de fondo
                         <input
                           type="color"
                           value={selected.backgroundColor || '#ffffff'}
                           onChange={(e) => {
                             if (!propsComponentId) return;
-                            updateDoc((current) => ({
-                              ...current,
-                              components: updateMobileComponentById(
-                                current.components,
-                                propsComponentId,
-                                (component) => {
-                                  if (component.type !== 'menuItem') return component;
-                                  return { ...component, backgroundColor: e.target.value };
-                                },
-                              ),
-                            }));
+                            updateDoc(
+                              (current) => ({
+                                ...current,
+                                components: updateMobileComponentById(
+                                  current.components,
+                                  propsComponentId,
+                                  (component) => {
+                                    if (component.type !== 'menuItem') return component;
+                                    return { ...component, backgroundColor: e.target.value };
+                                  },
+                                ),
+                              }),
+                              { debouncePersist: true },
+                            );
                           }}
                         />
                       </label>
@@ -2381,12 +2433,16 @@ export function MobileEditorPage() {
                           ))}
                         </select>
                       </label>
-                      <label>
+                      <label className="mobile-props-color-picker-label">
                         Color de fondo
                         <input
                           type="color"
                           value={selected.backgroundColor || '#ffffff'}
-                          onChange={(e) => updateSelectedField('backgroundColor', e.target.value)}
+                          onChange={(e) =>
+                            updateSelectedField('backgroundColor', e.target.value, {
+                              debouncePersist: true,
+                            })
+                          }
                         />
                       </label>
                       <h4>Imagen de fondo</h4>
@@ -3288,6 +3344,15 @@ export function MobileEditorPage() {
                 }}
               >
                 {multiSelectMode ? 'Selección múltiple: ON' : 'Selección múltiple'}
+              </button>
+              <button
+                type="button"
+                className="btn-secondary"
+                onClick={() => void clearMobileCanvas()}
+                disabled={!canClearCanvas}
+              >
+                <TrashIcon />
+                Limpiar lienzo
               </button>
               {selectedIds.length >= 2 && (
                 <button

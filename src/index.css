@@ -4525,17 +4525,17 @@ textarea {
 
 .mobile-runtime-node-delete {
   position: absolute;
-  top: 4px;
-  right: 4px;
+  top: 3px;
+  right: 3px;
   z-index: 5;
-  width: 1.55rem;
-  height: 1.55rem;
+  width: 1.2rem;
+  height: 1.2rem;
   padding: 0;
   border: none;
   border-radius: 999px;
-  background: rgb(15 23 42 / 72%);
+  background: rgb(15 23 42 / 66%);
   color: #fff;
-  font-size: 0.75rem;
+  font-size: 0.68rem;
   line-height: 1;
   cursor: pointer;
   display: grid;
@@ -4544,6 +4544,14 @@ textarea {
 
 .mobile-runtime-node-delete:hover {
   background: #b91c1c;
+}
+
+.mobile-props-color-picker-label {
+  pointer-events: none;
+}
+
+.mobile-props-color-picker-label input[type='color'] {
+  pointer-events: auto;
 }
 
 .mobile-runtime-root.is-editable .mobile-runtime-node {
