@@ -4,6 +4,7 @@ import { errorResponse, jsonResponse } from '../../../lib/types';
 
 export const onRequestPost: PagesFunction<Env> = async (context) => {
   const userId = context.data.userId as string;
+  const email = context.data.email as string;
   const menuId = context.params.id as string;
   const menu = await getMenuById(context.env.DB, menuId);
 
@@ -17,7 +18,7 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
   }
 
   try {
-    await deleteMenuExportPng(context.env.MEDIA, userId, menuId);
+    await deleteMenuExportPng(context.env.MEDIA, email, menuId, userId);
   } catch {
     /* best-effort */
   }

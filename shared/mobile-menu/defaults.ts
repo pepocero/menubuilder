@@ -109,7 +109,7 @@ export function createDefaultMobileComponent(type: MobileComponent['type']): Mob
       return {
         id,
         type,
-        title: 'Nueva seccion',
+        title: 'Titulo Seccion',
         backgroundColor: '#ffffff',
         padding: 16,
         size: 's',
@@ -123,13 +123,13 @@ export function createDefaultMobileComponent(type: MobileComponent['type']): Mob
         action: defaultSectionAction(),
         animation: defaultAnimation(),
         effect: defaultEffect(),
-        typography: defaultTypography({ fontSize: 18, fontWeight: 700 }),
+        typography: defaultTypography({ fontSize: 22, fontWeight: 700, textAlign: 'center' }),
       };
     case 'heading':
       return {
         id,
         type,
-        text: 'Titulo de seccion',
+        text: 'Título',
         animation: defaultAnimation(),
         effect: defaultEffect(),
         typography: defaultTypography({ fontSize: 28, fontWeight: 700 }),
@@ -165,6 +165,7 @@ export function createDefaultMobileComponent(type: MobileComponent['type']): Mob
         price: '12,00€',
         ingredients: 'Ingrediente 1 - Ingrediente 2 - Ingrediente 3',
         allergens: '',
+        allergensAccentColor: '#b45309',
         backgroundColor: '#ffffff',
         menuImage: {
           src: '',
@@ -250,8 +251,7 @@ export function createDefaultMobileMenuDocument(
       fontFamily: 'Inter, system-ui, Arial, sans-serif',
     },
     components: [
-      createDefaultMobileComponent('heading'),
-      createDefaultMobileComponent('text'),
+      createDefaultMobileComponent('section'),
       createDefaultMobileComponent('menuItem'),
       createDefaultMobileComponent('menuItem'),
       createDefaultMobileComponent('button'),

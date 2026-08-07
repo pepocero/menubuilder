@@ -24,5 +24,7 @@ export const onRequestGet: PagesFunction<Env> = async (context) => {
       updated_at: menu.updated_at,
       public_slug: menu.public_slug,
     },
+  }, 200, {
+    'Cache-Control': 'no-store, max-age=0, must-revalidate',
   });
 };

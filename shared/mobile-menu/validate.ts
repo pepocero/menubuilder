@@ -373,6 +373,10 @@ function parseComponent(value: unknown): MobileComponent | null {
       price: value.price,
       ingredients: value.ingredients,
       allergens: isString(value.allergens) ? value.allergens : '',
+      allergensAccentColor:
+        isString(value.allergensAccentColor) && value.allergensAccentColor.trim()
+          ? value.allergensAccentColor.trim().slice(0, 64)
+          : '#b45309',
       backgroundColor:
         isString(value.backgroundColor) && value.backgroundColor.trim()
           ? value.backgroundColor.trim().slice(0, 64)

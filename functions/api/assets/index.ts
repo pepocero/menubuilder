@@ -73,6 +73,7 @@ export const onRequestGet: PagesFunction<Env> = async (context) => {
 export const onRequestPost: PagesFunction<Env> = async (context) => {
   const { request, env } = context;
   const userId = context.data.userId as string;
+  const email = context.data.email as string;
 
   const formData = await request.formData();
   const file = formData.get('file');
@@ -86,7 +87,7 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
     return errorResponse(validation.error);
   }
 
-  const r2Key = buildR2Key(userId, file.name);
+  const r2Key = buildR2Key(email, file.name);
   const buffer = await file.arrayBuffer();
 
   await uploadToR2(env.MEDIA, r2Key, buffer, file.type);

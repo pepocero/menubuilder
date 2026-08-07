@@ -11,9 +11,30 @@ export function sanitizeFilename(name: string): string {
   return name.replace(/[^a-zA-Z0-9._-]/g, '_').slice(0, 100);
 }
 
-export function buildR2Key(userId: string, filename: string): string {
+/**
+ * Carpeta de usuario en R2 legible por email de registro.
+ * Ej.: pepocero@gmail.com → pepocero_at_gmail.com
+ * (El aislamiento multitenant sigue siendo por user_id en D1.)
+ */
+export function sanitizeUserStorageFolder(email: string): string {
+  const normalized = email.trim().toLowerCase();
+  const folder = normalized
+    .replace(/@/g, '_at_')
+    .replace(/[^a-z0-9._+-]/g, '_')
+    .replace(/_+/g, '_')
+    .replace(/^[._-]+|[._-]+$/g, '')
+    .slice(0, 180);
+  return folder || 'unknown';
+}
+
+/** Prefijo R2 por usuario: users/<email-sanitizado>/ */
+export function buildUserR2Prefix(email: string): string {
+  return `users/${sanitizeUserStorageFolder(email)}`;
+}
+
+export function buildR2Key(email: string, filename: string): string {
   const safe = sanitizeFilename(filename);
-  return `users/${userId}/${crypto.randomUUID()}-${safe}`;
+  return `${buildUserR2Prefix(email)}/${crypto.randomUUID()}-${safe}`;
 }
 
 export function validateImageUpload(

@@ -7,6 +7,8 @@
     "/icons.svg",
     "/robots.txt",
     "/sitemap.xml",
+    "/manifest.webmanifest",
+    "/sw.js",
     "/templates/*",
     "/landing/*",
     "/asset-404.txt"

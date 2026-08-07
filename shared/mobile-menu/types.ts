@@ -265,6 +265,11 @@ export interface MobileMenuItemComponent extends MobileComponentBase {
   ingredients: string;
   /** Alérgenos: uno por línea (también admite comas). */
   allergens: string;
+  /**
+   * Color predominante del modal de alérgenos (preview / carta pública).
+   * Por defecto: `#b45309`.
+   */
+  allergensAccentColor?: string;
   /** Color de fondo del plato. Por defecto: `#ffffff`. */
   backgroundColor?: string;
   menuImage?: {

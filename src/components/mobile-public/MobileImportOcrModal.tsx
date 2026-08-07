@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState, type ChangeEvent, type FormEvent } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type ChangeEvent, type FormEvent } from 'react';
 import { createPortal } from 'react-dom';
 import {
   MENU_OCR_PROMPT_EXTRA_MAX,
@@ -100,6 +100,7 @@ export function MobileImportOcrModal({
   const [assetsError, setAssetsError] = useState('');
   const [selectedAssetIds, setSelectedAssetIds] = useState<string[]>([]);
   const [replaceExisting, setReplaceExisting] = useState(false);
+  const cameraInputRef = useRef<HTMLInputElement>(null);
 
   const previewUrls = useMemo(
     () => files.map((file) => ({ name: file.name, url: URL.createObjectURL(file) })),
@@ -178,6 +179,15 @@ export function MobileImportOcrModal({
     const list = Array.from(e.target.files ?? []).filter((f) => f.type.startsWith('image/'));
     setFiles(list);
     setSelectedAssetIds([]);
+    e.target.value = '';
+  }
+
+  function handleCameraChange(e: ChangeEvent<HTMLInputElement>) {
+    const list = Array.from(e.target.files ?? []).filter((f) => f.type.startsWith('image/'));
+    if (list.length > 0) {
+      setFiles(list);
+      setSelectedAssetIds([]);
+    }
     e.target.value = '';
   }
 
@@ -329,16 +339,36 @@ export function MobileImportOcrModal({
 
             {tab === 'upload' && (
               <div className="import-menu-panel">
-                <label className="btn-file import-menu-file">
-                  {files.length > 0 ? 'Cambiar imágenes' : 'Elegir imágenes'}
+                <div className="import-menu-file-actions">
+                  <label className="btn-file import-menu-file">
+                    {files.length > 0 ? 'Cambiar imágenes' : 'Elegir imágenes'}
+                    <input
+                      type="file"
+                      accept="image/png,image/jpeg,image/webp,image/*"
+                      multiple
+                      onChange={handleFilesChange}
+                      hidden
+                    />
+                  </label>
+                  <button
+                    type="button"
+                    className="btn-file import-menu-file"
+                    onClick={() => cameraInputRef.current?.click()}
+                  >
+                    Abrir cámara
+                  </button>
                   <input
+                    ref={cameraInputRef}
                     type="file"
-                    accept="image/png,image/jpeg,image/webp,image/*"
-                    multiple
-                    onChange={handleFilesChange}
+                    accept="image/*"
+                    capture="environment"
+                    onChange={handleCameraChange}
                     hidden
                   />
-                </label>
+                </div>
+                <p className="import-menu-filename import-menu-camera-hint">
+                  En el móvil, «Abrir cámara» permite fotografiar la carta al momento.
+                </p>
                 {files.length > 0 && (
                   <p className="import-menu-filename">
                     {files.length} imagen{files.length === 1 ? '' : 'es'} seleccionada

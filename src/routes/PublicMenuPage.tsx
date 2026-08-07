@@ -31,6 +31,7 @@ async function fetchPublicMenu(slug: string): Promise<PublicMenuPayload> {
   const response = await fetch(`/api/public/menus/${encodeURIComponent(slug)}`, {
     method: 'GET',
     headers: { Accept: 'application/json' },
+    cache: 'no-store',
   });
   const data = (await response.json().catch(() => ({}))) as {
     menu?: PublicMenuPayload;
@@ -45,6 +46,31 @@ async function fetchPublicMenu(slug: string): Promise<PublicMenuPayload> {
 function isHttpUrl(value: string | null | undefined): value is string {
   if (!value) return false;
   return value.startsWith('/') || /^https?:\/\//i.test(value);
+}
+
+function coerceMobileDocument(raw: unknown): MobileMenuDocument | null {
+  const direct = parseMobileMenuDocument(raw);
+  if (direct) return direct;
+  if (typeof raw === 'string') {
+    try {
+      return parseMobileMenuDocument(JSON.parse(raw));
+    } catch {
+      return null;
+    }
+  }
+  return null;
+}
+
+function hasRenderableContent(menu: PublicMenuPayload): boolean {
+  if (menu.editor_kind === 'mobile') {
+    return !!coerceMobileDocument(menu.mobile_document);
+  }
+  if (validateCanvasData(menu.canvas_data)) {
+    const canvasDoc = normalizeCanvasData(menu.canvas_data);
+    return canvasDoc.pages.some((page) => page.hidden !== true);
+  }
+  if (parseMenuDocument(menu.menu_document)) return true;
+  return isHttpUrl(menu.export_png_url);
 }
 
 /**
@@ -68,65 +94,81 @@ export function PublicMenuPage() {
   useEffect(() => {
     if (!slug) return;
     let disposed = false;
+    let retryTimer = 0;
 
-    (async () => {
-      try {
-        const menu = await fetchPublicMenu(slug);
-        if (disposed) return;
+    const applyMenu = (menu: PublicMenuPayload) => {
+      const safeTitle = menu.title?.trim() || 'Carta digital';
+      setTitle(safeTitle);
+      applyPageSeo({
+        title: safeTitle,
+        description: `${safeTitle} — carta de menú digital publicada con ${SITE_NAME}.`,
+        path: `/p/${slug}`,
+        index: true,
+      });
 
-        const safeTitle = menu.title?.trim() || 'Carta digital';
-        setTitle(safeTitle);
-        applyPageSeo({
-          title: safeTitle,
-          description: `${safeTitle} — carta de menú digital publicada con ${SITE_NAME}.`,
-          path: `/p/${slug}`,
-          index: true,
-        });
+      setExportPngUrl(isHttpUrl(menu.export_png_url) ? menu.export_png_url : null);
 
-        setExportPngUrl(isHttpUrl(menu.export_png_url) ? menu.export_png_url : null);
-
-        if (menu.editor_kind === 'mobile') {
-          const mobileDoc = parseMobileMenuDocument(menu.mobile_document);
-          if (mobileDoc) {
-            setMobileDocument(mobileDoc);
-            setMenuDocument(null);
-            setPages([]);
-            setPageScroll('vertical');
-            setPageGap(0);
-            setLoading(false);
-            return;
-          }
-        }
-
-        // Misma fuente de verdad que el editor.
-        if (validateCanvasData(menu.canvas_data)) {
-          const canvasDoc = normalizeCanvasData(menu.canvas_data);
-          setPages(canvasDoc.pages.filter((page) => page.hidden !== true));
-          setPageScroll(canvasDoc.pageScroll ?? 'vertical');
-          setPageGap(normalizePageGap(canvasDoc.pageGap));
+      if (menu.editor_kind === 'mobile') {
+        const mobileDoc = coerceMobileDocument(menu.mobile_document);
+        if (mobileDoc) {
+          setMobileDocument(mobileDoc);
           setMenuDocument(null);
-          setMobileDocument(null);
-          setLoading(false);
-          return;
-        }
-
-        const storedDoc = parseMenuDocument(menu.menu_document);
-        if (storedDoc) {
-          setMenuDocument(storedDoc);
-          setMobileDocument(null);
           setPages([]);
           setPageScroll('vertical');
           setPageGap(0);
-          setLoading(false);
-          return;
+          return true;
         }
-
+        setMobileDocument(null);
         setMenuDocument(null);
+        setPages([]);
+        return false;
+      }
+
+      if (validateCanvasData(menu.canvas_data)) {
+        const canvasDoc = normalizeCanvasData(menu.canvas_data);
+        setPages(canvasDoc.pages.filter((page) => page.hidden !== true));
+        setPageScroll(canvasDoc.pageScroll ?? 'vertical');
+        setPageGap(normalizePageGap(canvasDoc.pageGap));
+        setMenuDocument(null);
+        setMobileDocument(null);
+        return true;
+      }
+
+      const storedDoc = parseMenuDocument(menu.menu_document);
+      if (storedDoc) {
+        setMenuDocument(storedDoc);
         setMobileDocument(null);
         setPages([]);
         setPageScroll('vertical');
         setPageGap(0);
-        setLoading(false);
+        return true;
+      }
+
+      setMenuDocument(null);
+      setMobileDocument(null);
+      setPages([]);
+      setPageScroll('vertical');
+      setPageGap(0);
+      return isHttpUrl(menu.export_png_url);
+    };
+
+    (async () => {
+      try {
+        let menu = await fetchPublicMenu(slug);
+        if (disposed) return;
+
+        // Tras publicar, a veces el primer GET llega antes de que el documento esté listo.
+        if (!hasRenderableContent(menu)) {
+          await new Promise((resolve) => {
+            retryTimer = window.setTimeout(resolve, 450);
+          });
+          if (disposed) return;
+          menu = await fetchPublicMenu(slug);
+          if (disposed) return;
+        }
+
+        applyMenu(menu);
+        if (!disposed) setLoading(false);
       } catch {
         if (!disposed) {
           setError('Esta carta no está disponible o ya no es pública.');
@@ -137,6 +179,7 @@ export function PublicMenuPage() {
 
     return () => {
       disposed = true;
+      if (retryTimer) window.clearTimeout(retryTimer);
     };
   }, [slug]);
 

@@ -19,6 +19,7 @@ interface ImportStockBody {
 export const onRequestPost: PagesFunction<Env> = async (context) => {
   const { request, env } = context;
   const userId = context.data.userId as string;
+  const email = context.data.email as string;
   const body = await parseJson<ImportStockBody>(request);
 
   if (!body?.stockImageId) {
@@ -57,7 +58,7 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
   }
 
   const ext = remote.contentType.split('/')[1] ?? 'jpg';
-  const r2Key = buildR2Key(userId, `stock-${body.stockImageId}.${ext}`);
+  const r2Key = buildR2Key(email, `stock-${body.stockImageId}.${ext}`);
 
   await uploadToR2(env.MEDIA, r2Key, remote.buffer, remote.contentType);
   const url = getAssetPublicUrl(request, r2Key);

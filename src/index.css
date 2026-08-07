@@ -44,7 +44,8 @@ textarea {
 
 .btn-primary,
 .btn-secondary,
-.btn-file {
+.btn-file,
+.btn-random {
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -73,6 +74,24 @@ textarea {
   background: var(--color-surface);
   border-color: var(--color-border);
   color: var(--color-text);
+}
+
+.btn-random {
+  gap: 0.4rem;
+  background: #fff7ed;
+  border-color: #fb923c;
+  color: #c2410c;
+}
+
+.btn-random:hover {
+  background: #ffedd5;
+  border-color: #f97316;
+  color: #9a3412;
+}
+
+.btn-random:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
 }
 
 .btn-lg {
@@ -937,6 +956,35 @@ textarea {
   align-items: center;
   padding: 0.75rem 1.5rem;
   gap: 0.75rem;
+}
+
+.app-header-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  margin-left: auto;
+}
+
+.btn-pwa-install {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.35rem;
+  padding: 0.45rem 0.75rem;
+  border-radius: var(--radius);
+  border: 1px solid #fb923c;
+  background: #fff7ed;
+  color: #c2410c;
+  cursor: pointer;
+  font-weight: 600;
+  font-size: 0.875rem;
+  min-height: 44px;
+}
+
+.btn-pwa-install:hover {
+  background: #ffedd5;
+  border-color: #f97316;
+  color: #9a3412;
 }
 
 .app-nav-toggle {
@@ -2645,6 +2693,21 @@ textarea {
   color: #fff;
 }
 
+.import-menu-file-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  align-items: center;
+}
+
+.import-menu-file-actions .import-menu-file {
+  margin: 0;
+}
+
+.import-menu-camera-hint {
+  margin-top: 0.35rem !important;
+}
+
 .import-menu-file:hover {
   background: var(--color-primary-hover);
   border-color: var(--color-primary-hover);
@@ -3645,14 +3708,20 @@ textarea {
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    margin-left: auto;
-    padding: 0.45rem 0.75rem;
+    padding: 0.45rem;
+    width: 44px;
+    height: 44px;
     border: 1px solid var(--color-border);
     border-radius: var(--radius);
     background: var(--color-surface);
+    color: var(--color-text);
     cursor: pointer;
-    font-weight: 600;
-    min-height: 44px;
+  }
+
+  .app-nav-toggle[aria-expanded='true'] {
+    background: #e0f2fe;
+    border-color: #7dd3fc;
+    color: #0369a1;
   }
 
   .app-header .app-nav {
@@ -4312,7 +4381,17 @@ textarea {
 
 .mobile-runtime-node.is-multi-selected {
   outline: 2px dashed #38bdf8;
+  outline-offset: 2px;
   border-radius: 10px;
+}
+
+.mobile-runtime-root.is-editable .mobile-runtime-node.is-selected:not(.is-multi-selected) {
+  outline: 2px solid #38bdf8;
+  outline-offset: 2px;
+  border-radius: 10px;
+  box-shadow: 0 0 0 3px rgb(56 189 248 / 28%);
+  position: relative;
+  z-index: 1;
 }
 
 .mobile-block-accordion {
@@ -4498,6 +4577,7 @@ textarea {
 .mobile-accordion-child.is-selected {
   outline: 2px solid #38bdf8;
   outline-offset: 2px;
+  box-shadow: 0 0 0 3px rgb(56 189 248 / 28%);
 }
 
 .mobile-runtime-root.is-editable .mobile-accordion-child {
@@ -4543,39 +4623,139 @@ textarea {
   outline: 2px solid #38bdf8;
 }
 
-.mobile-runtime-node-delete {
+.mobile-runtime-swipe-row {
+  position: relative;
+  overflow: hidden;
+  border-radius: 10px;
+  isolation: isolate;
+}
+
+.mobile-runtime-swipe-actions {
   position: absolute;
-  top: 2px;
-  right: 2px;
-  z-index: 5;
-  width: 1.7rem;
-  height: 1.7rem;
-  padding: 0;
-  border: none;
-  border-radius: 999px;
-  background: transparent;
+  inset: 0 0 0 auto;
+  z-index: 0;
+  width: 96px;
+  display: flex;
+  align-items: stretch;
+  justify-content: stretch;
+}
+
+.mobile-runtime-swipe-action {
+  flex: 1 1 auto;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.2rem;
+  margin: 0;
+  border: 0;
+  border-radius: 0;
+  background: #dc2626;
   color: #fff;
-  font-size: 0.68rem;
-  line-height: 1;
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.01em;
   cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
+}
+
+.mobile-runtime-swipe-action:active {
+  background: #b91c1c;
+}
+
+.mobile-runtime-swipe-front {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  align-items: stretch;
+  gap: 0;
+  transition: transform 0.22s cubic-bezier(0.22, 1, 0.36, 1);
+  will-change: transform;
+  background-color: var(--mobile-swipe-front-bg, #ffffff);
+}
+
+.mobile-runtime-swipe-front-body {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.mobile-runtime-reorder-handle {
+  flex: 0 0 auto;
+  align-self: stretch;
   display: grid;
   place-items: center;
+  width: 2.35rem;
+  margin: 0;
+  padding: 0.35rem 0.15rem;
+  border: 0;
+  border-right: 1px solid rgb(15 23 42 / 10%);
+  border-radius: 0;
+  background: rgb(15 23 42 / 6%);
+  color: #334155;
+  cursor: grab;
+  touch-action: none;
+  -webkit-tap-highlight-color: transparent;
+  user-select: none;
 }
 
-.mobile-runtime-node-delete svg {
-  width: 11px;
-  height: 11px;
+.mobile-runtime-reorder-handle:active {
+  cursor: grabbing;
+  background: rgb(14 165 233 / 18%);
+  color: #0369a1;
+}
+
+.mobile-runtime-root.is-reordering .mobile-runtime-reorder-handle {
+  cursor: grabbing;
+}
+
+.mobile-runtime-root.is-editable .mobile-runtime-swipe-front {
+  touch-action: pan-y;
+}
+
+.mobile-runtime-root.is-editable:not(.is-scroll-mode) .mobile-runtime-swipe-front {
+  touch-action: pan-y;
+}
+
+.mobile-runtime-root.is-editable:not(.is-scroll-mode) .mobile-runtime-swipe-front-body {
+  /* El cuerpo no inicia drag; solo el asa. */
+  touch-action: pan-y;
+}
+
+.mobile-editor-swipe-hint {
+  display: none;
+}
+
+.mobile-editor-page--phone .mobile-editor-swipe-hint {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  margin: 0;
+  padding: 0.45rem 0.75rem;
+  border-bottom: 1px solid #e2e8f0;
+  background: #f8fafc;
+  color: #475569;
+  font-size: 0.75rem;
+  line-height: 1.3;
+}
+
+.mobile-editor-page--phone .mobile-editor-swipe-hint strong {
+  color: #0f172a;
+  font-weight: 700;
+}
+
+.mobile-editor-page--phone .mobile-editor-swipe-hint-dismiss {
+  margin-left: auto;
+  flex: 0 0 auto;
+  width: 1.75rem;
+  height: 1.75rem;
+  display: grid;
+  place-items: center;
+  border: 0;
   border-radius: 999px;
-  background: rgb(15 23 42 / 66%);
-  padding: 1px;
-}
-
-.mobile-runtime-node-delete:hover {
-  color: #fee2e2;
-}
-
-.mobile-runtime-node-delete:hover svg {
-  background: #b91c1c;
+  background: transparent;
+  color: #64748b;
+  cursor: pointer;
 }
 
 .mobile-props-color-picker-label {
@@ -5037,10 +5217,10 @@ textarea {
   margin-top: 0.45rem;
   min-height: 2rem;
   padding: 0.35rem 0.65rem;
-  border: 1px solid #fcd34d;
+  border: 1px solid color-mix(in srgb, var(--allergens-accent, #b45309) 45%, white);
   border-radius: 999px;
-  background: #fffbeb;
-  color: #92400e;
+  background: color-mix(in srgb, var(--allergens-accent, #b45309) 12%, white);
+  color: var(--allergens-accent, #b45309);
   font-size: 0.72rem;
   font-weight: 600;
   line-height: 1;
@@ -5051,40 +5231,131 @@ textarea {
 
 @media (hover: hover) {
   .mobile-menu-allergens-btn:hover {
-    background: #fef3c7;
+    background: color-mix(in srgb, var(--allergens-accent, #b45309) 18%, white);
   }
 }
 
 .mobile-menu-allergens-btn:active {
-  background: #fde68a;
+  background: color-mix(in srgb, var(--allergens-accent, #b45309) 26%, white);
 }
 
-.mobile-allergens-modal .mobile-allergens-dish {
-  margin: 0;
+.mobile-allergens-overlay {
+  z-index: 5400;
+  padding: 1.25rem;
+  background: rgb(15 23 42 / 55%);
+  backdrop-filter: blur(4px);
+}
+
+.mobile-allergens-modal {
+  position: relative;
+  width: min(360px, 100%);
+  padding: 1.5rem 1.25rem 1.35rem;
+  border: 1px solid color-mix(in srgb, var(--allergens-accent, #b45309) 42%, white);
+  border-radius: 20px;
+  background:
+    linear-gradient(
+      180deg,
+      color-mix(in srgb, var(--allergens-accent, #b45309) 8%, white) 0%,
+      #fff 42%,
+      color-mix(in srgb, var(--allergens-accent, #b45309) 10%, white) 100%
+    );
+  box-shadow:
+    0 24px 48px rgb(15 23 42 / 28%),
+    0 0 0 1px rgb(255 255 255 / 40%) inset;
+  gap: 0.85rem;
+  text-align: center;
+}
+
+.mobile-allergens-close {
+  position: absolute;
+  top: 0.65rem;
+  right: 0.65rem;
+  width: 2rem;
+  height: 2rem;
+  display: grid;
+  place-items: center;
+  border: none;
+  border-radius: 999px;
+  background: rgb(15 23 42 / 6%);
   color: #64748b;
-  font-size: 0.9rem;
+  font-size: 0.95rem;
+  line-height: 1;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+
+@media (hover: hover) {
+  .mobile-allergens-close:hover {
+    background: rgb(15 23 42 / 10%);
+    color: #334155;
+  }
+}
+
+.mobile-allergens-close:active {
+  background: rgb(15 23 42 / 14%);
+}
+
+.mobile-allergens-dish-title {
+  margin: 0.15rem 1.75rem 0;
+  color: #1e293b;
+  font-size: 1.15rem;
+  font-weight: 700;
+  line-height: 1.3;
+  letter-spacing: -0.01em;
+  text-wrap: balance;
+}
+
+.mobile-allergens-heading {
+  margin: 0;
+  color: var(--allergens-accent, #b45309);
+  font-size: 0.78rem;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
 }
 
 .mobile-allergens-list {
   list-style: none;
-  margin: 0;
+  margin: 0.15rem 0 0;
   padding: 0;
   display: flex;
   flex-direction: column;
-  gap: 0.4rem;
-  max-height: min(50vh, 320px);
+  gap: 0.45rem;
+  max-height: min(52vh, 360px);
   overflow: auto;
   -webkit-overflow-scrolling: touch;
+  text-align: left;
 }
 
 .mobile-allergens-list li {
-  padding: 0.55rem 0.7rem;
-  border-radius: 10px;
-  background: #fffbeb;
-  border: 1px solid #fde68a;
-  color: #78350f;
-  font-size: 0.9rem;
-  font-weight: 500;
+  display: flex;
+  align-items: center;
+  gap: 0.85rem;
+  min-height: 3rem;
+  padding: 0.55rem 0.75rem;
+  border-radius: 14px;
+  background: #fff;
+  border: 1px solid color-mix(in srgb, var(--allergens-accent, #b45309) 32%, white);
+  box-shadow: 0 1px 2px color-mix(in srgb, var(--allergens-accent, #b45309) 12%, transparent);
+  color: color-mix(in srgb, var(--allergens-accent, #b45309) 78%, #1c1917);
+  font-size: 0.95rem;
+  font-weight: 600;
+}
+
+.mobile-allergens-icon {
+  flex: 0 0 auto;
+  display: grid;
+  place-items: center;
+  width: 2.5rem;
+  height: 2.5rem;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--allergens-accent, #b45309) 14%, white);
+  color: var(--allergens-accent, #b45309);
+}
+
+.mobile-allergens-label {
+  flex: 1 1 auto;
+  line-height: 1.25;
 }
 
 @media (max-width: 900px) {
@@ -5095,15 +5366,13 @@ textarea {
   }
 
   .mobile-allergens-list {
-    max-height: min(55dvh, 360px);
+    max-height: min(58dvh, 400px);
   }
 
   .mobile-allergens-list li {
-    min-height: 2.5rem;
-    display: flex;
-    align-items: center;
-    padding: 0.65rem 0.8rem;
-    font-size: 0.95rem;
+    min-height: 3.15rem;
+    padding: 0.65rem 0.85rem;
+    font-size: 1rem;
   }
 }
 
@@ -5446,7 +5715,8 @@ textarea {
   gap: 0.5rem;
 }
 
-.mobile-props-form label {
+.mobile-props-form label,
+.mobile-props-form .mobile-props-field {
   display: flex;
   flex-direction: column;
   gap: 0.25rem;
@@ -5499,16 +5769,22 @@ textarea {
 
 .wysiwyg-align-group {
   display: inline-flex;
+  flex: 0 0 auto;
+  align-self: flex-start;
   border: 1px solid var(--color-border);
   border-radius: 6px;
   overflow: hidden;
   width: fit-content;
+  max-width: 100%;
 }
 
 .wysiwyg-align-group button {
+  flex: 0 0 auto;
   width: 2rem;
   min-width: 2rem;
+  max-width: 2.5rem;
   height: 2rem;
+  padding: 0;
   border: 0;
   border-right: 1px solid var(--color-border);
   background: var(--color-bg);
@@ -5525,6 +5801,97 @@ textarea {
 .wysiwyg-align-group button.is-active {
   background: #e0f2fe;
   color: #0369a1;
+}
+
+.mobile-props-field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.mobile-props-field-label {
+  font-size: inherit;
+  font-weight: inherit;
+  color: inherit;
+}
+
+.mobile-number-stepper {
+  display: flex;
+  align-items: stretch;
+  width: 100%;
+  max-width: 100%;
+  border: 1px solid #cbd5e1;
+  border-radius: 10px;
+  overflow: hidden;
+  background: #fff;
+}
+
+.mobile-number-stepper input[type='number'] {
+  flex: 1 1 auto;
+  min-width: 0;
+  width: auto !important;
+  margin: 0;
+  border: 0 !important;
+  border-radius: 0 !important;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+  -moz-appearance: textfield;
+}
+
+.mobile-number-stepper input[type='number']::-webkit-outer-spin-button,
+.mobile-number-stepper input[type='number']::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+
+.mobile-number-stepper-btn {
+  flex: 0 0 2.75rem;
+  min-width: 2.75rem;
+  min-height: 2.5rem;
+  margin: 0;
+  border: 0;
+  border-right: 1px solid #e2e8f0;
+  background: #f8fafc;
+  color: #0f172a;
+  font-size: 1.25rem;
+  font-weight: 600;
+  line-height: 1;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
+}
+
+.mobile-number-stepper-btn:last-child {
+  border-right: 0;
+  border-left: 1px solid #e2e8f0;
+}
+
+.mobile-number-stepper-btn:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
+
+@media (hover: hover) {
+  .mobile-number-stepper-btn:not(:disabled):hover {
+    background: #e2e8f0;
+  }
+}
+
+.mobile-number-stepper-btn:not(:disabled):active {
+  background: #cbd5e1;
+}
+
+.mobile-editor-page--phone .mobile-number-stepper-btn {
+  flex-basis: 3rem;
+  min-width: 3rem;
+  min-height: 2.75rem;
+  font-size: 1.35rem;
+}
+
+.mobile-editor-page--phone .wysiwyg-align-group button {
+  width: 2.4rem;
+  min-width: 2.4rem;
+  height: 2.4rem;
 }
 
 .wysiwyg-text-icon {
@@ -5650,16 +6017,55 @@ textarea {
 .mobile-public-view--fullscreen .mobile-runtime-root {
   width: 100%;
   min-height: 100dvh;
+  overflow: visible;
 }
 
 .mobile-live-preview-overlay {
   position: fixed;
   inset: 0;
-  z-index: 1800;
+  z-index: 5300;
   display: flex;
   flex-direction: column;
   background: rgb(15 23 42 / 88%);
   backdrop-filter: blur(4px);
+}
+
+.mobile-live-preview-overlay.is-phone-public {
+  background: #fff;
+  backdrop-filter: none;
+  overflow: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+.mobile-live-preview-close-fab {
+  position: fixed;
+  top: max(0.65rem, env(safe-area-inset-top, 0px));
+  right: max(0.65rem, env(safe-area-inset-right, 0px));
+  z-index: 5310;
+  width: 2.5rem;
+  height: 2.5rem;
+  display: grid;
+  place-items: center;
+  border: 1px solid rgb(15 23 42 / 12%);
+  border-radius: 999px;
+  background: rgb(255 255 255 / 92%);
+  color: #334155;
+  font-size: 1rem;
+  line-height: 1;
+  box-shadow: 0 8px 24px rgb(15 23 42 / 18%);
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+
+@media (hover: hover) {
+  .mobile-live-preview-close-fab:hover {
+    background: #fff;
+    color: #0f172a;
+  }
+}
+
+.mobile-live-preview-close-fab:active {
+  background: #f1f5f9;
 }
 
 .mobile-live-preview-toolbar {
@@ -5762,37 +6168,114 @@ textarea {
   display: none;
 }
 
+.mobile-editor-page--phone .app-layout {
+  display: none !important;
+}
+
 .mobile-editor-page--phone .app-header {
   display: none;
+}
+
+.mobile-editor-page--phone {
+  /* svh = área visible con chrome del navegador expandido (evita dock fuera de pantalla). */
+  height: 100vh;
+  height: 100dvh;
+  height: 100svh;
+  max-height: 100vh;
+  max-height: 100dvh;
+  max-height: 100svh;
 }
 
 .mobile-editor-page--phone .mobile-editor-main {
   padding: 0;
   padding-bottom: calc(3.75rem + env(safe-area-inset-bottom, 0px));
+  overflow: hidden;
 }
 
 .mobile-editor-page--phone .mobile-editor-header {
-  padding: 0.45rem 0.75rem;
+  padding-top: max(0.45rem, env(safe-area-inset-top, 0px));
+  padding-right: 0.75rem;
+  padding-bottom: 0.45rem;
+  padding-left: 0.75rem;
   margin: 0;
   border-bottom: 1px solid var(--color-border);
   background: var(--color-surface);
+  align-items: flex-end;
+  gap: 0.5rem;
 }
 
 .mobile-editor-page--phone .mobile-editor-header h1 {
-  font-size: 0.95rem;
+  display: none;
+}
+
+.mobile-editor-page--phone .mobile-editor-header-actions {
+  flex: 1 1 auto;
+  width: 100%;
+  overflow: visible;
 }
 
 .mobile-editor-page--phone .mobile-editor-desktop-only {
   display: none !important;
 }
 
+.mobile-editor-phone-title-field {
+  display: none;
+}
+
+.mobile-editor-page--phone .mobile-editor-phone-title-field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  flex: 1 1 auto;
+  min-width: 0;
+  max-width: none;
+}
+
+.mobile-editor-page--phone .mobile-editor-phone-title-label {
+  font-size: 0.65rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--color-muted);
+  line-height: 1;
+}
+
+.mobile-editor-page--phone .mobile-editor-phone-title-field input {
+  width: 100%;
+  min-width: 0;
+  max-width: 100%;
+  box-sizing: border-box;
+  height: 2.15rem;
+  padding: 0.3rem 0.65rem;
+  border: 1px solid #cbd5e1;
+  border-radius: 10px;
+  background: #fff;
+  color: #0f172a;
+  font-size: 0.9rem;
+  font-weight: 600;
+  line-height: 1.2;
+  -webkit-appearance: none;
+  appearance: none;
+}
+
+.mobile-editor-page--phone .mobile-editor-phone-title-field input:focus {
+  outline: 2px solid #93c5fd;
+  outline-offset: 1px;
+  border-color: #60a5fa;
+}
+
+.mobile-editor-page--phone .mobile-editor-phone-title-field input:disabled {
+  opacity: 0.65;
+}
+
 .mobile-editor-page--phone .mobile-editor-phone-status {
   display: inline-block;
-  max-width: 55vw;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  flex: 0 0 auto;
+  max-width: none;
+  overflow: visible;
+  text-overflow: unset;
   white-space: nowrap;
-  font-size: 0.8rem;
+  font-size: 0.72rem;
   color: var(--color-muted);
 }
 
@@ -5819,6 +6302,7 @@ textarea {
   width: 100%;
   max-width: none;
   min-height: 100%;
+  height: 100%;
   border: 0;
   border-radius: 0;
   padding: 0;
@@ -5827,9 +6311,10 @@ textarea {
 }
 
 .mobile-editor-page--phone .mobile-device-frame.is-native-phone .mobile-runtime-root {
-  min-height: calc(100dvh - 6.5rem);
+  /* Llenar el área del lienzo (no 100dvh: provoca hueco fantasma tras modales / barra del SO). */
+  min-height: 100%;
   border-radius: 0;
-  padding: 12px 14px 5rem;
+  padding: 1.25rem 14px calc(1rem + env(safe-area-inset-bottom, 0px));
 }
 
 .mobile-editor-page--phone .mobile-editor-sidebar,
@@ -5841,7 +6326,7 @@ textarea {
   left: 0;
   right: 0;
   bottom: 0;
-  z-index: 1400;
+  z-index: 5100;
   max-height: min(78dvh, 640px);
   margin: 0;
   padding: 0.35rem 0.85rem calc(0.85rem + env(safe-area-inset-bottom, 0px));
@@ -5955,7 +6440,8 @@ textarea {
   padding-bottom: 1rem;
 }
 
-.mobile-editor-page--phone .mobile-props-form label {
+.mobile-editor-page--phone .mobile-props-form label,
+.mobile-editor-page--phone .mobile-props-form .mobile-props-field {
   font-size: 0.88rem;
   gap: 0.35rem;
 }
@@ -6049,28 +6535,33 @@ textarea {
   display: block;
   position: fixed;
   inset: 0;
-  z-index: 1350;
+  z-index: 5050;
   border: 0;
   background: rgb(15 23 42 / 42%);
   cursor: pointer;
 }
 
-.mobile-editor-page--phone .mobile-editor-phone-dock {
+.mobile-editor-page--phone .mobile-editor-phone-dock,
+.mobile-editor-phone-dock.is-portal {
   display: grid;
   grid-template-columns: repeat(4, 1fr);
   position: fixed;
   left: 0;
   right: 0;
   bottom: 0;
-  z-index: 1300;
+  z-index: 5000;
   gap: 0.15rem;
-  padding: 0.35rem 0.4rem calc(0.35rem + env(safe-area-inset-bottom, 0px));
-  background: rgba(255, 255, 255, 0.96);
+  padding: 0.35rem 0.4rem calc(0.5rem + env(safe-area-inset-bottom, 0px));
+  background: rgba(255, 255, 255, 0.98);
   border-top: 1px solid var(--color-border);
   backdrop-filter: blur(10px);
+  box-shadow: 0 -4px 20px rgb(15 23 42 / 12%);
+  /* Evita que el teclado / barras del SO lo empujen fuera en Android. */
+  transform: translateZ(0);
 }
 
-.mobile-editor-page--phone .mobile-editor-phone-dock button {
+.mobile-editor-page--phone .mobile-editor-phone-dock button,
+.mobile-editor-phone-dock.is-portal button {
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -6086,12 +6577,14 @@ textarea {
   cursor: pointer;
 }
 
-.mobile-editor-page--phone .mobile-editor-phone-dock button span {
+.mobile-editor-page--phone .mobile-editor-phone-dock button span,
+.mobile-editor-phone-dock.is-portal button span {
   font-size: 1.15rem;
   line-height: 1;
 }
 
-.mobile-editor-page--phone .mobile-editor-phone-dock button.is-active {
+.mobile-editor-page--phone .mobile-editor-phone-dock button.is-active,
+.mobile-editor-phone-dock.is-portal button.is-active {
   background: #eff6ff;
   color: #1d4ed8;
 }

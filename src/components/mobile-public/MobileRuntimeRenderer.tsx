@@ -10,6 +10,7 @@ import {
   type MobileTypographyConfig,
 } from '@shared/mobile-menu';
 import { ensureEditorFontLoaded } from '@/lib/google-fonts';
+import { AllergenGlyph } from '@/components/mobile-public/AllergenGlyph';
 
 interface MobileRuntimeRendererProps {
   document: MobileMenuDocument;
@@ -142,13 +143,32 @@ function AllergenIcon() {
   );
 }
 
-function TrashIcon() {
+function TrashIcon({ size = 18 }: { size?: number }) {
   return (
-    <svg viewBox="0 0 24 24" width="12" height="12" aria-hidden="true" focusable="false">
-      <path fill="currentColor" d="M9 3h6l1 2h4v2H4V5h4l1-2zm-2 6h2v9H7V9zm4 0h2v9h-2V9zm4 0h2v9h-2V9z" />
+    <svg viewBox="0 0 24 24" width={size} height={size} aria-hidden="true" focusable="false">
+      <path
+        fill="currentColor"
+        d="M9 3h6l1 2h4v2H4V5h4l1-2zm1 6h2v10h-2V9zm4 0h2v10h-2V9zM7 9h2v10H7V9z"
+      />
     </svg>
   );
 }
+
+/** Asa de reordenado (≡) — visible solo en modo Mover. */
+function ReorderHandleIcon({ size = 18 }: { size?: number }) {
+  return (
+    <svg viewBox="0 0 24 24" width={size} height={size} aria-hidden="true" focusable="false">
+      <path
+        fill="currentColor"
+        d="M4 7h16v2.2H4V7zm0 4.4h16v2.2H4v-2.2zm0 4.4h16V18H4v-2.2z"
+      />
+    </svg>
+  );
+}
+
+const SWIPE_ACTION_WIDTH = 96;
+const SWIPE_OPEN_THRESHOLD = 40;
+const SWIPE_AXIS_LOCK_PX = 10;
 
 function SectionBackgroundImage({
   image,
@@ -178,7 +198,11 @@ function renderComponent(
   component: MobileComponent,
   onAction?: (action: MobileInteractionAction) => void,
   onImageClick?: (src: string) => void,
-  onAllergensOpen?: (payload: { dishTitle: string; allergens: string[] }) => void,
+  onAllergensOpen?: (payload: {
+    dishTitle: string;
+    allergens: string[];
+    accentColor: string;
+  }) => void,
 ) {
   switch (component.type) {
     case 'section': {
@@ -336,12 +360,18 @@ function renderComponent(
                   className="mobile-menu-allergens-btn"
                   title="Ver alérgenos"
                   aria-label={`Alérgenos de ${component.title || 'este plato'}`}
+                  style={
+                    {
+                      '--allergens-accent': component.allergensAccentColor?.trim() || '#b45309',
+                    } as CSSProperties
+                  }
                   onPointerDown={(e) => e.stopPropagation()}
                   onClick={(e) => {
                     e.stopPropagation();
                     onAllergensOpen({
                       dishTitle: component.title || 'Plato',
                       allergens: allergenItems,
+                      accentColor: component.allergensAccentColor?.trim() || '#b45309',
                     });
                   }}
                 >
@@ -349,7 +379,15 @@ function renderComponent(
                   <span>Alérgenos</span>
                 </button>
               ) : (
-                <span className="mobile-menu-allergens-btn" aria-hidden="true">
+                <span
+                  className="mobile-menu-allergens-btn"
+                  aria-hidden="true"
+                  style={
+                    {
+                      '--allergens-accent': component.allergensAccentColor?.trim() || '#b45309',
+                    } as CSSProperties
+                  }
+                >
                   <AllergenIcon />
                   <span>Alérgenos</span>
                 </span>
@@ -455,7 +493,11 @@ function AccordionRuntime({
   onSelectChild?: (id: string) => void;
   onAction?: (action: MobileInteractionAction) => void;
   onImageClick?: (src: string) => void;
-  onAllergensOpen?: (payload: { dishTitle: string; allergens: string[] }) => void;
+  onAllergensOpen?: (payload: {
+    dishTitle: string;
+    allergens: string[];
+    accentColor: string;
+  }) => void;
   previewPlay?: AnimationPreviewPlay | null;
   animationPreview?: { componentId: string; nonce: number } | null;
   registerNodeRef?: (id: string, el: HTMLDivElement | null) => void;
@@ -644,12 +686,18 @@ export function MobileRuntimeRenderer({
     null,
   );
   const [lightboxSrc, setLightboxSrc] = useState<string | null>(null);
-  const [allergensModal, setAllergensModal] = useState<{ dishTitle: string; allergens: string[] } | null>(
-    null,
-  );
+  const [allergensModal, setAllergensModal] = useState<{
+    dishTitle: string;
+    allergens: string[];
+    accentColor: string;
+  } | null>(null);
   const [dragActiveId, setDragActiveId] = useState<string | null>(null);
   const [dragOrderIds, setDragOrderIds] = useState<string[] | null>(null);
   const [previewPlay, setPreviewPlay] = useState<AnimationPreviewPlay | null>(null);
+  /** Componente con la acción Eliminar revelada (swipe iOS). */
+  const [swipeOpenId, setSwipeOpenId] = useState<string | null>(null);
+  /** Offset en vivo mientras se arrastra el swipe. */
+  const [swipeOffset, setSwipeOffset] = useState<{ id: string; x: number } | null>(null);
 
   const dragActiveIdRef = useRef<string | null>(null);
   const dragOrderIdsRef = useRef<string[] | null>(null);
@@ -660,18 +708,28 @@ export function MobileRuntimeRenderer({
   const listeningRef = useRef(false);
   const longPressTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const longPressArmedRef = useRef(false);
-  const requireLongPressRef = useRef(false);
   const nodeRefs = useRef<Map<string, HTMLDivElement>>(new Map());
   const prevPosRef = useRef<Map<string, number>>(new Map());
   const componentIdsRef = useRef<string[]>(document.components.map((c) => c.id));
   const onReorderRef = useRef(onReorder);
   const onSelectRef = useRef(onSelect);
+  const onDeleteRef = useRef(onDelete);
+  const swipeOpenIdRef = useRef<string | null>(null);
+  const swipeSessionRef = useRef<{
+    id: string;
+    pointerId: number;
+    startX: number;
+    startY: number;
+    startOffset: number;
+    mode: 'pending' | 'horizontal' | 'cancelled';
+  } | null>(null);
+  const swipeListeningRef = useRef(false);
+  const swipeMovedRef = useRef(false);
   componentIdsRef.current = document.components.map((c) => c.id);
   onReorderRef.current = onReorder;
   onSelectRef.current = onSelect;
-
-  const LONG_PRESS_MS = 400;
-  const LONG_PRESS_CANCEL_PX = 12;
+  onDeleteRef.current = onDelete;
+  swipeOpenIdRef.current = swipeOpenId;
 
   const visibleComponents = useMemo(() => {
     if (editable) return document.components;
@@ -752,8 +810,164 @@ export function MobileRuntimeRenderer({
     longPressTimerRef.current = null;
   }
 
+  function closeSwipe() {
+    swipeOpenIdRef.current = null;
+    setSwipeOpenId(null);
+    setSwipeOffset(null);
+  }
+
+  function snapSwipe(id: string, offset: number) {
+    const open = offset <= -SWIPE_OPEN_THRESHOLD;
+    if (open) {
+      swipeOpenIdRef.current = id;
+      setSwipeOpenId(id);
+      setSwipeOffset(null);
+    } else {
+      closeSwipe();
+    }
+  }
+
+  function removeSwipeListeners() {
+    if (!swipeListeningRef.current) return;
+    swipeListeningRef.current = false;
+    window.removeEventListener('pointermove', stableSwipeMove);
+    window.removeEventListener('pointerup', stableSwipeUp);
+    window.removeEventListener('pointercancel', stableSwipeCancel);
+  }
+
+  function endSwipeSession(commit: boolean) {
+    const session = swipeSessionRef.current;
+    swipeSessionRef.current = null;
+    removeSwipeListeners();
+    if (!session || session.mode === 'cancelled') {
+      setSwipeOffset(null);
+      return;
+    }
+    if (!commit || session.mode !== 'horizontal') {
+      // Tap sin swipe horizontal: cerrar si estaba abierto otro / mismo.
+      if (!swipeMovedRef.current) {
+        if (swipeOpenIdRef.current && swipeOpenIdRef.current !== session.id) {
+          closeSwipe();
+        } else if (swipeOpenIdRef.current === session.id) {
+          closeSwipe();
+        }
+        onSelectRef.current?.(session.id);
+      } else {
+        setSwipeOffset(null);
+      }
+      swipeMovedRef.current = false;
+      return;
+    }
+    const live = swipeOffsetLiveRef.current;
+    snapSwipe(session.id, live);
+    swipeMovedRef.current = false;
+  }
+
+  const swipeOffsetLiveRef = useRef(0);
+
+  function beginSwipeSession(
+    id: string,
+    pointerId: number,
+    startX: number,
+    startY: number,
+    startOffset: number,
+    mode: 'pending' | 'horizontal' = 'pending',
+  ) {
+    removeSwipeListeners();
+    swipeMovedRef.current = mode === 'horizontal';
+    swipeOffsetLiveRef.current = startOffset;
+    swipeSessionRef.current = {
+      id,
+      pointerId,
+      startX,
+      startY,
+      startOffset,
+      mode,
+    };
+    if (mode === 'horizontal') {
+      setSwipeOffset({ id, x: startOffset });
+      if (swipeOpenIdRef.current && swipeOpenIdRef.current !== id) {
+        swipeOpenIdRef.current = null;
+        setSwipeOpenId(null);
+      }
+    }
+    swipeListeningRef.current = true;
+    window.addEventListener('pointermove', stableSwipeMove, { passive: false });
+    window.addEventListener('pointerup', stableSwipeUp);
+    window.addEventListener('pointercancel', stableSwipeCancel);
+  }
+
+  const onSwipeMoveRef = useRef<(e: PointerEvent) => void>(() => undefined);
+  const onSwipeUpRef = useRef<(e: PointerEvent) => void>(() => undefined);
+  const onSwipeCancelRef = useRef<(e: PointerEvent) => void>(() => undefined);
+
+  const stableSwipeMove = useRef((e: PointerEvent) => {
+    onSwipeMoveRef.current(e);
+  }).current;
+  const stableSwipeUp = useRef((e: PointerEvent) => {
+    onSwipeUpRef.current(e);
+  }).current;
+  const stableSwipeCancel = useRef((e: PointerEvent) => {
+    onSwipeCancelRef.current(e);
+  }).current;
+
+  onSwipeMoveRef.current = (e: PointerEvent) => {
+    const session = swipeSessionRef.current;
+    if (!session || session.pointerId !== e.pointerId) return;
+    const dx = e.clientX - session.startX;
+    const dy = e.clientY - session.startY;
+    const absX = Math.abs(dx);
+    const absY = Math.abs(dy);
+
+    if (session.mode === 'pending') {
+      if (absY > SWIPE_AXIS_LOCK_PX && absY > absX) {
+        session.mode = 'cancelled';
+        endSwipeSession(false);
+        return;
+      }
+      if (absX > SWIPE_AXIS_LOCK_PX && absX > absY) {
+        session.mode = 'horizontal';
+        swipeMovedRef.current = true;
+        if (swipeOpenIdRef.current && swipeOpenIdRef.current !== session.id) {
+          swipeOpenIdRef.current = null;
+          setSwipeOpenId(null);
+        }
+        try {
+          e.preventDefault();
+        } catch {
+          /* ignore */
+        }
+      } else {
+        return;
+      }
+    }
+
+    if (session.mode !== 'horizontal') return;
+    try {
+      e.preventDefault();
+    } catch {
+      /* ignore */
+    }
+    const next = Math.max(-SWIPE_ACTION_WIDTH, Math.min(0, session.startOffset + dx));
+    swipeOffsetLiveRef.current = next;
+    setSwipeOffset({ id: session.id, x: next });
+  };
+
+  onSwipeUpRef.current = (e: PointerEvent) => {
+    const session = swipeSessionRef.current;
+    if (!session || session.pointerId !== e.pointerId) return;
+    endSwipeSession(true);
+  };
+
+  onSwipeCancelRef.current = (e: PointerEvent) => {
+    const session = swipeSessionRef.current;
+    if (!session || session.pointerId !== e.pointerId) return;
+    endSwipeSession(false);
+  };
+
   function armLongPressDrag(id: string) {
     if (longPressArmedRef.current) return;
+    closeSwipe();
     longPressArmedRef.current = true;
     dragActiveIdRef.current = id;
     setDragActiveId(id);
@@ -788,7 +1002,6 @@ export function MobileRuntimeRenderer({
     dragStartRef.current = null;
     dragMovedRef.current = false;
     longPressArmedRef.current = false;
-    requireLongPressRef.current = false;
     setDragActiveId(null);
     setDragOrderIds(null);
     if (dragFrameRef.current !== null) {
@@ -808,18 +1021,12 @@ export function MobileRuntimeRenderer({
     const dist = Math.hypot(dx, dy);
 
     if (!longPressArmedRef.current) {
-      if (requireLongPressRef.current) {
-        if (dist >= LONG_PRESS_CANCEL_PX) {
-          endDrag(false);
-        }
-        return;
-      }
-      // Ratón / escritorio: activar al mover un poco (sin pulsación larga).
-      if (dist < 6) return;
+      // Desde el asa: armar al mover un poco (sin long-press ni swipe).
+      if (dist < 4) return;
       armLongPressDrag(start.id);
       dragMovedRef.current = true;
     } else if (!dragMovedRef.current) {
-      if (dist < 6) return;
+      if (dist < 4) return;
       dragMovedRef.current = true;
     }
 
@@ -857,34 +1064,51 @@ export function MobileRuntimeRenderer({
     }
   }
 
-  function onNodePointerDown(id: string, e: ReactPointerEvent<HTMLDivElement>) {
+  /** Reordenado solo desde el asa ≡ (modo Mover). */
+  function onReorderHandlePointerDown(id: string, e: ReactPointerEvent<HTMLButtonElement>) {
     if (!editable || !onReorder) return;
     if (e.button !== 0) return;
-    const target = e.target as HTMLElement | null;
-    if (target?.closest('a, button, input, textarea, select, [contenteditable="true"]')) return;
 
     e.preventDefault();
+    e.stopPropagation();
+    closeSwipe();
     removeDragListeners();
     clearLongPressTimer();
     dragPointerIdRef.current = e.pointerId;
     dragStartRef.current = { x: e.clientX, y: e.clientY, id };
     dragMovedRef.current = false;
     longPressArmedRef.current = false;
-    requireLongPressRef.current = e.pointerType !== 'mouse';
     listeningRef.current = true;
     window.addEventListener('pointermove', stableMove, { passive: true });
     window.addEventListener('pointerup', stableUp);
     window.addEventListener('pointercancel', stableCancel);
-
-    if (requireLongPressRef.current) {
-      longPressTimerRef.current = setTimeout(() => {
-        longPressTimerRef.current = null;
-        if (dragStartRef.current?.id === id && dragPointerIdRef.current === e.pointerId) {
-          armLongPressDrag(id);
-        }
-      }, LONG_PRESS_MS);
-    }
+    // Intención clara: armar al instante desde el asa.
+    armLongPressDrag(id);
   }
+
+  function onSwipePointerDown(id: string, e: ReactPointerEvent<HTMLDivElement>) {
+    if (!editable || !onDelete) return;
+    // En modo Mover no hay swipe; solo asas.
+    if (onReorder) return;
+    if (e.button !== 0) return;
+    const target = e.target as HTMLElement | null;
+    if (target?.closest('a, button, input, textarea, select, [contenteditable="true"]')) return;
+    if (target?.closest('.mobile-runtime-swipe-action')) return;
+    if (target?.closest('.mobile-runtime-reorder-handle')) return;
+
+    const startOffset = swipeOpenIdRef.current === id ? -SWIPE_ACTION_WIDTH : 0;
+    beginSwipeSession(id, e.pointerId, e.clientX, e.clientY, startOffset, 'pending');
+  }
+
+  function resolveSwipeTranslateX(id: string): number {
+    if (swipeOffset?.id === id) return swipeOffset.x;
+    if (swipeOpenId === id) return -SWIPE_ACTION_WIDTH;
+    return 0;
+  }
+
+  useEffect(() => {
+    if (onReorder) closeSwipe();
+  }, [onReorder]);
 
   useEffect(() => {
     if (!dragActiveId || !dragOrderIds) return;
@@ -896,6 +1120,7 @@ export function MobileRuntimeRenderer({
     () => () => {
       clearLongPressTimer();
       removeDragListeners();
+      removeSwipeListeners();
       if (dragFrameRef.current !== null) window.cancelAnimationFrame(dragFrameRef.current);
     },
     [],
@@ -951,7 +1176,22 @@ export function MobileRuntimeRenderer({
     }
 
     let observer: IntersectionObserver | null = null;
+    let revealFallbackTimer = 0;
     if (revealNodes.length > 0) {
+      const revealIfVisible = (node: HTMLElement) => {
+        const rect = node.getBoundingClientRect();
+        const vh = window.innerHeight || 0;
+        const vw = window.innerWidth || 0;
+        const visible =
+          rect.bottom > 0 &&
+          rect.right > 0 &&
+          rect.top < vh &&
+          rect.left < vw &&
+          rect.height > 0;
+        if (visible) node.classList.add('is-anim-visible');
+        return visible;
+      };
+
       observer = new IntersectionObserver(
         (entries) => {
           for (const entry of entries) {
@@ -961,12 +1201,20 @@ export function MobileRuntimeRenderer({
             }
           }
         },
-        { root: null, rootMargin: '0px 0px -10% 0px', threshold: 0.15 },
+        { root: null, rootMargin: '0px 0px -8% 0px', threshold: 0.05 },
       );
       for (const node of revealNodes) {
         if (node.dataset.animTrigger === 'on_load') continue;
+        // Primer paint: revelar ya visibles (evita carta en blanco en WebViews).
+        if (revealIfVisible(node)) continue;
         observer.observe(node);
       }
+
+      revealFallbackTimer = window.setTimeout(() => {
+        for (const node of revealNodes) {
+          if (!node.classList.contains('is-anim-visible')) revealIfVisible(node);
+        }
+      }, 700);
     }
 
     const applyParallax = () => {
@@ -1002,12 +1250,13 @@ export function MobileRuntimeRenderer({
             }
           }
         },
-        { root: null, rootMargin: '0px', threshold: 0.15 },
+        { root: null, rootMargin: '0px', threshold: 0.05 },
       );
       for (const node of effectOnViewNodes) effectObserver.observe(node);
     }
 
     return () => {
+      if (revealFallbackTimer) window.clearTimeout(revealFallbackTimer);
       observer?.disconnect();
       effectObserver?.disconnect();
       if (parallaxNodes.length > 0) {
@@ -1124,6 +1373,7 @@ export function MobileRuntimeRenderer({
         backgroundColor: document.theme.backgroundColor,
         color: document.theme.textColor,
         fontFamily: document.theme.fontFamily,
+        ['--mobile-swipe-front-bg' as string]: document.theme.backgroundColor || '#ffffff',
       }}
     >
       {displayComponents.map((component) => {
@@ -1134,6 +1384,141 @@ export function MobileRuntimeRenderer({
             : selectedId === component.id);
         const isMulti =
           editable && !!selectedIds && selectedIds.length > 1 && selectedIds.includes(component.id);
+        const swipeX = editable && onDelete ? resolveSwipeTranslateX(component.id) : 0;
+        const swipeOpen = editable && onDelete && swipeOpenId === component.id && !swipeOffset;
+        const nodeBody = (
+          <>
+            {component.type === 'accordion' ? (
+              <AccordionRuntime
+                component={component}
+                editable={editable}
+                selectedId={selectedId}
+                onSelectAccordion={editable ? () => onSelect?.(component.id) : undefined}
+                onSelectChild={editable ? (id) => onSelect?.(id) : undefined}
+                onAction={!editable ? (action) => runAction(action) : undefined}
+                onImageClick={!editable ? (src) => setLightboxSrc(src) : undefined}
+                onAllergensOpen={!editable ? (payload) => setAllergensModal(payload) : undefined}
+                previewPlay={previewPlay}
+                animationPreview={animationPreview}
+                registerNodeRef={(id, el) => {
+                  if (!el) {
+                    nodeRefs.current.delete(id);
+                    return;
+                  }
+                  nodeRefs.current.set(id, el);
+                }}
+              />
+            ) : (
+              renderComponent(
+                component,
+                !editable ? (action) => runAction(action) : undefined,
+                !editable ? (src) => setLightboxSrc(src) : undefined,
+                !editable ? (payload) => setAllergensModal(payload) : undefined,
+              )
+            )}
+          </>
+        );
+
+        if (editable && onDelete) {
+          return (
+            <div
+              key={component.id}
+              ref={(el) => {
+                if (!el) {
+                  nodeRefs.current.delete(component.id);
+                  return;
+                }
+                nodeRefs.current.set(component.id, el);
+              }}
+              data-component-id={component.id}
+              className={[
+                'mobile-runtime-swipe-row',
+                'mobile-runtime-node',
+                isSelected ? 'is-selected' : '',
+                isMulti ? 'is-multi-selected' : '',
+                ...previewVisibilityClasses(component.id, previewPlay, editable),
+                component.hidden === true ? 'is-hidden-public' : '',
+                dragActiveId === component.id ? 'is-dragging' : '',
+                swipeOpen || (swipeOffset?.id === component.id && swipeOffset.x < -8)
+                  ? 'is-swipe-open'
+                  : '',
+                effectClassName(component.effect),
+              ]
+                .filter(Boolean)
+                .join(' ')}
+              data-anim-preset={component.animation?.preset ?? 'none'}
+              data-anim-trigger={component.animation?.trigger ?? 'on_view'}
+              data-anim-intensity={component.animation?.intensity ?? 1}
+              data-effect-trigger={component.effect?.trigger ?? ''}
+              data-effect-anim={buildEffectAnimation(component.effect)}
+              style={
+                {
+                  ...animationStyleVars(component),
+                  ...effectStyle(component.effect, editable),
+                } as CSSProperties
+              }
+              role="button"
+              tabIndex={0}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' || e.key === ' ') {
+                  e.preventDefault();
+                  onSelect?.(component.id);
+                }
+              }}
+            >
+              <div className="mobile-runtime-swipe-actions" aria-hidden={swipeX > -SWIPE_OPEN_THRESHOLD}>
+                <button
+                  type="button"
+                  className="mobile-runtime-swipe-action"
+                  title="Eliminar componente"
+                  aria-label="Eliminar componente"
+                  onPointerDown={(e) => e.stopPropagation()}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    closeSwipe();
+                    onDelete(component.id);
+                  }}
+                >
+                  <TrashIcon size={20} />
+                  <span>Eliminar</span>
+                </button>
+              </div>
+              <div
+                className="mobile-runtime-swipe-front"
+                style={{
+                  transform: `translateX(${swipeX}px)`,
+                  transition: swipeOffset?.id === component.id ? 'none' : undefined,
+                }}
+                onPointerDown={(e) => {
+                  if (onReorder) return;
+                  onSwipePointerDown(component.id, e);
+                }}
+                onClick={
+                  onReorder
+                    ? () => {
+                        onSelect?.(component.id);
+                      }
+                    : undefined
+                }
+              >
+                {onReorder && (
+                  <button
+                    type="button"
+                    className="mobile-runtime-reorder-handle"
+                    title="Arrastrar para reordenar"
+                    aria-label="Arrastrar para reordenar"
+                    onPointerDown={(e) => onReorderHandlePointerDown(component.id, e)}
+                    onClick={(e) => e.stopPropagation()}
+                  >
+                    <ReorderHandleIcon size={18} />
+                  </button>
+                )}
+                <div className="mobile-runtime-swipe-front-body">{nodeBody}</div>
+              </div>
+            </div>
+          );
+        }
+
         return (
         <div
           key={component.id}
@@ -1167,10 +1552,12 @@ export function MobileRuntimeRenderer({
               ...effectStyle(component.effect, editable),
             } as CSSProperties
           }
-          onPointerDown={editable && onReorder ? (e) => onNodePointerDown(component.id, e) : undefined}
+          onPointerDown={undefined}
           onClick={
             editable && !onReorder
               ? () => onSelect?.(component.id)
+              : editable && onReorder
+                ? () => onSelect?.(component.id)
               : undefined
           }
           role={editable ? 'button' : undefined}
@@ -1186,49 +1573,7 @@ export function MobileRuntimeRenderer({
               : undefined
           }
         >
-          {editable && onDelete && (
-            <button
-              type="button"
-              className="mobile-runtime-node-delete"
-              title="Eliminar componente"
-              aria-label="Eliminar componente"
-              onPointerDown={(e) => e.stopPropagation()}
-              onClick={(e) => {
-                e.stopPropagation();
-                onDelete(component.id);
-              }}
-            >
-              <TrashIcon />
-            </button>
-          )}
-          {component.type === 'accordion' ? (
-            <AccordionRuntime
-              component={component}
-              editable={editable}
-              selectedId={selectedId}
-              onSelectAccordion={editable ? () => onSelect?.(component.id) : undefined}
-              onSelectChild={editable ? (id) => onSelect?.(id) : undefined}
-              onAction={!editable ? (action) => runAction(action) : undefined}
-              onImageClick={!editable ? (src) => setLightboxSrc(src) : undefined}
-              onAllergensOpen={!editable ? (payload) => setAllergensModal(payload) : undefined}
-              previewPlay={previewPlay}
-              animationPreview={animationPreview}
-              registerNodeRef={(id, el) => {
-                if (!el) {
-                  nodeRefs.current.delete(id);
-                  return;
-                }
-                nodeRefs.current.set(id, el);
-              }}
-            />
-          ) : (
-            renderComponent(
-              component,
-              !editable ? (action) => runAction(action) : undefined,
-              !editable ? (src) => setLightboxSrc(src) : undefined,
-              !editable ? (payload) => setAllergensModal(payload) : undefined,
-            )
-          )}
+          {nodeBody}
         </div>
         );
       })}
@@ -1250,25 +1595,42 @@ export function MobileRuntimeRenderer({
         </div>
       )}
       {allergensModal && (
-        <div className="mobile-action-modal-overlay" onClick={() => setAllergensModal(null)}>
+        <div className="mobile-action-modal-overlay mobile-allergens-overlay" onClick={() => setAllergensModal(null)}>
           <div
             className="mobile-action-modal mobile-allergens-modal"
             role="dialog"
             aria-modal="true"
-            aria-label={`Alérgenos de ${allergensModal.dishTitle}`}
+            aria-labelledby="mobile-allergens-dish-title"
+            style={
+              {
+                '--allergens-accent': allergensModal.accentColor || '#b45309',
+              } as CSSProperties
+            }
             onClick={(e) => e.stopPropagation()}
             onPointerDown={(e) => e.stopPropagation()}
           >
-            <h3>Alérgenos</h3>
-            <p className="mobile-allergens-dish">{allergensModal.dishTitle}</p>
+            <button
+              type="button"
+              className="mobile-allergens-close"
+              aria-label="Cerrar"
+              onClick={() => setAllergensModal(null)}
+            >
+              ✕
+            </button>
+            <h2 id="mobile-allergens-dish-title" className="mobile-allergens-dish-title">
+              {allergensModal.dishTitle || 'Plato'}
+            </h2>
+            <p className="mobile-allergens-heading">Alérgenos</p>
             <ul className="mobile-allergens-list">
               {allergensModal.allergens.map((item) => (
-                <li key={item}>{item}</li>
+                <li key={item}>
+                  <span className="mobile-allergens-icon" aria-hidden="true">
+                    <AllergenGlyph name={item} size={32} />
+                  </span>
+                  <span className="mobile-allergens-label">{item}</span>
+                </li>
               ))}
             </ul>
-            <button type="button" className="btn-primary" onClick={() => setAllergensModal(null)}>
-              Cerrar
-            </button>
           </div>
         </div>
       )}

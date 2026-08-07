@@ -74,6 +74,7 @@ export const onRequestGet: PagesFunction<Env> = async (context) => {
 export const onRequestPut: PagesFunction<Env> = async (context) => {
   const { request, env } = context;
   const userId = context.data.userId as string;
+  const email = context.data.email as string;
   const menuId = context.params.id as string;
 
   try {
@@ -136,10 +137,11 @@ export const onRequestPut: PagesFunction<Env> = async (context) => {
       try {
         const uploaded = await uploadMenuExportPng(
           env.MEDIA,
-          userId,
+          email,
           menuId,
           thumbnailUrl,
           (key) => getAssetPublicUrl(request, key),
+          userId,
         );
         if (uploaded) {
           exportPngUrl = uploaded;
@@ -220,6 +222,7 @@ export const onRequestPut: PagesFunction<Env> = async (context) => {
 export const onRequestDelete: PagesFunction<Env> = async (context) => {
   const { env } = context;
   const userId = context.data.userId as string;
+  const email = context.data.email as string;
   const menuId = context.params.id as string;
 
   const menu = await getMenuById(env.DB, menuId);
@@ -241,7 +244,7 @@ export const onRequestDelete: PagesFunction<Env> = async (context) => {
     await garbageCollectRemovedAssetUrls(env, userId, assetUrls);
 
     if (env.MEDIA) {
-      await deleteMenuExportPng(env.MEDIA, userId, menuId);
+      await deleteMenuExportPng(env.MEDIA, email, menuId, userId);
     }
   } catch (err) {
     console.error('Limpieza post-borrado de menú falló (menú ya eliminado)', menuId, err);

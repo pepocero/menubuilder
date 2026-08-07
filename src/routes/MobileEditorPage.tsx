@@ -5,9 +5,11 @@ import {
   useState,
   type CSSProperties,
 } from 'react';
+import { createPortal } from 'react-dom';
 import { Link, useParams } from 'react-router-dom';
 import { AppLayout } from '@/components/AppLayout';
 import { MobileRuntimeRenderer } from '@/components/mobile-public/MobileRuntimeRenderer';
+import { MobilePublicView } from '@/components/mobile-public/MobilePublicView';
 import { MobileImportOcrModal, type MobileOcrImportSource } from '@/components/mobile-public/MobileImportOcrModal';
 import type { ImportMenuOptions } from '@/components/editor/ImportMenuModal';
 import { StockImageSearch } from '@/components/editor/StockImageSearch';
@@ -32,6 +34,7 @@ import {
   uploadAsset,
 } from '@/lib/api';
 import { compressImage } from '@/lib/image-compress';
+import { searchStockImages, buildDishStockSearchQuery, pickBestStockImageForDish } from '@/lib/stock';
 import {
   canRedoMobileDoc,
   canUndoMobileDoc,
@@ -84,6 +87,7 @@ import {
   type MobileSectionBorderRound,
   type MobileSectionSize,
   type MobileTypographyConfig,
+  type MobileComponent,
 } from '@shared/mobile-menu';
 
 function AlignLeftIcon() {
@@ -207,6 +211,17 @@ function TrashIcon() {
   );
 }
 
+function RandomIcon() {
+  return (
+    <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true">
+      <path
+        fill="currentColor"
+        d="M10.59 9.17 5.41 4 4 5.41l5.17 5.17 1.42-1.41zM14.5 4l2.04 2.04L4 18.59 5.41 20 17.96 7.46 20 9.5V4h-5.5zm.33 9.41-1.41 1.41 3.13 3.13L14.5 20H20v-5.5l-2.04 2.04-3.13-3.13z"
+      />
+    </svg>
+  );
+}
+
 function BulletListIcon() {
   return (
     <svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true">
@@ -247,6 +262,72 @@ function OutdentIcon() {
   );
 }
 
+function NumberStepper({
+  label,
+  value,
+  min,
+  max,
+  step,
+  onChange,
+  decimals,
+}: {
+  label: string;
+  value: number;
+  min: number;
+  max: number;
+  step: number;
+  onChange: (next: number) => void;
+  /** Decimales al redondear (p. ej. 2 para interlineado). */
+  decimals?: number;
+}) {
+  function clamp(next: number): number {
+    const rounded =
+      decimals != null
+        ? Math.round(next * 10 ** decimals) / 10 ** decimals
+        : Math.round(next / step) * step;
+    return Math.min(max, Math.max(min, rounded));
+  }
+
+  return (
+    <div className="mobile-props-field">
+      <span className="mobile-props-field-label">{label}</span>
+      <div className="mobile-number-stepper">
+        <button
+          type="button"
+          className="mobile-number-stepper-btn"
+          aria-label={`Disminuir ${label}`}
+          disabled={value <= min}
+          onClick={() => onChange(clamp(value - step))}
+        >
+          −
+        </button>
+        <input
+          type="number"
+          min={min}
+          max={max}
+          step={step}
+          value={value}
+          aria-label={label}
+          onChange={(e) => {
+            const raw = Number(e.target.value);
+            if (Number.isNaN(raw)) return;
+            onChange(clamp(raw));
+          }}
+        />
+        <button
+          type="button"
+          className="mobile-number-stepper-btn"
+          aria-label={`Aumentar ${label}`}
+          disabled={value >= max}
+          onClick={() => onChange(clamp(value + step))}
+        >
+          +
+        </button>
+      </div>
+    </div>
+  );
+}
+
 function TypographyStyleToolbar({
   fontStyle,
   textDecoration,
@@ -265,8 +346,8 @@ function TypographyStyleToolbar({
   const currentList = listStyle ?? 'none';
   return (
     <>
-      <label>
-        Formato
+      <div className="mobile-props-field">
+        <span className="mobile-props-field-label">Formato</span>
         <div className="wysiwyg-align-group" role="group" aria-label="Formato de texto">
           <button
             type="button"
@@ -329,9 +410,9 @@ function TypographyStyleToolbar({
             </>
           ) : null}
         </div>
-      </label>
-      <label>
-        Mayúsculas
+      </div>
+      <div className="mobile-props-field">
+        <span className="mobile-props-field-label">Mayúsculas</span>
         <div className="wysiwyg-align-group" role="group" aria-label="Transformación de texto">
           <button
             type="button"
@@ -370,7 +451,7 @@ function TypographyStyleToolbar({
             <CapitalizeIcon />
           </button>
         </div>
-      </label>
+      </div>
     </>
   );
 }
@@ -397,6 +478,306 @@ const MOBILE_GOOGLE_FONTS_20 = [
   'Allura',
   'Qwitcher Grypen',
 ] as const;
+
+/** Temas controlados para «Aspecto aleatorio» de platos (legibles, no caos). */
+const MENU_ITEM_STYLE_THEMES = [
+  {
+    titleFont: 'Playfair Display',
+    bodyFont: 'Lato',
+    priceFont: 'Montserrat',
+    backgroundColor: '#fffaf5',
+    titleColor: '#1c1917',
+    descriptionColor: '#57534e',
+    priceColor: '#b45309',
+    ingredientsColor: '#78716c',
+    allergensAccentColor: '#b45309',
+  },
+  {
+    titleFont: 'Oswald',
+    bodyFont: 'Open Sans',
+    priceFont: 'Oswald',
+    backgroundColor: '#f8fafc',
+    titleColor: '#0f172a',
+    descriptionColor: '#475569',
+    priceColor: '#0f766e',
+    ingredientsColor: '#64748b',
+    allergensAccentColor: '#0f766e',
+  },
+  {
+    titleFont: 'Merriweather',
+    bodyFont: 'Open Sans',
+    priceFont: 'Merriweather',
+    backgroundColor: '#fafafa',
+    titleColor: '#18181b',
+    descriptionColor: '#3f3f46',
+    priceColor: '#9f1239',
+    ingredientsColor: '#71717a',
+    allergensAccentColor: '#9f1239',
+  },
+  {
+    titleFont: 'Montserrat',
+    bodyFont: 'Roboto',
+    priceFont: 'Montserrat',
+    backgroundColor: '#ffffff',
+    titleColor: '#111827',
+    descriptionColor: '#4b5563',
+    priceColor: '#1d4ed8',
+    ingredientsColor: '#6b7280',
+    allergensAccentColor: '#2563eb',
+  },
+  {
+    titleFont: 'Lora',
+    bodyFont: 'Raleway',
+    priceFont: 'Lora',
+    backgroundColor: '#fefce8',
+    titleColor: '#422006',
+    descriptionColor: '#713f12',
+    priceColor: '#a16207',
+    ingredientsColor: '#854d0e',
+    allergensAccentColor: '#a16207',
+  },
+  {
+    titleFont: 'Poppins',
+    bodyFont: 'DM Sans',
+    priceFont: 'Poppins',
+    backgroundColor: '#fdf2f8',
+    titleColor: '#831843',
+    descriptionColor: '#9d174d',
+    priceColor: '#be185d',
+    ingredientsColor: '#9f1239',
+    allergensAccentColor: '#db2777',
+  },
+  {
+    titleFont: 'Bebas Neue',
+    bodyFont: 'Open Sans',
+    priceFont: 'Bebas Neue',
+    backgroundColor: '#111827',
+    titleColor: '#f9fafb',
+    descriptionColor: '#d1d5db',
+    priceColor: '#fbbf24',
+    ingredientsColor: '#9ca3af',
+    allergensAccentColor: '#f59e0b',
+  },
+  {
+    titleFont: 'Caveat',
+    bodyFont: 'Lato',
+    priceFont: 'Montserrat',
+    backgroundColor: '#f0fdf4',
+    titleColor: '#14532d',
+    descriptionColor: '#166534',
+    priceColor: '#15803d',
+    ingredientsColor: '#4d7c0f',
+    allergensAccentColor: '#16a34a',
+  },
+] as const;
+
+function pickRandom<T>(items: readonly T[]): T {
+  return items[Math.floor(Math.random() * items.length)]!;
+}
+
+function randomInRange(min: number, max: number, step = 1): number {
+  const steps = Math.floor((max - min) / step);
+  return min + Math.floor(Math.random() * (steps + 1)) * step;
+}
+
+function buildRandomMenuItemStyle(): {
+  backgroundColor: string;
+  allergensAccentColor: string;
+  menuTypography: NonNullable<Extract<MobileComponent, { type: 'menuItem' }>['menuTypography']>;
+  imageLayout: { position: 'left' | 'right'; width: number; radius: number };
+} {
+  const theme = pickRandom(MENU_ITEM_STYLE_THEMES);
+  // Fuente body: si el tema pedía una no listada, caer a Open Sans.
+  const bodyFont = (MOBILE_GOOGLE_FONTS_20 as readonly string[]).includes(theme.bodyFont)
+    ? theme.bodyFont
+    : 'Open Sans';
+  const titleFont = (MOBILE_GOOGLE_FONTS_20 as readonly string[]).includes(theme.titleFont)
+    ? theme.titleFont
+    : 'Montserrat';
+  const priceFont = (MOBILE_GOOGLE_FONTS_20 as readonly string[]).includes(theme.priceFont)
+    ? theme.priceFont
+    : titleFont;
+
+  const titleAlign = pickRandom(['left', 'left', 'center'] as const);
+  const bodyAlign = pickRandom(['left', 'left', 'left', 'center'] as const);
+  const priceAlign = pickRandom(['right', 'right', 'left'] as const);
+  const titleTransform = pickRandom(['none', 'none', 'uppercase', 'capitalize'] as const);
+  const titleItalic = Math.random() < 0.18;
+  const descItalic = Math.random() < 0.28;
+
+  const title: MobileTypographyConfig = {
+    ...defaultMenuItemFieldTypography('title'),
+    fontFamily: titleFont,
+    fontSize: randomInRange(16, 24, 1),
+    fontWeight: pickRandom([600, 700, 700, 800]),
+    fontStyle: titleItalic ? 'italic' : 'normal',
+    textDecoration: 'none',
+    textTransform: titleTransform,
+    textAlign: titleAlign,
+    lineHeight: pickRandom([1.15, 1.2, 1.25, 1.3]),
+    letterSpacing: titleTransform === 'uppercase' ? pickRandom([0.4, 0.8, 1.2]) : pickRandom([0, 0, 0.2]),
+    color: theme.titleColor,
+  };
+
+  const description: MobileTypographyConfig = {
+    ...defaultMenuItemFieldTypography('description'),
+    fontFamily: bodyFont,
+    fontSize: randomInRange(12, 16, 1),
+    fontWeight: pickRandom([400, 400, 500]),
+    fontStyle: descItalic ? 'italic' : 'normal',
+    textDecoration: 'none',
+    textTransform: 'none',
+    textAlign: bodyAlign,
+    lineHeight: pickRandom([1.35, 1.4, 1.45, 1.5]),
+    letterSpacing: 0,
+    color: theme.descriptionColor,
+  };
+
+  const price: MobileTypographyConfig = {
+    ...defaultMenuItemFieldTypography('price'),
+    fontFamily: priceFont,
+    fontSize: randomInRange(14, 20, 1),
+    fontWeight: pickRandom([600, 700, 700]),
+    fontStyle: 'normal',
+    textDecoration: 'none',
+    textTransform: 'none',
+    textAlign: priceAlign,
+    lineHeight: 1.2,
+    letterSpacing: pickRandom([0, 0.2, 0.4]),
+    color: theme.priceColor,
+  };
+
+  const ingredients: MobileTypographyConfig = {
+    ...defaultMenuItemFieldTypography('ingredients'),
+    fontFamily: bodyFont,
+    fontSize: randomInRange(11, 14, 1),
+    fontWeight: 400,
+    fontStyle: Math.random() < 0.2 ? 'italic' : 'normal',
+    textDecoration: 'none',
+    textTransform: 'none',
+    textAlign: bodyAlign,
+    lineHeight: pickRandom([1.3, 1.35, 1.4]),
+    letterSpacing: 0,
+    color: theme.ingredientsColor,
+  };
+
+  return {
+    backgroundColor: theme.backgroundColor,
+    allergensAccentColor: theme.allergensAccentColor,
+    menuTypography: { title, description, price, ingredients },
+    imageLayout: {
+      position: pickRandom(['left', 'right']),
+      width: randomInRange(72, 120, 4),
+      radius: pickRandom([0, 6, 10, 14, 20, 28]),
+    },
+  };
+}
+
+/** Temas controlados para «Aspecto aleatorio» de secciones. */
+const SECTION_STYLE_THEMES = [
+  {
+    titleFont: 'Playfair Display',
+    backgroundColor: '#fffaf5',
+    titleColor: '#1c1917',
+  },
+  {
+    titleFont: 'Oswald',
+    backgroundColor: '#f8fafc',
+    titleColor: '#0f172a',
+  },
+  {
+    titleFont: 'Merriweather',
+    backgroundColor: '#fafafa',
+    titleColor: '#18181b',
+  },
+  {
+    titleFont: 'Montserrat',
+    backgroundColor: '#ffffff',
+    titleColor: '#111827',
+  },
+  {
+    titleFont: 'Lora',
+    backgroundColor: '#fefce8',
+    titleColor: '#422006',
+  },
+  {
+    titleFont: 'Poppins',
+    backgroundColor: '#fdf2f8',
+    titleColor: '#831843',
+  },
+  {
+    titleFont: 'Bebas Neue',
+    backgroundColor: '#111827',
+    titleColor: '#f9fafb',
+  },
+  {
+    titleFont: 'Caveat',
+    backgroundColor: '#f0fdf4',
+    titleColor: '#14532d',
+  },
+  {
+    titleFont: 'Anton',
+    backgroundColor: '#1c1917',
+    titleColor: '#fafaf9',
+  },
+  {
+    titleFont: 'Raleway',
+    backgroundColor: '#eff6ff',
+    titleColor: '#1e3a8a',
+  },
+] as const;
+
+function buildRandomSectionStyle(): {
+  backgroundColor: string;
+  padding: number;
+  size: MobileSectionSize;
+  borderLine: MobileSectionBorderLine;
+  borderRound: MobileSectionBorderRound;
+  textOffsetX: number;
+  textOffsetY: number;
+  typography: MobileTypographyConfig;
+  imageLayout: { align: 'left' | 'center' | 'right'; stretch: boolean };
+} {
+  const theme = pickRandom(SECTION_STYLE_THEMES);
+  const titleFont = (MOBILE_GOOGLE_FONTS_20 as readonly string[]).includes(theme.titleFont)
+    ? theme.titleFont
+    : 'Montserrat';
+  const titleAlign = pickRandom(['left', 'center', 'center', 'center'] as const);
+  const titleTransform = pickRandom(['none', 'none', 'uppercase', 'capitalize'] as const);
+  const isDarkBg = theme.backgroundColor.startsWith('#1') || theme.backgroundColor.startsWith('#0');
+  const textShadow = isDarkBg ? Math.random() < 0.55 : Math.random() < 0.12;
+
+  const typography: MobileTypographyConfig = {
+    fontFamily: titleFont,
+    fontSize: randomInRange(18, 32, 1),
+    fontWeight: pickRandom([600, 700, 700, 800]),
+    fontStyle: Math.random() < 0.15 ? 'italic' : 'normal',
+    textDecoration: 'none',
+    textTransform: titleTransform,
+    textAlign: titleAlign,
+    lineHeight: pickRandom([1.1, 1.15, 1.2, 1.25, 1.3]),
+    letterSpacing:
+      titleTransform === 'uppercase' ? pickRandom([0.6, 1, 1.4, 2]) : pickRandom([0, 0, 0.3, 0.6]),
+    color: theme.titleColor,
+    textShadow,
+    ...(textShadow ? { textShadowIntensity: pickRandom([3, 4, 5, 6, 7]) } : {}),
+  };
+
+  return {
+    backgroundColor: theme.backgroundColor,
+    padding: randomInRange(10, 28, 2),
+    size: pickRandom(['auto', 's', 's', 'm', 'l'] as const),
+    borderLine: pickRandom(['none', 'thin', 'thin', 'medium', 'thick', 'dashed'] as const),
+    borderRound: pickRandom(['none', 'sm', 'md', 'md', 'lg', 'xl'] as const),
+    textOffsetX: pickRandom([0, 0, 0, -8, 8, -16, 16]),
+    textOffsetY: pickRandom([0, 0, 0, -4, 4, -8, 8]),
+    typography,
+    imageLayout: {
+      align: pickRandom(['left', 'center', 'center', 'right'] as const),
+      stretch: Math.random() < 0.75,
+    },
+  };
+}
 
 export function MobileEditorPage() {
   const { menuId } = useParams<{ menuId: string }>();
@@ -431,7 +812,9 @@ export function MobileEditorPage() {
   const [stockModalOpen, setStockModalOpen] = useState(false);
   const [assetModalOpen, setAssetModalOpen] = useState(false);
   const [uploading, setUploading] = useState(false);
-  const [isPhoneLayout, setIsPhoneLayout] = useState(false);
+  const [isPhoneLayout, setIsPhoneLayout] = useState(() =>
+    typeof window !== 'undefined' ? window.matchMedia('(max-width: 900px)').matches : false,
+  );
   const [interactionMode, setInteractionMode] = useState<CanvasInteractionMode>('scroll');
   const [phoneSheet, setPhoneSheet] = useState<'components' | 'props' | 'more' | null>(null);
   const [ocrModalOpen, setOcrModalOpen] = useState(false);
@@ -443,8 +826,16 @@ export function MobileEditorPage() {
     detail?: string;
   } | null>(null);
   const [customAllergenDraft, setCustomAllergenDraft] = useState('');
+  const [swipeHintVisible, setSwipeHintVisible] = useState(() => {
+    try {
+      return globalThis.localStorage?.getItem('mobile-editor-swipe-delete-hint') !== '1';
+    } catch {
+      return true;
+    }
+  });
   const ocrInFlightRef = useRef(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const cameraInputRef = useRef<HTMLInputElement>(null);
   const documentRef = useRef(document);
   const persistTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   documentRef.current = document;
@@ -471,13 +862,13 @@ export function MobileEditorPage() {
   }, []);
 
   useEffect(() => {
-    if (!isPhoneLayout || !phoneSheet) return;
+    if (!isPhoneLayout || (!phoneSheet && !qrOpen && !ocrModalOpen && !livePreviewOpen)) return;
     const prev = globalThis.document.body.style.overflow;
     globalThis.document.body.style.overflow = 'hidden';
     return () => {
       globalThis.document.body.style.overflow = prev;
     };
-  }, [isPhoneLayout, phoneSheet]);
+  }, [isPhoneLayout, phoneSheet, qrOpen, ocrModalOpen, livePreviewOpen]);
 
   useEffect(() => {
     if (!menuId) return;
@@ -598,7 +989,11 @@ export function MobileEditorPage() {
   }, [document.components]);
 
   /** Apply a picked image URL to the correct target field */
-  function applyPickedImageUrl(url: string) {
+  function applyPickedImageUrl(
+    url: string,
+    targetOverride?: 'image' | 'menuImage' | 'sectionBg' | null,
+  ) {
+    const target = targetOverride !== undefined ? targetOverride : imagePickerTarget;
     // Nunca persistir hotlinks de stock (caducan / ToS). Solo URLs propias de R2.
     if (
       !url.includes('/api/assets/file') &&
@@ -609,11 +1004,11 @@ export function MobileEditorPage() {
       );
       return;
     }
-    if (imagePickerTarget === 'menuImage') {
+    if (target === 'menuImage') {
       updateSelectedMenuItemImage({ src: url });
-    } else if (imagePickerTarget === 'sectionBg') {
+    } else if (target === 'sectionBg') {
       updateSelectedSectionBackground({ src: url });
-    } else if (imagePickerTarget === 'image') {
+    } else if (target === 'image') {
       updateSelectedField('src', url);
     }
   }
@@ -630,12 +1025,21 @@ export function MobileEditorPage() {
     }
   }
 
-  function openImagePicker(target: 'image' | 'menuImage' | 'sectionBg', mode: 'stock' | 'assets' | 'upload') {
+  function openImagePicker(
+    target: 'image' | 'menuImage' | 'sectionBg',
+    mode: 'stock' | 'assets' | 'upload' | 'camera',
+  ) {
     setImagePickerTarget(target);
+    // El sheet «Editar» (z-index alto) tapa Stock / Mis archivos: hay que cerrarlo.
+    if (mode === 'stock' || mode === 'assets') {
+      setPhoneSheet(null);
+    }
     if (mode === 'stock') {
       setStockModalOpen(true);
     } else if (mode === 'assets') {
       setAssetModalOpen(true);
+    } else if (mode === 'camera') {
+      cameraInputRef.current?.click();
     } else {
       fileInputRef.current?.click();
     }
@@ -644,6 +1048,7 @@ export function MobileEditorPage() {
   /** Gestor de archivos (ver / eliminar), sin destino de imagen forzado. */
   function openAssetsManager() {
     setImagePickerTarget(null);
+    setPhoneSheet(null);
     setAssetModalOpen(true);
   }
 
@@ -664,86 +1069,131 @@ export function MobileEditorPage() {
     }
   }
 
+  async function importAndApplyStockImage(
+    image: StockImage,
+    targetOverride?: 'image' | 'menuImage' | 'sectionBg',
+  ) {
+    // 1) Descargar Pixabay → R2 (URLs de Pixabay caducan / no hotlink)
+    let assetUrl: string | undefined;
+    let importedId: string | undefined;
+    try {
+      const { asset } = await importStockImage({
+        stockImageId: image.id,
+        fullUrl: image.fullUrl,
+        provider: image.provider,
+        fallbackUrls: image.downloadUrls,
+      });
+      importedId = asset.id;
+      assetUrl = asset.url;
+    } catch (serverErr) {
+      // Fallback: el navegador del usuario a veces sí puede bajar la imagen
+      const tryUrls = [
+        ...(image.downloadUrls ?? []),
+        image.fullUrl,
+        image.previewUrl,
+      ].filter(Boolean);
+      let uploaded: { asset: { id: string; url: string } } | null = null;
+      for (const tryUrl of tryUrls) {
+        try {
+          const res = await fetch(tryUrl, { mode: 'cors', credentials: 'omit' });
+          if (!res.ok) continue;
+          const blob = await res.blob();
+          if (!blob.type.startsWith('image/') || blob.size < 100) continue;
+          const file = new File(
+            [blob],
+            `stock-${image.id}.${blob.type.includes('png') ? 'png' : 'jpg'}`,
+            { type: blob.type || 'image/jpeg' },
+          );
+          const compressed = await compressImage(file, undefined, 'mobile');
+          uploaded = await uploadAsset(compressed);
+          break;
+        } catch {
+          /* probar siguiente URL */
+        }
+      }
+      if (!uploaded) {
+        throw serverErr instanceof Error
+          ? serverErr
+          : new Error('No se pudo importar la imagen de stock');
+      }
+      applyPickedImageUrl(uploaded.asset.url, targetOverride);
+      return;
+    }
+
+    // 2) Recomprimir en cliente a perfil móvil (WebP ~1400px) y sustituir en R2
+    const remote = await fetch(assetUrl!, { credentials: 'include' });
+    if (!remote.ok) {
+      applyPickedImageUrl(assetUrl!, targetOverride);
+      return;
+    }
+    const blob = await remote.blob();
+    const input = new File(
+      [blob],
+      `stock-${image.id}.${blob.type.includes('png') ? 'png' : 'jpg'}`,
+      { type: blob.type || 'image/jpeg' },
+    );
+    const compressed = await compressImage(input, undefined, 'mobile');
+    const { asset: optimized } = await uploadAsset(compressed);
+    applyPickedImageUrl(optimized.url, targetOverride);
+
+    if (importedId && importedId !== optimized.id) {
+      try {
+        await deleteAsset({ id: importedId, force: true });
+      } catch {
+        // La optimizada ya está en uso; el original huérfano se puede limpiar luego
+      }
+    }
+  }
+
   async function handleStockSelect(image: StockImage) {
     if (uploading) return;
     setUploading(true);
     setAssetsError('');
-    let importedId: string | undefined;
     try {
-      // 1) Descargar Pixabay → R2 (URLs de Pixabay caducan / no hotlink)
-      let assetUrl: string | undefined;
-      try {
-        const { asset } = await importStockImage({
-          stockImageId: image.id,
-          fullUrl: image.fullUrl,
-          provider: image.provider,
-          fallbackUrls: image.downloadUrls,
-        });
-        importedId = asset.id;
-        assetUrl = asset.url;
-      } catch (serverErr) {
-        // Fallback: el navegador del usuario a veces sí puede bajar la imagen
-        const tryUrls = [
-          ...(image.downloadUrls ?? []),
-          image.fullUrl,
-          image.previewUrl,
-        ].filter(Boolean);
-        let uploaded: { asset: { id: string; url: string } } | null = null;
-        for (const tryUrl of tryUrls) {
-          try {
-            const res = await fetch(tryUrl, { mode: 'cors', credentials: 'omit' });
-            if (!res.ok) continue;
-            const blob = await res.blob();
-            if (!blob.type.startsWith('image/') || blob.size < 100) continue;
-            const file = new File(
-              [blob],
-              `stock-${image.id}.${blob.type.includes('png') ? 'png' : 'jpg'}`,
-              { type: blob.type || 'image/jpeg' },
-            );
-            const compressed = await compressImage(file, undefined, 'mobile');
-            uploaded = await uploadAsset(compressed);
-            break;
-          } catch {
-            /* probar siguiente URL */
-          }
-        }
-        if (!uploaded) {
-          throw serverErr instanceof Error
-            ? serverErr
-            : new Error('No se pudo importar la imagen de stock');
-        }
-        applyPickedImageUrl(uploaded.asset.url);
-        setStockModalOpen(false);
-        return;
-      }
-
-      // 2) Recomprimir en cliente a perfil móvil (WebP ~1400px) y sustituir en R2
-      const remote = await fetch(assetUrl!, { credentials: 'include' });
-      if (!remote.ok) {
-        applyPickedImageUrl(assetUrl!);
-        setStockModalOpen(false);
-        return;
-      }
-      const blob = await remote.blob();
-      const input = new File(
-        [blob],
-        `stock-${image.id}.${blob.type.includes('png') ? 'png' : 'jpg'}`,
-        { type: blob.type || 'image/jpeg' },
-      );
-      const compressed = await compressImage(input, undefined, 'mobile');
-      const { asset: optimized } = await uploadAsset(compressed);
-      applyPickedImageUrl(optimized.url);
+      await importAndApplyStockImage(image);
       setStockModalOpen(false);
-
-      if (importedId && importedId !== optimized.id) {
-        try {
-          await deleteAsset({ id: importedId, force: true });
-        } catch {
-          // La optimizada ya está en uso; el original huérfano se puede limpiar luego
-        }
-      }
     } catch (err) {
       setAssetsError(err instanceof ApiError ? err.message : 'Error al importar la imagen de stock');
+    } finally {
+      setUploading(false);
+    }
+  }
+
+  /** Busca stock por el nombre del plato (query mejorado) y elige la mejor por tags. */
+  async function autoAssignStockImageFromDishTitle() {
+    if (!selected || selected.type !== 'menuItem' || uploading) return;
+    const dishTitle = selected.title.trim();
+    if (!dishTitle) {
+      setAssetsError('Escribe el nombre del plato para buscar una imagen automática.');
+      return;
+    }
+
+    const searchQuery = buildDishStockSearchQuery(dishTitle);
+    if (!searchQuery) {
+      setAssetsError('Escribe el nombre del plato para buscar una imagen automática.');
+      return;
+    }
+
+    setImagePickerTarget('menuImage');
+    setUploading(true);
+    setAssetsError('');
+    try {
+      const result = await searchStockImages(searchQuery, 1, 20);
+      if (!result.images.length) {
+        setAssetsError(`No se encontraron imágenes de stock para «${dishTitle}».`);
+        return;
+      }
+      const image = pickBestStockImageForDish(dishTitle, result.images);
+      if (!image) {
+        setAssetsError(`No se encontraron imágenes de stock para «${dishTitle}».`);
+        return;
+      }
+      await importAndApplyStockImage(image, 'menuImage');
+      setPhoneSheet(null);
+    } catch (err) {
+      setAssetsError(
+        err instanceof ApiError ? err.message : 'No se pudo asignar la imagen automática',
+      );
     } finally {
       setUploading(false);
     }
@@ -998,6 +1448,7 @@ export function MobileEditorPage() {
     setSelectedId(next.id);
     setSelectedIds([next.id]);
     setAccordionActionError('');
+    if (isPhoneLayout) setPhoneSheet(null);
   }
 
   function handleSelectComponent(id: string) {
@@ -1288,6 +1739,71 @@ export function MobileEditorPage() {
         };
       }),
     }), options);
+  }
+
+  async function randomizeSelectedMenuItemStyle() {
+    if (!selected || selected.type !== 'menuItem' || !propsComponentId) return;
+    const style = buildRandomMenuItemStyle();
+    for (const field of ['title', 'description', 'price', 'ingredients'] as const) {
+      const family = style.menuTypography[field]?.fontFamily;
+      if (family) ensureEditorFontLoaded(family);
+    }
+
+    updateDoc((current) => ({
+      ...current,
+      components: updateMobileComponentById(current.components, propsComponentId, (component) => {
+        if (component.type !== 'menuItem') return component;
+        return {
+          ...component,
+          backgroundColor: style.backgroundColor,
+          allergensAccentColor: style.allergensAccentColor,
+          menuTypography: {
+            title: { ...style.menuTypography.title! },
+            description: { ...style.menuTypography.description! },
+            price: { ...style.menuTypography.price! },
+            ingredients: { ...style.menuTypography.ingredients! },
+          },
+          menuImage: {
+            src: component.menuImage?.src ?? '',
+            alt: component.menuImage?.alt ?? 'Imagen del plato',
+            position: style.imageLayout.position,
+            width: style.imageLayout.width,
+            radius: style.imageLayout.radius,
+          },
+        };
+      }),
+    }));
+    setPhoneSheet(null);
+  }
+
+  async function randomizeSelectedSectionStyle() {
+    if (!selected || selected.type !== 'section' || !propsComponentId) return;
+    const style = buildRandomSectionStyle();
+    if (style.typography.fontFamily) ensureEditorFontLoaded(style.typography.fontFamily);
+
+    updateDoc((current) => ({
+      ...current,
+      components: updateMobileComponentById(current.components, propsComponentId, (component) => {
+        if (component.type !== 'section') return component;
+        return {
+          ...component,
+          backgroundColor: style.backgroundColor,
+          padding: style.padding,
+          size: style.size,
+          borderLine: style.borderLine,
+          borderRound: style.borderRound,
+          textOffsetX: style.textOffsetX,
+          textOffsetY: style.textOffsetY,
+          typography: { ...style.typography },
+          backgroundImage: {
+            src: component.backgroundImage?.src ?? '',
+            align: style.imageLayout.align,
+            stretch: style.imageLayout.stretch,
+          },
+        };
+      }),
+    }));
+    setPhoneSheet(null);
   }
 
   async function applySelectedMenuItemStyleToAll() {
@@ -1688,7 +2204,7 @@ export function MobileEditorPage() {
               <button
                 type="button"
                 className={interactionMode === 'move' ? 'is-active' : undefined}
-                title="Mover y reordenar componentes"
+                title="Mover: arrastra el icono ≡ para reordenar"
                 aria-label="Mover"
                 aria-pressed={interactionMode === 'move'}
                 onClick={() => setInteractionMode('move')}
@@ -1698,7 +2214,7 @@ export function MobileEditorPage() {
               <button
                 type="button"
                 className={interactionMode === 'scroll' ? 'is-active' : undefined}
-                title="Desplazar la carta (scroll)"
+                title="Scroll: desplaza la carta y desliza para eliminar"
                 aria-label="Scroll"
                 aria-pressed={interactionMode === 'scroll'}
                 onClick={() => setInteractionMode('scroll')}
@@ -1739,7 +2255,7 @@ export function MobileEditorPage() {
                   const nextTitle = e.target.value;
                   setTitle(nextTitle);
                 }}
-                onBlur={() => void persist(document, title)}
+                onBlur={(e) => void persist(document, e.currentTarget.value.trim() || title)}
               />
             </label>
             <label className="mobile-editor-desktop-only">
@@ -1799,7 +2315,10 @@ export function MobileEditorPage() {
             <button
               type="button"
               className="btn-primary mobile-editor-desktop-only"
-              onClick={() => setQrOpen(true)}
+              onClick={() => {
+                setPhoneSheet(null);
+                setQrOpen(true);
+              }}
               disabled={loading || !menuId}
             >
               QR / Publicar
@@ -1807,9 +2326,31 @@ export function MobileEditorPage() {
             <Link to="/dashboard" className="btn-secondary mobile-editor-desktop-only">
               Volver
             </Link>
-            <span className="mobile-editor-phone-status" aria-live="polite">
-              {saving ? 'Guardando…' : title}
-            </span>
+            <label className="mobile-editor-phone-title-field">
+              <span className="mobile-editor-phone-title-label">Nombre</span>
+              <input
+                type="text"
+                value={title}
+                disabled={loading}
+                placeholder="Nombre de la carta"
+                aria-label="Nombre de la carta"
+                enterKeyHint="done"
+                autoComplete="off"
+                autoCorrect="off"
+                onChange={(e) => setTitle(e.target.value)}
+                onBlur={(e) => void persist(document, e.currentTarget.value.trim() || title)}
+                onKeyDown={(e) => {
+                  if (e.key !== 'Enter') return;
+                  e.preventDefault();
+                  (e.currentTarget as HTMLInputElement).blur();
+                }}
+              />
+            </label>
+            {saving && (
+              <span className="mobile-editor-phone-status" aria-live="polite">
+                Guardando…
+              </span>
+            )}
           </div>
         </header>
 
@@ -1856,6 +2397,28 @@ export function MobileEditorPage() {
             </aside>
 
             <section className="mobile-editor-canvas-wrap">
+              {isPhoneLayout && swipeHintVisible && (
+                <p className="mobile-editor-swipe-hint" role="status">
+                  <span>
+                    <strong>Eliminar:</strong> en modo Scroll, desliza un componente a la izquierda
+                  </span>
+                  <button
+                    type="button"
+                    className="mobile-editor-swipe-hint-dismiss"
+                    aria-label="Cerrar pista"
+                    onClick={() => {
+                      setSwipeHintVisible(false);
+                      try {
+                        globalThis.localStorage?.setItem('mobile-editor-swipe-delete-hint', '1');
+                      } catch {
+                        /* ignore */
+                      }
+                    }}
+                  >
+                    ✕
+                  </button>
+                </p>
+              )}
               <div
                 className={`mobile-device-frame is-editor${isPhoneLayout ? ' is-native-phone' : ''}`}
                 style={
@@ -1893,8 +2456,8 @@ export function MobileEditorPage() {
                 {saving
                   ? 'Guardando...'
                   : interactionMode === 'scroll'
-                    ? 'Modo Scroll: desplaza la carta sin mover componentes · Autoguardado activo'
-                    : 'Modo Mover: arrastra componentes para reordenarlos · Autoguardado activo'}
+                    ? 'Modo Scroll: desplaza la carta · Desliza a la izquierda para eliminar · Autoguardado activo'
+                    : 'Modo Mover: arrastra el icono ≡ para reordenar · Autoguardado activo'}
               </p>
             </section>
 
@@ -1917,6 +2480,38 @@ export function MobileEditorPage() {
               )}
               {selectedNode && (
                 <div className="mobile-props-form">
+                  {selected?.type === 'menuItem' && (
+                    <>
+                      <button
+                        type="button"
+                        className="btn-random"
+                        onClick={() => randomizeSelectedMenuItemStyle()}
+                      >
+                        <RandomIcon />
+                        Aspecto aleatorio
+                      </button>
+                      <small className="panel-hint">
+                        Cambia tipografías, colores, alineaciones, fondo y formato de la foto con un
+                        estilo coherente. No altera textos, alérgenos ni la imagen.
+                      </small>
+                    </>
+                  )}
+                  {selected?.type === 'section' && (
+                    <>
+                      <button
+                        type="button"
+                        className="btn-random"
+                        onClick={() => randomizeSelectedSectionStyle()}
+                      >
+                        <RandomIcon />
+                        Aspecto aleatorio
+                      </button>
+                      <small className="panel-hint">
+                        Cambia tipografía, colores, tamaño, bordes, fondo y formato de la imagen de
+                        fondo con un estilo coherente. No altera el título ni la imagen.
+                      </small>
+                    </>
+                  )}
                   <div className="mobile-selection-tools">
                     <button
                       type="button"
@@ -2100,8 +2695,8 @@ export function MobileEditorPage() {
                     </label>
                   )}
                   {selected.type === 'text' && (
-                    <label>
-                      Lista y sangría
+                    <div className="mobile-props-field">
+                      <span className="mobile-props-field-label">Lista y sangría</span>
                       <div className="wysiwyg-align-group" role="group" aria-label="Lista y sangría">
                         <button
                           type="button"
@@ -2152,7 +2747,7 @@ export function MobileEditorPage() {
                       <small className="panel-hint">
                         Una línea = un elemento. Sangría actual: {selected.indentPx ?? 0}px.
                       </small>
-                    </label>
+                    </div>
                   )}
                   {'description' in selected && (
                     <label>
@@ -2277,6 +2872,30 @@ export function MobileEditorPage() {
                         Pulsa las etiquetas para activar o desactivar. Puedes añadir otras y quitarlas
                         con ✕. Se guardan con el menú y se ven en la carta pública.
                       </small>
+                      <label className="mobile-props-color-picker-label">
+                        Color del modal de alérgenos
+                        <input
+                          type="color"
+                          value={selected.allergensAccentColor || '#b45309'}
+                          onChange={(e) => {
+                            if (!propsComponentId) return;
+                            updateDoc(
+                              (current) => ({
+                                ...current,
+                                components: updateMobileComponentById(
+                                  current.components,
+                                  propsComponentId,
+                                  (component) => {
+                                    if (component.type !== 'menuItem') return component;
+                                    return { ...component, allergensAccentColor: e.target.value };
+                                  },
+                                ),
+                              }),
+                              { debouncePersist: true },
+                            );
+                          }}
+                        />
+                      </label>
                     </div>
                   )}
                   {selected.type === 'menuItem' && (
@@ -2319,10 +2938,37 @@ export function MobileEditorPage() {
                           <button type="button" className="btn-secondary" disabled={uploading} onClick={() => openImagePicker('menuImage', 'assets')}>Mis archivos</button>
                           <button type="button" className="btn-secondary" disabled={uploading} onClick={() => openImagePicker('menuImage', 'stock')}>Stock</button>
                           <button type="button" className="btn-secondary" disabled={uploading} onClick={() => openImagePicker('menuImage', 'upload')}>{uploading && imagePickerTarget === 'menuImage' ? 'Subiendo…' : 'Subir'}</button>
+                          <button
+                            type="button"
+                            className="btn-secondary"
+                            disabled={uploading}
+                            onClick={() => openImagePicker('menuImage', 'camera')}
+                            title="Abrir cámara y usar la foto como imagen del plato"
+                            aria-label="Abrir cámara"
+                          >
+                            {uploading && imagePickerTarget === 'menuImage' ? 'Subiendo…' : 'Cámara'}
+                          </button>
+                          <button
+                            type="button"
+                            className="btn-secondary"
+                            disabled={uploading || !selected.title.trim()}
+                            onClick={() => void autoAssignStockImageFromDishTitle()}
+                            title="Busca el plato en stock (consulta optimizada) y elige la foto cuyos tags mejor coinciden"
+                            aria-label="Imagen automática desde stock"
+                          >
+                            {uploading && imagePickerTarget === 'menuImage' ? 'Buscando…' : 'Imagen automática'}
+                          </button>
                         </div>
+                        {assetsError && imagePickerTarget === 'menuImage' && (
+                          <small className="error-text">{assetsError}</small>
+                        )}
+                        <small className="panel-hint">
+                          Imagen automática: limpia el nombre, busca con sesgo gastronómico y elige
+                          la foto cuyos tags mejor coinciden con el plato.
+                        </small>
                       </div>
-                      <label>
-                        Posición de imagen
+                      <div className="mobile-props-field">
+                        <span className="mobile-props-field-label">Posición de imagen</span>
                         <div className="wysiwyg-align-group" role="group" aria-label="Posición de imagen">
                           <button
                             type="button"
@@ -2345,33 +2991,23 @@ export function MobileEditorPage() {
                             <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><rect x="14" y="4" width="8" height="8" rx="1" fill="currentColor"/><path fill="currentColor" d="M2 5h9v2H2zM4 9h7v2H4zM2 15h20v2H2zM6 19h16v2H6z"/></svg>
                           </button>
                         </div>
-                      </label>
-                      <label>
-                        Ancho imagen (px)
-                        <input
-                          type="number"
-                          min={56}
-                          max={180}
-                          step={2}
-                          value={selected.menuImage?.width ?? 92}
-                          onChange={(e) =>
-                            updateSelectedMenuItemImage({ width: Number(e.target.value) })
-                          }
-                        />
-                      </label>
-                      <label>
-                        Radio imagen
-                        <input
-                          type="number"
-                          min={0}
-                          max={28}
-                          step={1}
-                          value={selected.menuImage?.radius ?? 10}
-                          onChange={(e) =>
-                            updateSelectedMenuItemImage({ radius: Number(e.target.value) })
-                          }
-                        />
-                      </label>
+                      </div>
+                      <NumberStepper
+                        label="Ancho imagen (px)"
+                        value={selected.menuImage?.width ?? 92}
+                        min={56}
+                        max={180}
+                        step={2}
+                        onChange={(width) => updateSelectedMenuItemImage({ width })}
+                      />
+                      <NumberStepper
+                        label="Radio imagen"
+                        value={selected.menuImage?.radius ?? 10}
+                        min={0}
+                        max={28}
+                        step={1}
+                        onChange={(radius) => updateSelectedMenuItemImage({ radius })}
+                      />
                     </>
                   )}
                   {selected.type === 'section' && (
@@ -2483,8 +3119,8 @@ export function MobileEditorPage() {
                       </div>
                       {selected.backgroundImage?.src ? (
                         <>
-                          <label>
-                            Alineación
+                          <div className="mobile-props-field">
+                            <span className="mobile-props-field-label">Alineación</span>
                             <div className="wysiwyg-align-group" role="group" aria-label="Alineación de imagen de fondo">
                               <button
                                 type="button"
@@ -2529,9 +3165,9 @@ export function MobileEditorPage() {
                                 <AlignRightIcon />
                               </button>
                             </div>
-                          </label>
-                          <label>
-                            Ajuste
+                          </div>
+                          <div className="mobile-props-field">
+                            <span className="mobile-props-field-label">Ajuste</span>
                             <div className="wysiwyg-align-group" role="group" aria-label="Ajuste de imagen de fondo">
                               <button
                                 type="button"
@@ -2556,7 +3192,7 @@ export function MobileEditorPage() {
                             <small className="panel-hint">
                               Activo: la imagen cubre toda la sección. Desactivado: se adapta sin recortar.
                             </small>
-                          </label>
+                          </div>
                         </>
                       ) : null}
                       {assetsError && <small className="error-text">{assetsError}</small>}
@@ -2746,28 +3382,22 @@ export function MobileEditorPage() {
                   <small className="panel-hint">
                     Al cambiar Trigger o Animación se reproduce un preview en el móvil.
                   </small>
-                  <label>
-                    Duración (ms)
-                    <input
-                      type="number"
-                      min={0}
-                      max={5000}
-                      step={50}
-                      value={selectedNode.animation?.durationMs ?? 450}
-                      onChange={(e) => updateSelectedAnimation({ durationMs: Number(e.target.value) })}
-                    />
-                  </label>
-                  <label>
-                    Delay (ms)
-                    <input
-                      type="number"
-                      min={0}
-                      max={5000}
-                      step={50}
-                      value={selectedNode.animation?.delayMs ?? 0}
-                      onChange={(e) => updateSelectedAnimation({ delayMs: Number(e.target.value) })}
-                    />
-                  </label>
+                  <NumberStepper
+                    label="Duración (ms)"
+                    value={selectedNode.animation?.durationMs ?? 450}
+                    min={0}
+                    max={5000}
+                    step={50}
+                    onChange={(durationMs) => updateSelectedAnimation({ durationMs })}
+                  />
+                  <NumberStepper
+                    label="Delay (ms)"
+                    value={selectedNode.animation?.delayMs ?? 0}
+                    min={0}
+                    max={5000}
+                    step={50}
+                    onChange={(delayMs) => updateSelectedAnimation({ delayMs })}
+                  />
                   <label>
                     Intensidad
                     <input
@@ -2803,8 +3433,8 @@ export function MobileEditorPage() {
                       ))}
                     </select>
                   </label>
-                  <label>
-                    Alineación
+                  <div className="mobile-props-field">
+                    <span className="mobile-props-field-label">Alineación</span>
                     <div className="wysiwyg-align-group" role="group" aria-label="Alineación de texto">
                       <button
                         type="button"
@@ -2834,29 +3464,23 @@ export function MobileEditorPage() {
                         <AlignRightIcon />
                       </button>
                     </div>
-                  </label>
-                  <label>
-                    Tamaño (px)
-                    <input
-                      type="number"
-                      min={8}
-                      max={96}
-                      step={1}
-                      value={selected.typography?.fontSize ?? 16}
-                      onChange={(e) => updateSelectedTypography({ fontSize: Number(e.target.value) })}
-                    />
-                  </label>
-                  <label>
-                    Peso
-                    <input
-                      type="number"
-                      min={100}
-                      max={900}
-                      step={100}
-                      value={selected.typography?.fontWeight ?? 400}
-                      onChange={(e) => updateSelectedTypography({ fontWeight: Number(e.target.value) })}
-                    />
-                  </label>
+                  </div>
+                  <NumberStepper
+                    label="Tamaño (px)"
+                    value={selected.typography?.fontSize ?? 16}
+                    min={8}
+                    max={96}
+                    step={1}
+                    onChange={(fontSize) => updateSelectedTypography({ fontSize })}
+                  />
+                  <NumberStepper
+                    label="Peso"
+                    value={selected.typography?.fontWeight ?? 400}
+                    min={100}
+                    max={900}
+                    step={100}
+                    onChange={(fontWeight) => updateSelectedTypography({ fontWeight })}
+                  />
                   <TypographyStyleToolbar
                     fontStyle={selected.typography?.fontStyle ?? 'normal'}
                     textDecoration={selected.typography?.textDecoration ?? 'none'}
@@ -2867,28 +3491,24 @@ export function MobileEditorPage() {
                       selected.type === 'text' ? updateSelectedTextListStyle : undefined
                     }
                   />
-                  <label>
-                    Interlineado
-                    <input
-                      type="number"
-                      min={1}
-                      max={3}
-                      step={0.05}
-                      value={selected.typography?.lineHeight ?? 1.45}
-                      onChange={(e) => updateSelectedTypography({ lineHeight: Number(e.target.value) })}
-                    />
-                  </label>
-                  <label>
-                    Espaciado de letras (px)
-                    <input
-                      type="number"
-                      min={-2}
-                      max={12}
-                      step={0.1}
-                      value={selected.typography?.letterSpacing ?? 0}
-                      onChange={(e) => updateSelectedTypography({ letterSpacing: Number(e.target.value) })}
-                    />
-                  </label>
+                  <NumberStepper
+                    label="Interlineado"
+                    value={selected.typography?.lineHeight ?? 1.45}
+                    min={1}
+                    max={3}
+                    step={0.05}
+                    decimals={2}
+                    onChange={(lineHeight) => updateSelectedTypography({ lineHeight })}
+                  />
+                  <NumberStepper
+                    label="Espaciado de letras (px)"
+                    value={selected.typography?.letterSpacing ?? 0}
+                    min={-2}
+                    max={12}
+                    step={0.1}
+                    decimals={1}
+                    onChange={(letterSpacing) => updateSelectedTypography({ letterSpacing })}
+                  />
                   <label className="mobile-props-color-picker-label">
                     Color de texto
                     <input
@@ -2940,36 +3560,22 @@ export function MobileEditorPage() {
                           </span>
                         </label>
                       )}
-                      <label>
-                        Margen izquierdo (px)
-                        <input
-                          type="number"
-                          min={-400}
-                          max={400}
-                          step={1}
-                          value={selected.textOffsetX ?? 0}
-                          onChange={(e) =>
-                            updateSelectedSectionTextOffset({
-                              textOffsetX: Number(e.target.value),
-                            })
-                          }
-                        />
-                      </label>
-                      <label>
-                        Desplazamiento vertical (px)
-                        <input
-                          type="number"
-                          min={-400}
-                          max={400}
-                          step={1}
-                          value={selected.textOffsetY ?? 0}
-                          onChange={(e) =>
-                            updateSelectedSectionTextOffset({
-                              textOffsetY: Number(e.target.value),
-                            })
-                          }
-                        />
-                      </label>
+                      <NumberStepper
+                        label="Margen izquierdo (px)"
+                        value={selected.textOffsetX ?? 0}
+                        min={-400}
+                        max={400}
+                        step={1}
+                        onChange={(textOffsetX) => updateSelectedSectionTextOffset({ textOffsetX })}
+                      />
+                      <NumberStepper
+                        label="Desplazamiento vertical (px)"
+                        value={selected.textOffsetY ?? 0}
+                        min={-400}
+                        max={400}
+                        step={1}
+                        onChange={(textOffsetY) => updateSelectedSectionTextOffset({ textOffsetY })}
+                      />
                       <small className="panel-hint">
                         Negativo mueve el texto a la izquierda / arriba. Positivo a la derecha / abajo.
                       </small>
@@ -3025,8 +3631,8 @@ export function MobileEditorPage() {
                           ))}
                         </select>
                       </label>
-                      <label>
-                        Alineación
+                      <div className="mobile-props-field">
+                        <span className="mobile-props-field-label">Alineación</span>
                         <div className="wysiwyg-align-group" role="group" aria-label="Alineación de texto">
                           <button
                             type="button"
@@ -3064,73 +3670,55 @@ export function MobileEditorPage() {
                             <AlignRightIcon />
                           </button>
                         </div>
-                      </label>
-                      <label>
-                        Tamaño (px)
-                        <input
-                          type="number"
-                          min={8}
-                          max={96}
-                          step={1}
-                          value={selectedMenuItemFieldTypo.fontSize}
-                          onChange={(e) =>
-                            updateSelectedMenuItemTypography(menuTypoTarget, {
-                              fontSize: Number(e.target.value),
-                            })
-                          }
-                        />
-                      </label>
-                      <label>
-                        Peso
-                        <input
-                          type="number"
-                          min={100}
-                          max={900}
-                          step={100}
-                          value={selectedMenuItemFieldTypo.fontWeight}
-                          onChange={(e) =>
-                            updateSelectedMenuItemTypography(menuTypoTarget, {
-                              fontWeight: Number(e.target.value),
-                            })
-                          }
-                        />
-                      </label>
+                      </div>
+                      <NumberStepper
+                        label="Tamaño (px)"
+                        value={selectedMenuItemFieldTypo.fontSize}
+                        min={8}
+                        max={96}
+                        step={1}
+                        onChange={(fontSize) =>
+                          updateSelectedMenuItemTypography(menuTypoTarget, { fontSize })
+                        }
+                      />
+                      <NumberStepper
+                        label="Peso"
+                        value={selectedMenuItemFieldTypo.fontWeight}
+                        min={100}
+                        max={900}
+                        step={100}
+                        onChange={(fontWeight) =>
+                          updateSelectedMenuItemTypography(menuTypoTarget, { fontWeight })
+                        }
+                      />
                       <TypographyStyleToolbar
                         fontStyle={selectedMenuItemFieldTypo.fontStyle}
                         textDecoration={selectedMenuItemFieldTypo.textDecoration}
                         textTransform={selectedMenuItemFieldTypo.textTransform}
                         onChange={(patch) => updateSelectedMenuItemTypography(menuTypoTarget, patch)}
                       />
-                      <label>
-                        Interlineado
-                        <input
-                          type="number"
-                          min={1}
-                          max={3}
-                          step={0.05}
-                          value={selectedMenuItemFieldTypo.lineHeight}
-                          onChange={(e) =>
-                            updateSelectedMenuItemTypography(menuTypoTarget, {
-                              lineHeight: Number(e.target.value),
-                            })
-                          }
-                        />
-                      </label>
-                      <label>
-                        Espaciado de letras (px)
-                        <input
-                          type="number"
-                          min={-2}
-                          max={12}
-                          step={0.1}
-                          value={selectedMenuItemFieldTypo.letterSpacing}
-                          onChange={(e) =>
-                            updateSelectedMenuItemTypography(menuTypoTarget, {
-                              letterSpacing: Number(e.target.value),
-                            })
-                          }
-                        />
-                      </label>
+                      <NumberStepper
+                        label="Interlineado"
+                        value={selectedMenuItemFieldTypo.lineHeight}
+                        min={1}
+                        max={3}
+                        step={0.05}
+                        decimals={2}
+                        onChange={(lineHeight) =>
+                          updateSelectedMenuItemTypography(menuTypoTarget, { lineHeight })
+                        }
+                      />
+                      <NumberStepper
+                        label="Espaciado de letras (px)"
+                        value={selectedMenuItemFieldTypo.letterSpacing}
+                        min={-2}
+                        max={12}
+                        step={0.1}
+                        decimals={1}
+                        onChange={(letterSpacing) =>
+                          updateSelectedMenuItemTypography(menuTypoTarget, { letterSpacing })
+                        }
+                      />
                       <label className="mobile-props-color-picker-label">
                         Color de texto
                         <input
@@ -3300,7 +3888,7 @@ export function MobileEditorPage() {
                   <button
                     type="button"
                     className={interactionMode === 'move' ? 'is-active' : undefined}
-                    title="Mover: mantén pulsado un componente para reordenarlo"
+                    title="Mover: arrastra el icono ≡ para reordenar"
                     aria-label="Mover"
                     aria-pressed={interactionMode === 'move'}
                     onClick={() => setInteractionMode('move')}
@@ -3311,7 +3899,7 @@ export function MobileEditorPage() {
                   <button
                     type="button"
                     className={interactionMode === 'scroll' ? 'is-active' : undefined}
-                    title="Scroll: desplaza la carta sin mover componentes"
+                    title="Scroll: desplaza la carta y desliza para eliminar"
                     aria-label="Scroll"
                     aria-pressed={interactionMode === 'scroll'}
                     onClick={() => setInteractionMode('scroll')}
@@ -3322,8 +3910,8 @@ export function MobileEditorPage() {
                 </div>
                 <small className="panel-hint">
                   {interactionMode === 'move'
-                    ? 'Mantén pulsado un componente y arrástralo para reordenarlo. Las propiedades se abren con Editar.'
-                    : 'Desplaza la carta con el dedo. Toca un componente para seleccionarlo y pulsa Editar para sus propiedades.'}
+                    ? 'Modo Mover: arrastra el icono ≡ de cada componente para reordenarlo. Las propiedades se abren con Editar.'
+                    : 'Modo Scroll: desplaza la carta con el dedo. Desliza a la izquierda para eliminar. Toca y pulsa Editar para propiedades.'}
                 </small>
               </div>
               <button
@@ -3363,12 +3951,21 @@ export function MobileEditorPage() {
                 <small className="panel-hint mobile-accordion-error">{accordionActionError}</small>
               )}
               <label>
-                Nombre
+                Nombre de la carta
                 <input
                   type="text"
                   value={title}
+                  placeholder="Nombre de la carta"
+                  enterKeyHint="done"
+                  autoComplete="off"
+                  autoCorrect="off"
                   onChange={(e) => setTitle(e.target.value)}
-                  onBlur={() => void persist(document, title)}
+                  onBlur={(e) => void persist(document, e.currentTarget.value.trim() || title)}
+                  onKeyDown={(e) => {
+                    if (e.key !== 'Enter') return;
+                    e.preventDefault();
+                    (e.currentTarget as HTMLInputElement).blur();
+                  }}
                 />
               </label>
               <label>
@@ -3400,7 +3997,6 @@ export function MobileEditorPage() {
                 className="btn-secondary"
                 disabled={uploading}
                 onClick={() => {
-                  setPhoneSheet(null);
                   openAssetsManager();
                 }}
                 title="Ver y eliminar archivos subidos"
@@ -3432,74 +4028,101 @@ export function MobileEditorPage() {
           </aside>
         )}
 
-        {isPhoneLayout && (
-          <nav className="mobile-editor-phone-dock" aria-label="Herramientas del editor">
-            <button
-              type="button"
-              className={phoneSheet === 'components' ? 'is-active' : undefined}
-              aria-pressed={phoneSheet === 'components'}
-              onClick={() => togglePhoneSheet('components')}
-            >
-              <span aria-hidden="true">＋</span>
-              Añadir
-            </button>
-            <button
-              type="button"
-              className={phoneSheet === 'props' ? 'is-active' : undefined}
-              aria-pressed={phoneSheet === 'props'}
-              onClick={() => togglePhoneSheet('props')}
-            >
-              <span aria-hidden="true">✎</span>
-              Editar
-            </button>
-            <button type="button" onClick={() => setLivePreviewOpen(true)}>
-              <span aria-hidden="true">▷</span>
-              Preview
-            </button>
-            <button
-              type="button"
-              className={phoneSheet === 'more' ? 'is-active' : undefined}
-              aria-pressed={phoneSheet === 'more'}
-              onClick={() => togglePhoneSheet('more')}
-            >
-              <span aria-hidden="true">⋯</span>
-              Más
-            </button>
-          </nav>
-        )}
+        {isPhoneLayout &&
+          !livePreviewOpen &&
+          createPortal(
+            <nav className="mobile-editor-phone-dock is-portal" aria-label="Herramientas del editor">
+              <button
+                type="button"
+                className={phoneSheet === 'components' ? 'is-active' : undefined}
+                aria-pressed={phoneSheet === 'components'}
+                onClick={() => togglePhoneSheet('components')}
+              >
+                <span aria-hidden="true">＋</span>
+                Añadir
+              </button>
+              <button
+                type="button"
+                className={phoneSheet === 'props' ? 'is-active' : undefined}
+                aria-pressed={phoneSheet === 'props'}
+                onClick={() => togglePhoneSheet('props')}
+              >
+                <span aria-hidden="true">✎</span>
+                Editar
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setPhoneSheet(null);
+                  setLivePreviewOpen(true);
+                }}
+              >
+                <span aria-hidden="true">▷</span>
+                Preview
+              </button>
+              <button
+                type="button"
+                className={phoneSheet === 'more' ? 'is-active' : undefined}
+                aria-pressed={phoneSheet === 'more'}
+                onClick={() => togglePhoneSheet('more')}
+              >
+                <span aria-hidden="true">⋯</span>
+                Más
+              </button>
+            </nav>,
+            globalThis.document.body,
+          )}
       </main>
 
-      {livePreviewOpen && (
-        <div
-          className="mobile-live-preview-overlay"
-          role="dialog"
-          aria-modal="true"
-          aria-label="Preview de la carta móvil"
-        >
-          <div className="mobile-live-preview-toolbar">
-            <div className="mobile-live-preview-toolbar-copy">
-              <strong>Preview</strong>
-              <span>Como en la URL pública. Prueba botones, modales y saltos entre secciones.</span>
-            </div>
-            <button type="button" className="btn-secondary" onClick={() => setLivePreviewOpen(false)}>
-              Cerrar preview
-            </button>
-          </div>
-          <div className="mobile-live-preview-stage">
-            <div
-              className="mobile-device-frame is-live-preview"
-              style={
-                {
-                  ['--mobile-viewport-width' as string]: `${document.viewport.width}px`,
-                  ['--mobile-viewport-height' as string]: `${document.viewport.height}px`,
-                } as CSSProperties
-              }
-            >
-              <MobileRuntimeRenderer document={document} openLinksInNewTab />
-            </div>
-          </div>
-        </div>
-      )}
+      {livePreviewOpen &&
+        createPortal(
+          <div
+            className={`mobile-live-preview-overlay${isPhoneLayout ? ' is-phone-public' : ''}`}
+            role="dialog"
+            aria-modal="true"
+            aria-label="Preview de la carta móvil"
+          >
+            {isPhoneLayout ? (
+              <>
+                <button
+                  type="button"
+                  className="mobile-live-preview-close-fab"
+                  aria-label="Cerrar preview"
+                  onClick={() => setLivePreviewOpen(false)}
+                >
+                  ✕
+                </button>
+                <MobilePublicView document={document} />
+              </>
+            ) : (
+              <>
+                <div className="mobile-live-preview-toolbar">
+                  <div className="mobile-live-preview-toolbar-copy">
+                    <strong>Preview</strong>
+                    <span>Como en la URL pública. Prueba botones, modales y saltos entre secciones.</span>
+                  </div>
+                  <button type="button" className="btn-secondary" onClick={() => setLivePreviewOpen(false)}>
+                    Cerrar preview
+                  </button>
+                </div>
+                <div className="mobile-live-preview-stage">
+                  <div
+                    className="mobile-device-frame is-live-preview"
+                    style={
+                      {
+                        ['--mobile-viewport-width' as string]: `${document.viewport.width}px`,
+                        ['--mobile-viewport-height' as string]: `${document.viewport.height}px`,
+                      } as CSSProperties
+                    }
+                  >
+                    <MobileRuntimeRenderer document={document} openLinksInNewTab />
+                  </div>
+                </div>
+              </>
+            )}
+          </div>,
+          globalThis.document.body,
+        )}
 
       <MobileImportOcrModal
         open={ocrModalOpen}
@@ -3535,6 +4158,14 @@ export function MobileEditorPage() {
         ref={fileInputRef}
         type="file"
         accept="image/*"
+        style={{ display: 'none' }}
+        onChange={(e) => void handleFileUpload(e)}
+      />
+      <input
+        ref={cameraInputRef}
+        type="file"
+        accept="image/*"
+        capture="environment"
         style={{ display: 'none' }}
         onChange={(e) => void handleFileUpload(e)}
       />
