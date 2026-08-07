@@ -9,6 +9,7 @@
     "/sitemap.xml",
     "/manifest.webmanifest",
     "/sw.js",
+    "/icons/*",
     "/templates/*",
     "/landing/*",
     "/asset-404.txt"
