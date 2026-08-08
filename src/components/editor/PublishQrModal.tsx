@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, type ReactNode } from 'react';
 import { QRCodeSVG } from 'qrcode.react';
 import {
   ApiError,
@@ -23,6 +23,87 @@ interface PublishQrModalProps {
   initialPublic: boolean;
   onClose: () => void;
   onStatusChange: (isPublic: boolean, slug: string | null) => void;
+}
+
+function CopyIcon() {
+  return (
+    <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true">
+      <path
+        fill="currentColor"
+        d="M16 1H4c-1.1 0-2 .9-2 2v14h2V3h12V1zm3 4H8c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h11c1.1 0 2-.9 2-2V7c0-1.1-.9-2-2-2zm0 16H8V7h11v14z"
+      />
+    </svg>
+  );
+}
+
+function DownloadIcon() {
+  return (
+    <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true">
+      <path fill="currentColor" d="M19 9h-4V3H9v6H5l7 7 7-7zM5 18v2h14v-2H5z" />
+    </svg>
+  );
+}
+
+function PublishIcon() {
+  return (
+    <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true">
+      <path
+        fill="currentColor"
+        d="M5 4v2h14V4H5zm0 10h3v6h8v-6h3l-7-7-7 7z"
+      />
+    </svg>
+  );
+}
+
+function UnpublishIcon() {
+  return (
+    <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true">
+      <path
+        fill="currentColor"
+        d="M12 6.5c3.79 0 7.17 2.13 8.82 5.5-.59 1.22-1.42 2.27-2.41 3.12l1.41 1.41c1.39-1.23 2.49-2.77 3.18-4.53C21.27 7.11 17 4 12 4c-1.27 0-2.49.2-3.64.57l1.65 1.65C10.66 6.09 11.32 6.5 12 6.5zm-1.07 1.14L13 9.71c.57.25 1.03.71 1.28 1.28l2.07 2.07c.08-.34.15-.68.15-1.06 0-2.48-2.02-4.5-4.5-4.5-.38 0-.72.07-1.07.14zM2.71 3.16 1.3 4.57l2.38 2.38C2.06 8.37 1.05 10.11.5 12.01 2.73 16.89 7 20 12 20c1.52 0 2.97-.3 4.31-.82l2.18 2.18 1.41-1.41L2.71 3.16zM12 17.5c-3.79 0-7.17-2.13-8.82-5.5.64-1.32 1.6-2.47 2.77-3.35l2.2 2.2c-.23.4-.35.86-.35 1.35 0 1.93 1.57 3.5 3.5 3.5.49 0 .95-.12 1.35-.35l1.62 1.62c-.72.28-1.5.43-2.27.43z"
+      />
+    </svg>
+  );
+}
+
+function TrashIcon() {
+  return (
+    <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">
+      <path
+        fill="currentColor"
+        d="M9 3h6l1 2h4v2H4V5h4l1-2zm1 6h2v10h-2V9zm4 0h2v10h-2V9zM7 9h2v10H7V9z"
+      />
+    </svg>
+  );
+}
+
+function ActionBtn({
+  className,
+  disabled,
+  onClick,
+  title,
+  ariaLabel,
+  children,
+}: {
+  className: string;
+  disabled?: boolean;
+  onClick: () => void;
+  title: string;
+  ariaLabel: string;
+  children: ReactNode;
+}) {
+  return (
+    <button
+      type="button"
+      className={className}
+      disabled={disabled}
+      onClick={onClick}
+      title={title}
+      aria-label={ariaLabel}
+    >
+      {children}
+    </button>
+  );
 }
 
 export function PublishQrModal({
@@ -169,7 +250,7 @@ export function PublishQrModal({
     <div className="stock-modal-overlay" onClick={onClose}>
       <div className="stock-modal qr-modal" onClick={(e) => e.stopPropagation()}>
         <header className="stock-modal-header">
-          <h2>Código QR — {menuTitle}</h2>
+          <h2>QR — {menuTitle}</h2>
           <button type="button" className="close-btn" onClick={onClose}>
             ✕
           </button>
@@ -180,20 +261,22 @@ export function PublishQrModal({
 
           {!hasLink ? (
             <div className="qr-empty">
-              <p>
-                Publica esta carta para generar un enlace y un código QR. Cualquiera que lo escanee
-                podrá verla (solo lectura).
-              </p>
-              <button type="button" className="btn-primary" disabled={busy} onClick={handlePublish}>
-                {busy ? 'Publicando...' : 'Publicar y generar QR'}
+              <p>Publica la carta para generar el enlace y el código QR.</p>
+              <button
+                type="button"
+                className="btn-primary qr-action-btn"
+                disabled={busy}
+                onClick={() => void handlePublish()}
+              >
+                <PublishIcon />
+                {busy ? 'Publicando…' : 'Publicar'}
               </button>
             </div>
           ) : (
             <>
               {!isPublic && (
                 <div className="qr-status-banner qr-status-banner--inactive" role="status">
-                  Enlace inactivo — el QR se conserva. Publícala de nuevo para reactivar el mismo
-                  enlace.
+                  Enlace inactivo — el QR se conserva.
                 </div>
               )}
               <div className={`qr-preview${isPublic ? '' : ' qr-preview--inactive'}`}>
@@ -212,60 +295,70 @@ export function PublishQrModal({
               </p>
               <div className="qr-actions">
                 {!isPublic ? (
-                  <button
-                    type="button"
-                    className="btn-primary"
+                  <ActionBtn
+                    className="btn-primary qr-action-btn"
                     disabled={busy}
-                    onClick={handlePublish}
+                    onClick={() => void handlePublish()}
+                    title="Publicar de nuevo (mismo enlace y QR)"
+                    ariaLabel={busy ? 'Publicando' : 'Publicar'}
                   >
-                    {busy ? 'Publicando...' : 'Publicar (mismo enlace)'}
-                  </button>
+                    <PublishIcon />
+                    {busy ? '…' : 'Publicar'}
+                  </ActionBtn>
                 ) : null}
-                <button type="button" className="btn-secondary" onClick={copyLink}>
-                  Copiar enlace
-                </button>
-                <button
-                  type="button"
-                  className="btn-primary"
+                <ActionBtn
+                  className="btn-secondary qr-action-btn"
+                  onClick={() => void copyLink()}
+                  title="Copiar enlace"
+                  ariaLabel="Copiar enlace"
+                >
+                  <CopyIcon />
+                  Copiar
+                </ActionBtn>
+                <ActionBtn
+                  className="btn-primary qr-action-btn"
                   disabled={downloading}
                   onClick={() => void handleDownloadPng()}
-                  title="PNG 1024×1024 — ideal para imprimir"
+                  title="Descargar PNG 1024×1024 (impresión)"
+                  ariaLabel={downloading ? 'Descargando PNG' : 'Descargar PNG'}
                 >
-                  {downloading ? 'Descargando…' : 'Descargar PNG (alta calidad)'}
-                </button>
-                <button
-                  type="button"
-                  className="btn-secondary"
+                  <DownloadIcon />
+                  PNG
+                </ActionBtn>
+                <ActionBtn
+                  className="btn-secondary qr-action-btn"
                   disabled={downloading}
                   onClick={() => void handleDownloadSvg()}
-                  title="SVG vectorial 1024×1024"
+                  title="Descargar SVG vectorial"
+                  ariaLabel={downloading ? 'Descargando SVG' : 'Descargar SVG'}
                 >
-                  Descargar SVG
-                </button>
+                  <DownloadIcon />
+                  SVG
+                </ActionBtn>
                 {isPublic ? (
-                  <button
-                    type="button"
-                    className="btn-secondary"
+                  <ActionBtn
+                    className="btn-secondary qr-action-btn"
                     disabled={busy}
-                    onClick={handleUnpublish}
+                    onClick={() => void handleUnpublish()}
+                    title="Despublicar: oculta la carta y conserva el QR"
+                    ariaLabel="Despublicar"
                   >
-                    Despublicar
-                  </button>
+                    <UnpublishIcon />
+                    Ocultar
+                  </ActionBtn>
                 ) : null}
-                <button
-                  type="button"
-                  className="danger-btn"
+                <ActionBtn
+                  className="danger-btn qr-action-btn qr-action-btn--icon"
                   disabled={busy}
-                  onClick={handleRemovePublic}
+                  onClick={() => void handleRemovePublic()}
+                  title="Eliminar enlace y QR"
+                  ariaLabel="Eliminar enlace y QR"
                 >
-                  Eliminar
-                </button>
+                  <TrashIcon />
+                </ActionBtn>
               </div>
-              <p className="panel-hint">
-                <strong>Despublicar</strong> deja el enlace inactivo pero conserva el QR.{' '}
-                <strong>Eliminar</strong> borra el enlace y la imagen asociada; al publicar de
-                nuevo se crea un enlace distinto. Para imprimir usa{' '}
-                <strong>Descargar PNG (alta calidad)</strong> (1024×1024).
+              <p className="panel-hint qr-modal-hint">
+                Ocultar conserva el QR. La papelera borra el enlace.
               </p>
             </>
           )}
