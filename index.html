@@ -23,6 +23,15 @@
     <meta name="apple-mobile-web-app-title" content="Paper To Menu" />
     <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png" />
     <link rel="manifest" href="/manifest.webmanifest" />
+    <script>
+      /* Captura temprana: evita perder beforeinstallprompt antes del bundle. */
+      window.__ptmDeferredInstall = null;
+      window.addEventListener('beforeinstallprompt', function (e) {
+        e.preventDefault();
+        window.__ptmDeferredInstall = e;
+        window.dispatchEvent(new Event('ptm-beforeinstallprompt'));
+      });
+    </script>
     <link rel="canonical" href="https://papertomenu.com/" />
 
     <meta property="og:type" content="website" />

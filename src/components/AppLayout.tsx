@@ -3,8 +3,10 @@ import { Link, useLocation } from 'react-router-dom';
 import { useAuth } from '@/lib/auth-context';
 import { appAlert } from '@/lib/app-dialog';
 import {
-  isIosSafari,
+  getDeferredInstallPrompt,
   isStandaloneDisplay,
+  promptPwaInstall,
+  subscribeInstallPrompt,
   type BeforeInstallPromptEvent,
 } from '@/lib/pwa';
 
@@ -41,7 +43,10 @@ export function AppLayout() {
   const { user, logout, isSystemAdmin } = useAuth();
   const [menuOpen, setMenuOpen] = useState(false);
   const [installed, setInstalled] = useState(() => isStandaloneDisplay());
-  const [deferredPrompt, setDeferredPrompt] = useState<BeforeInstallPromptEvent | null>(null);
+  const [canNativeInstall, setCanNativeInstall] = useState(
+    () => !!getDeferredInstallPrompt(),
+  );
+  const [installBusy, setInstallBusy] = useState(false);
   const location = useLocation();
 
   useEffect(() => {
@@ -54,16 +59,14 @@ export function AppLayout() {
 
     if (isStandaloneDisplay()) return;
 
-    const onBeforeInstall = (event: Event) => {
-      event.preventDefault();
-      setDeferredPrompt(event as BeforeInstallPromptEvent);
-    };
+    const unsubscribe = subscribeInstallPrompt((event: BeforeInstallPromptEvent | null) => {
+      setCanNativeInstall(!!event);
+    });
+
     const onInstalled = () => {
       setInstalled(true);
-      setDeferredPrompt(null);
+      setCanNativeInstall(false);
     };
-
-    window.addEventListener('beforeinstallprompt', onBeforeInstall);
     window.addEventListener('appinstalled', onInstalled);
 
     const mediaQueries = [
@@ -76,7 +79,7 @@ export function AppLayout() {
     }
 
     return () => {
-      window.removeEventListener('beforeinstallprompt', onBeforeInstall);
+      unsubscribe();
       window.removeEventListener('appinstalled', onInstalled);
       for (const mq of mediaQueries) {
         mq.removeEventListener('change', syncInstalled);
@@ -84,38 +87,46 @@ export function AppLayout() {
     };
   }, []);
 
-  // Visible siempre que no esté instalada (antes solo salía con beforeinstallprompt / iOS).
+  // Si ya está instalada, ocultar. Si no, mostrar (en Chromium el clic abre el diálogo nativo).
   const showInstall = !installed;
 
   async function handleInstallClick() {
-    if (deferredPrompt) {
-      await deferredPrompt.prompt();
-      const choice = await deferredPrompt.userChoice;
-      setDeferredPrompt(null);
-      if (choice.outcome === 'accepted') {
+    if (installBusy) return;
+    setInstallBusy(true);
+    try {
+      const outcome = await promptPwaInstall();
+      if (outcome === 'accepted') {
         setInstalled(true);
+        setCanNativeInstall(false);
+        return;
       }
-      return;
-    }
-
-    if (isIosSafari()) {
+      if (outcome === 'dismissed') {
+        setCanNativeInstall(false);
+        return;
+      }
+      if (outcome === 'ios') {
+        await appAlert(
+          'En iPhone/iPad Safari no permite instalar desde un botón. Toca Compartir (□↑) y elige «Añadir a pantalla de inicio».',
+          {
+            title: 'Instalar en el iPhone',
+            confirmText: 'Entendido',
+          },
+        );
+        return;
+      }
+      // unavailable: el navegador aún no expone el prompt (criterios PWA / ya instalada en otro perfil)
       await appAlert(
-        'En iPhone/iPad: toca Compartir (□↑) y elige «Añadir a pantalla de inicio». Así Paper To Menu se abre como app, sin barra del navegador.',
+        canNativeInstall
+          ? 'No se pudo abrir el instalador. Recarga la página e inténtalo de nuevo.'
+          : 'El navegador aún no está listo para instalar. Espera unos segundos, recarga con Chrome/Edge y vuelve a pulsar Instalar. Si ya la instalaste antes, ábrela desde la pantalla de inicio.',
         {
-          title: 'Instalar en el iPhone',
+          title: 'Instalar Paper To Menu',
           confirmText: 'Entendido',
         },
       );
-      return;
+    } finally {
+      setInstallBusy(false);
     }
-
-    await appAlert(
-      'Para instalar: abre el menú del navegador (⋮) y elige «Instalar aplicación» o «Añadir a la pantalla de inicio». Si no aparece aún, recarga la página o usa Chrome/Edge en el móvil.',
-      {
-        title: 'Instalar Paper To Menu',
-        confirmText: 'Entendido',
-      },
-    );
   }
 
   return (
@@ -129,11 +140,12 @@ export function AppLayout() {
             <button
               type="button"
               className="btn-pwa-install"
+              disabled={installBusy}
               onClick={() => void handleInstallClick()}
               title="Instalar Paper To Menu en este dispositivo"
             >
               <InstallIcon />
-              Instalar
+              {installBusy ? 'Instalando…' : 'Instalar'}
             </button>
           )}
           <button
