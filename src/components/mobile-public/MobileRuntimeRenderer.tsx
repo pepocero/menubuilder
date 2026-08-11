@@ -1212,9 +1212,11 @@ export function MobileRuntimeRenderer({
 
       revealFallbackTimer = window.setTimeout(() => {
         for (const node of revealNodes) {
-          if (!node.classList.contains('is-anim-visible')) revealIfVisible(node);
+          if (!node.classList.contains('is-anim-visible')) {
+            node.classList.add('is-anim-visible');
+          }
         }
-      }, 700);
+      }, 900);
     }
 
     const applyParallax = () => {

@@ -1635,6 +1635,12 @@ textarea {
   color: #444;
 }
 
+.public-menu-retry {
+  margin-top: 0.75rem;
+  display: flex;
+  justify-content: center;
+}
+
 .toolbar-right {
   margin-left: auto;
 }

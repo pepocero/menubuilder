@@ -27,11 +27,12 @@ interface PublicMenuPayload {
 }
 
 /** Fetch público sin cookies/refresh de auth (más fiable en móviles / Brave). */
-async function fetchPublicMenu(slug: string): Promise<PublicMenuPayload> {
+async function fetchPublicMenu(slug: string, signal?: AbortSignal): Promise<PublicMenuPayload> {
   const response = await fetch(`/api/public/menus/${encodeURIComponent(slug)}`, {
     method: 'GET',
     headers: { Accept: 'application/json' },
     cache: 'no-store',
+    signal,
   });
   const data = (await response.json().catch(() => ({}))) as {
     menu?: PublicMenuPayload;
@@ -73,6 +74,12 @@ function hasRenderableContent(menu: PublicMenuPayload): boolean {
   return isHttpUrl(menu.export_png_url);
 }
 
+function wait(ms: number) {
+  return new Promise<void>((resolve) => {
+    window.setTimeout(resolve, ms);
+  });
+}
+
 /**
  * Prioridad de render público (fidelidad con el editor):
  * 1) canvas_data → PublicPageView (Fabric → PNG, mismo motor que el editor)
@@ -90,11 +97,12 @@ export function PublicMenuPage() {
   const [title, setTitle] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(true);
+  const [loadNonce, setLoadNonce] = useState(0);
 
   useEffect(() => {
     if (!slug) return;
     let disposed = false;
-    let retryTimer = 0;
+    const abort = new AbortController();
 
     const applyMenu = (menu: PublicMenuPayload) => {
       const safeTitle = menu.title?.trim() || 'Carta digital';
@@ -153,21 +161,64 @@ export function PublicMenuPage() {
     };
 
     (async () => {
+      setLoading(true);
+      setError('');
       try {
-        let menu = await fetchPublicMenu(slug);
-        if (disposed) return;
+        let menu: PublicMenuPayload | null = null;
+        let lastError: unknown = null;
 
-        // Tras publicar, a veces el primer GET llega antes de que el documento esté listo.
-        if (!hasRenderableContent(menu)) {
-          await new Promise((resolve) => {
-            retryTimer = window.setTimeout(resolve, 450);
-          });
-          if (disposed) return;
-          menu = await fetchPublicMenu(slug);
-          if (disposed) return;
+        // Varios intentos: al abrir desde cámara/QR la primera petición a veces falla o llega vacía.
+        for (let attempt = 0; attempt < 3; attempt += 1) {
+          if (disposed || abort.signal.aborted) return;
+          const attemptAbort = new AbortController();
+          const onParentAbort = () => attemptAbort.abort();
+          abort.signal.addEventListener('abort', onParentAbort);
+          const timeout = window.setTimeout(() => attemptAbort.abort(), 12000);
+          try {
+            menu = await fetchPublicMenu(slug, attemptAbort.signal);
+            if (hasRenderableContent(menu)) break;
+            menu = null;
+          } catch (err) {
+            lastError = err;
+            menu = null;
+            if (abort.signal.aborted) return;
+          } finally {
+            window.clearTimeout(timeout);
+            abort.signal.removeEventListener('abort', onParentAbort);
+          }
+          await wait(350 + attempt * 250);
         }
 
-        applyMenu(menu);
+        if (disposed || abort.signal.aborted) return;
+
+        if (!menu) {
+          // Último intento limpio.
+          try {
+            menu = await fetchPublicMenu(slug, abort.signal);
+          } catch (err) {
+            lastError = err;
+          }
+        }
+
+        if (disposed || abort.signal.aborted) return;
+
+        if (!menu) {
+          throw lastError instanceof Error
+            ? lastError
+            : new ApiError('Carta no disponible', 404);
+        }
+
+        if (!hasRenderableContent(menu)) {
+          await wait(450);
+          if (disposed || abort.signal.aborted) return;
+          menu = await fetchPublicMenu(slug, abort.signal);
+          if (disposed || abort.signal.aborted) return;
+        }
+
+        const ok = applyMenu(menu);
+        if (!ok && !hasRenderableContent(menu)) {
+          setError('Esta carta no está disponible o ya no es pública.');
+        }
         if (!disposed) setLoading(false);
       } catch {
         if (!disposed) {
@@ -179,9 +230,45 @@ export function PublicMenuPage() {
 
     return () => {
       disposed = true;
-      if (retryTimer) window.clearTimeout(retryTimer);
+      abort.abort();
     };
-  }, [slug]);
+  }, [slug, loadNonce]);
+
+  // Si el móvil restaura la pestaña desde bfcache / cámara, reintentar carga.
+  useEffect(() => {
+    const onPageShow = (event: PageTransitionEvent) => {
+      if (event.persisted) setLoadNonce((n) => n + 1);
+    };
+    const onVisible = () => {
+      if (document.visibilityState !== 'visible') return;
+      if (loading || error) return;
+      // Si tras volver no hay nada renderizable, forzar recarga de datos.
+      const empty =
+        pages.length === 0 && !mobileDocument && !menuDocument && !exportPngUrl;
+      if (empty) setLoadNonce((n) => n + 1);
+    };
+    window.addEventListener('pageshow', onPageShow);
+    document.addEventListener('visibilitychange', onVisible);
+    return () => {
+      window.removeEventListener('pageshow', onPageShow);
+      document.removeEventListener('visibilitychange', onVisible);
+    };
+  }, [loading, error, pages.length, mobileDocument, menuDocument, exportPngUrl]);
+
+  // Si la carta quedó vacía tras “cargar”, un reload único suele arreglar WebViews rotos.
+  useEffect(() => {
+    if (loading || error || !slug) return;
+    const empty =
+      pages.length === 0 && !mobileDocument && !menuDocument && !exportPngUrl;
+    if (!empty) return;
+    const key = `ptm-public-empty-reload:${slug}`;
+    if (sessionStorage.getItem(key)) return;
+    const timer = window.setTimeout(() => {
+      sessionStorage.setItem(key, '1');
+      window.location.reload();
+    }, 1200);
+    return () => window.clearTimeout(timer);
+  }, [loading, error, slug, pages.length, mobileDocument, menuDocument, exportPngUrl]);
 
   const showPages = pages.length > 0;
   const showMobile = !!mobileDocument;
@@ -198,7 +285,23 @@ export function PublicMenuPage() {
     >
       <main className="public-menu-main">
         {loading && <p className="public-menu-status">Cargando carta…</p>}
-        {error && <div className="error-banner">{error}</div>}
+        {error && (
+          <div className="error-banner">
+            {error}
+            <div className="public-menu-retry">
+              <button
+                type="button"
+                className="btn-secondary"
+                onClick={() => {
+                  setError('');
+                  setLoadNonce((n) => n + 1);
+                }}
+              >
+                Reintentar
+              </button>
+            </div>
+          </div>
+        )}
 
         {!loading && !error && showPages && (
           <div
