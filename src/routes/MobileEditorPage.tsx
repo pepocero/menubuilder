@@ -1514,8 +1514,18 @@ export function MobileEditorPage() {
     if (isPhoneLayout) setPhoneSheet('props');
   }
 
-  function handleUngroupAccordion() {
+  async function handleUngroupAccordion() {
     if (!selectedId || selectedNode?.type !== 'accordion') return;
+    const confirmed = await appConfirm(
+      '¿Desagrupar este acordeón?\n\nLa cabecera y el contenido dejarán de estar agrupados y pasarán a ser componentes independientes en la carta. Se puede deshacer.',
+      {
+        title: 'Desagrupar acordeón',
+        variant: 'warning',
+        confirmText: 'Desagrupar',
+        cancelText: 'Cancelar',
+      },
+    );
+    if (!confirmed) return;
     const next = ungroupAccordionById(documentRef.current.components, selectedId);
     if (!next) return;
     const firstChildId = selectedNode.children[0]?.id ?? null;
@@ -2201,7 +2211,7 @@ export function MobileEditorPage() {
   async function clearMobileCanvas() {
     if (documentRef.current.components.length === 0) return;
     const confirmed = await appConfirm(
-      '¿Limpiar el lienzo móvil?\n\nSe eliminarán todos los componentes de la carta actual. Puedes deshacer con Ctrl+Z.',
+      '¿Limpiar el lienzo móvil?\n\nSe eliminarán todos los componentes de la carta actual. Se puede deshacer.',
       {
         title: 'Limpiar lienzo',
         variant: 'danger',
@@ -2748,7 +2758,7 @@ export function MobileEditorPage() {
                       <button
                         type="button"
                         className="btn-secondary"
-                        onClick={handleUngroupAccordion}
+                        onClick={() => void handleUngroupAccordion()}
                       >
                         Desagrupar acordeón
                       </button>
@@ -2988,6 +2998,93 @@ export function MobileEditorPage() {
                                   (component) => {
                                     if (component.type !== 'menuItem') return component;
                                     return { ...component, allergensAccentColor: e.target.value };
+                                  },
+                                ),
+                              }),
+                              { debouncePersist: true },
+                            );
+                          }}
+                        />
+                      </label>
+                    </div>
+                  )}
+                  {selected.type === 'menuItem' && (
+                    <div className="mobile-props-field">
+                      <span className="mobile-props-field-label">Mostrar ingredientes</span>
+                      <div className="wysiwyg-align-group" role="group" aria-label="Mostrar ingredientes">
+                        <button
+                          type="button"
+                          className={selected.ingredientsDisplay !== 'button' ? 'is-active' : undefined}
+                          aria-pressed={selected.ingredientsDisplay !== 'button'}
+                          title="Como texto, debajo del plato"
+                          aria-label="Mostrar ingredientes como texto"
+                          onClick={() => {
+                            if (!propsComponentId) return;
+                            updateDoc((current) => ({
+                              ...current,
+                              components: updateMobileComponentById(
+                                current.components,
+                                propsComponentId,
+                                (component) => {
+                                  if (component.type !== 'menuItem') return component;
+                                  return { ...component, ingredientsDisplay: 'text' };
+                                },
+                              ),
+                            }));
+                          }}
+                        >
+                          <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true">
+                            <path
+                              fill="currentColor"
+                              d="M4 5h16v2H4V5zm0 4h16v2H4V9zm0 4h12v2H4v-2zm0 4h16v2H4v-2z"
+                            />
+                          </svg>
+                        </button>
+                        <button
+                          type="button"
+                          className={selected.ingredientsDisplay === 'button' ? 'is-active' : undefined}
+                          aria-pressed={selected.ingredientsDisplay === 'button'}
+                          title="Como botón, igual que alérgenos"
+                          aria-label="Mostrar ingredientes como botón"
+                          onClick={() => {
+                            if (!propsComponentId) return;
+                            updateDoc((current) => ({
+                              ...current,
+                              components: updateMobileComponentById(
+                                current.components,
+                                propsComponentId,
+                                (component) => {
+                                  if (component.type !== 'menuItem') return component;
+                                  return { ...component, ingredientsDisplay: 'button' };
+                                },
+                              ),
+                            }));
+                          }}
+                        >
+                          <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true">
+                            <path
+                              fill="currentColor"
+                              d="M7 8h10a4 4 0 0 1 0 8H7a4 4 0 0 1 0-8zm0 2a2 2 0 0 0 0 4h10a2 2 0 0 0 0-4H7z"
+                            />
+                          </svg>
+                        </button>
+                      </div>
+                      <label className="mobile-props-color-picker-label">
+                        Color del modal de ingredientes
+                        <input
+                          type="color"
+                          value={selected.ingredientsAccentColor || '#4d7c0f'}
+                          onChange={(e) => {
+                            if (!propsComponentId) return;
+                            updateDoc(
+                              (current) => ({
+                                ...current,
+                                components: updateMobileComponentById(
+                                  current.components,
+                                  propsComponentId,
+                                  (component) => {
+                                    if (component.type !== 'menuItem') return component;
+                                    return { ...component, ingredientsAccentColor: e.target.value };
                                   },
                                 ),
                               }),

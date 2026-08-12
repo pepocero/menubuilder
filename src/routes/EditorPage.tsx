@@ -907,7 +907,7 @@ export function EditorPage() {
     if (objectCount === 0 && !hasBgImage) return;
 
     const confirmed = await appConfirm(
-      `¿Limpiar el lienzo de la página ${activePageIndex + 1}?\n\nSe eliminarán todas las capas. El color de fondo se mantiene. Puedes deshacer con Ctrl+Z.`,
+      `¿Limpiar el lienzo de la página ${activePageIndex + 1}?\n\nSe eliminarán todas las capas. El color de fondo se mantiene. Se puede deshacer.`,
       {
         title: 'Limpiar lienzo',
         variant: 'warning',

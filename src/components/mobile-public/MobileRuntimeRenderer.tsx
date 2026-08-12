@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, type CSSProperties, type PointerEvent as ReactPointerEvent } from 'react';
+import { useEffect, useMemo, useRef, useState, type CSSProperties, type PointerEvent as ReactPointerEvent, type ReactNode } from 'react';
 import {
   defaultMenuItemFieldTypography,
   resolveSectionBorderStyle,
@@ -124,7 +124,7 @@ function effectClassName(effect?: MobileEffectConfig): string {
   return '';
 }
 
-function parseAllergenList(raw: string | undefined): string[] {
+function parseDishTagList(raw: string | undefined): string[] {
   if (!raw?.trim()) return [];
   return raw
     .split(/[\n,;·•]+/)
@@ -132,14 +132,93 @@ function parseAllergenList(raw: string | undefined): string[] {
     .filter(Boolean);
 }
 
+type DishInfoKind = 'allergens' | 'ingredients';
+
+type DishInfoPayload = {
+  kind: DishInfoKind;
+  dishTitle: string;
+  items: string[];
+  accentColor: string;
+};
+
 function AllergenIcon() {
   return (
-    <svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true" focusable="false">
+    <svg viewBox="0 0 24 24" width="11" height="11" aria-hidden="true" focusable="false">
       <path
         fill="currentColor"
         d="M12 2a1 1 0 0 1 .9.55l1.4 2.8 3.1.45a1 1 0 0 1 .55 1.7l-2.25 2.2.53 3.1a1 1 0 0 1-1.45 1.05L12 12.9l-2.78 1.45a1 1 0 0 1-1.45-1.05l.53-3.1-2.25-2.2a1 1 0 0 1 .55-1.7l3.1-.45 1.4-2.8A1 1 0 0 1 12 2zm0 4.2-.7 1.4a1 1 0 0 1-.75.55l-1.55.22 1.12 1.1a1 1 0 0 1 .29.88l-.26 1.55 1.4-.73a1 1 0 0 1 .9 0l1.4.73-.26-1.55a1 1 0 0 1 .29-.88l1.12-1.1-1.55-.22a1 1 0 0 1-.75-.55L12 6.2zM11 15h2v5h-2v-5z"
       />
     </svg>
+  );
+}
+
+function IngredientIcon() {
+  return (
+    <svg viewBox="0 0 24 24" width="11" height="11" aria-hidden="true" focusable="false">
+      <path
+        fill="currentColor"
+        d="M17.2 4.3c-3.4.4-6.2 2.2-7.8 4.8-1.2 1.9-1.8 4.1-1.8 6.4 0 1.4.2 2.7.6 3.9l-2.7 2.7 1.4 1.4 2.7-2.7c1.2.4 2.5.6 3.9.6 2.3 0 4.5-.6 6.4-1.8 2.6-1.6 4.4-4.4 4.8-7.8.2-1.7-.3-2.6-1.2-3.5-.9-.9-1.8-1.4-3.5-1.2zM9.2 17.2c-.3-.9-.5-1.8-.5-2.8 0-1.9.5-3.7 1.4-5.2 1.3-2.1 3.5-3.5 6.1-3.8 1.1-.1 1.6.1 2 .5.4.4.6.9.5 2-.3 2.6-1.7 4.8-3.8 6.1-1.5.9-3.3 1.4-5.2 1.4-.9 0-1.8-.2-2.5-.5z"
+      />
+    </svg>
+  );
+}
+
+function IngredientGlyph({ size = 32 }: { size?: number }) {
+  return (
+    <svg viewBox="0 0 48 48" width={size} height={size} aria-hidden="true" focusable="false">
+      <circle cx="24" cy="24" r="22" fill="none" stroke="currentColor" strokeWidth="2.2" />
+      <path
+        fill="currentColor"
+        d="M32.4 12.6c-4.1.5-7.5 2.6-9.4 5.8-1.4 2.3-2.2 5-2.2 7.7 0 1.6.2 3.2.7 4.6l-3.4 3.4 1.7 1.7 3.4-3.4c1.4.5 3 .7 4.6.7 2.7 0 5.4-.8 7.7-2.2 3.2-1.9 5.3-5.3 5.8-9.4.2-2-.4-3.1-1.4-4.1s-2.1-1.6-4.1-1.4zm-9.6 15.6c-.4-1-.6-2.1-.6-3.3 0-2.3.6-4.4 1.7-6.2 1.5-2.5 4.2-4.2 7.3-4.6 1.3-.2 1.9.1 2.4.6s.8 1.1.6 2.4c-.4 3.1-2.1 5.8-4.6 7.3-1.8 1.1-3.9 1.7-6.2 1.7-1.1 0-2.2-.2-3-.5z"
+      />
+    </svg>
+  );
+}
+
+function DishInfoChip({
+  label,
+  ariaLabel,
+  accentColor,
+  icon,
+  onOpen,
+}: {
+  label: string;
+  ariaLabel: string;
+  accentColor: string;
+  icon: ReactNode;
+  onOpen?: () => void;
+}) {
+  const style = {
+    '--allergens-accent': accentColor,
+  } as CSSProperties;
+  const content = (
+    <>
+      {icon}
+      <span>{label}</span>
+    </>
+  );
+  if (onOpen) {
+    return (
+      <button
+        type="button"
+        className="mobile-menu-allergens-btn"
+        title={label}
+        aria-label={ariaLabel}
+        style={style}
+        onPointerDown={(e) => e.stopPropagation()}
+        onClick={(e) => {
+          e.stopPropagation();
+          onOpen();
+        }}
+      >
+        {content}
+      </button>
+    );
+  }
+  return (
+    <span className="mobile-menu-allergens-btn" aria-hidden="true" style={style}>
+      {content}
+    </span>
   );
 }
 
@@ -198,11 +277,7 @@ function renderComponent(
   component: MobileComponent,
   onAction?: (action: MobileInteractionAction) => void,
   onImageClick?: (src: string) => void,
-  onAllergensOpen?: (payload: {
-    dishTitle: string;
-    allergens: string[];
-    accentColor: string;
-  }) => void,
+  onDishInfoOpen?: (payload: DishInfoPayload) => void,
 ) {
   switch (component.type) {
     case 'section': {
@@ -311,7 +386,11 @@ function renderComponent(
     case 'menuItem':
       const hasMenuImage = !!component.menuImage?.src.trim();
       const imagePosition = component.menuImage?.position === 'right' ? 'right' : 'left';
-      const allergenItems = parseAllergenList(component.allergens);
+      const allergenItems = parseDishTagList(component.allergens);
+      const ingredientItems = parseDishTagList(component.ingredients);
+      const ingredientsAccent = component.ingredientsAccentColor?.trim() || '#4d7c0f';
+      const allergensAccent = component.allergensAccentColor?.trim() || '#b45309';
+      const dishTitle = component.title || 'Plato';
       return (
         <article
           className={`mobile-block mobile-block-menu-item${
@@ -345,53 +424,57 @@ function renderComponent(
               </strong>
             </header>
             <p style={menuItemTypographyStyle(component, 'description')}>{component.description}</p>
-            {component.ingredients.trim() && (
+            {component.ingredientsDisplay !== 'button' && component.ingredients.trim() ? (
               <small
                 className="mobile-menu-ingredients"
                 style={menuItemTypographyStyle(component, 'ingredients')}
               >
                 {component.ingredients}
               </small>
+            ) : null}
+            {((component.ingredientsDisplay === 'button' && ingredientItems.length > 0) ||
+              allergenItems.length > 0) && (
+              <div className="mobile-menu-meta-actions">
+                {component.ingredientsDisplay === 'button' && ingredientItems.length > 0 && (
+                  <DishInfoChip
+                    label="Ingredientes"
+                    ariaLabel={`Ingredientes de ${dishTitle}`}
+                    accentColor={ingredientsAccent}
+                    icon={<IngredientIcon />}
+                    onOpen={
+                      onDishInfoOpen
+                        ? () =>
+                            onDishInfoOpen({
+                              kind: 'ingredients',
+                              dishTitle,
+                              items: ingredientItems,
+                              accentColor: ingredientsAccent,
+                            })
+                        : undefined
+                    }
+                  />
+                )}
+                {allergenItems.length > 0 && (
+                  <DishInfoChip
+                    label="Alérgenos"
+                    ariaLabel={`Alérgenos de ${dishTitle}`}
+                    accentColor={allergensAccent}
+                    icon={<AllergenIcon />}
+                    onOpen={
+                      onDishInfoOpen
+                        ? () =>
+                            onDishInfoOpen({
+                              kind: 'allergens',
+                              dishTitle,
+                              items: allergenItems,
+                              accentColor: allergensAccent,
+                            })
+                        : undefined
+                    }
+                  />
+                )}
+              </div>
             )}
-            {allergenItems.length > 0 &&
-              (onAllergensOpen ? (
-                <button
-                  type="button"
-                  className="mobile-menu-allergens-btn"
-                  title="Ver alérgenos"
-                  aria-label={`Alérgenos de ${component.title || 'este plato'}`}
-                  style={
-                    {
-                      '--allergens-accent': component.allergensAccentColor?.trim() || '#b45309',
-                    } as CSSProperties
-                  }
-                  onPointerDown={(e) => e.stopPropagation()}
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    onAllergensOpen({
-                      dishTitle: component.title || 'Plato',
-                      allergens: allergenItems,
-                      accentColor: component.allergensAccentColor?.trim() || '#b45309',
-                    });
-                  }}
-                >
-                  <AllergenIcon />
-                  <span>Alérgenos</span>
-                </button>
-              ) : (
-                <span
-                  className="mobile-menu-allergens-btn"
-                  aria-hidden="true"
-                  style={
-                    {
-                      '--allergens-accent': component.allergensAccentColor?.trim() || '#b45309',
-                    } as CSSProperties
-                  }
-                >
-                  <AllergenIcon />
-                  <span>Alérgenos</span>
-                </span>
-              ))}
           </div>
         </article>
       );
@@ -481,7 +564,7 @@ function AccordionRuntime({
   onSelectChild,
   onAction,
   onImageClick,
-  onAllergensOpen,
+  onDishInfoOpen,
   previewPlay,
   animationPreview,
   registerNodeRef,
@@ -493,11 +576,7 @@ function AccordionRuntime({
   onSelectChild?: (id: string) => void;
   onAction?: (action: MobileInteractionAction) => void;
   onImageClick?: (src: string) => void;
-  onAllergensOpen?: (payload: {
-    dishTitle: string;
-    allergens: string[];
-    accentColor: string;
-  }) => void;
+  onDishInfoOpen?: (payload: DishInfoPayload) => void;
   previewPlay?: AnimationPreviewPlay | null;
   animationPreview?: { componentId: string; nonce: number } | null;
   registerNodeRef?: (id: string, el: HTMLDivElement | null) => void;
@@ -571,7 +650,7 @@ function AccordionRuntime({
                 // La cabecera no ejecuta acciones propias: el clic abre/cierra el acordeón.
                 undefined,
                 !editable ? onImageClick : undefined,
-                !editable ? onAllergensOpen : undefined,
+                !editable ? onDishInfoOpen : undefined,
               )
             : null}
         </div>
@@ -660,7 +739,7 @@ function AccordionRuntime({
                 child,
                 !editable ? onAction : undefined,
                 !editable ? onImageClick : undefined,
-                !editable ? onAllergensOpen : undefined,
+                !editable ? onDishInfoOpen : undefined,
               )}
             </div>
           );
@@ -686,11 +765,7 @@ export function MobileRuntimeRenderer({
     null,
   );
   const [lightboxSrc, setLightboxSrc] = useState<string | null>(null);
-  const [allergensModal, setAllergensModal] = useState<{
-    dishTitle: string;
-    allergens: string[];
-    accentColor: string;
-  } | null>(null);
+  const [dishInfoModal, setDishInfoModal] = useState<DishInfoPayload | null>(null);
   const [dragActiveId, setDragActiveId] = useState<string | null>(null);
   const [dragOrderIds, setDragOrderIds] = useState<string[] | null>(null);
   const [previewPlay, setPreviewPlay] = useState<AnimationPreviewPlay | null>(null);
@@ -1399,7 +1474,7 @@ export function MobileRuntimeRenderer({
                 onSelectChild={editable ? (id) => onSelect?.(id) : undefined}
                 onAction={!editable ? (action) => runAction(action) : undefined}
                 onImageClick={!editable ? (src) => setLightboxSrc(src) : undefined}
-                onAllergensOpen={!editable ? (payload) => setAllergensModal(payload) : undefined}
+                onDishInfoOpen={!editable ? (payload) => setDishInfoModal(payload) : undefined}
                 previewPlay={previewPlay}
                 animationPreview={animationPreview}
                 registerNodeRef={(id, el) => {
@@ -1415,7 +1490,7 @@ export function MobileRuntimeRenderer({
                 component,
                 !editable ? (action) => runAction(action) : undefined,
                 !editable ? (src) => setLightboxSrc(src) : undefined,
-                !editable ? (payload) => setAllergensModal(payload) : undefined,
+                !editable ? (payload) => setDishInfoModal(payload) : undefined,
               )
             )}
           </>
@@ -1596,8 +1671,8 @@ export function MobileRuntimeRenderer({
           </div>
         </div>
       )}
-      {allergensModal && (
-        <div className="mobile-action-modal-overlay mobile-allergens-overlay" onClick={() => setAllergensModal(null)}>
+      {dishInfoModal && (
+        <div className="mobile-action-modal-overlay mobile-allergens-overlay" onClick={() => setDishInfoModal(null)}>
           <div
             className="mobile-action-modal mobile-allergens-modal"
             role="dialog"
@@ -1605,7 +1680,7 @@ export function MobileRuntimeRenderer({
             aria-labelledby="mobile-allergens-dish-title"
             style={
               {
-                '--allergens-accent': allergensModal.accentColor || '#b45309',
+                '--allergens-accent': dishInfoModal.accentColor || '#b45309',
               } as CSSProperties
             }
             onClick={(e) => e.stopPropagation()}
@@ -1615,19 +1690,25 @@ export function MobileRuntimeRenderer({
               type="button"
               className="mobile-allergens-close"
               aria-label="Cerrar"
-              onClick={() => setAllergensModal(null)}
+              onClick={() => setDishInfoModal(null)}
             >
               ✕
             </button>
             <h2 id="mobile-allergens-dish-title" className="mobile-allergens-dish-title">
-              {allergensModal.dishTitle || 'Plato'}
+              {dishInfoModal.dishTitle || 'Plato'}
             </h2>
-            <p className="mobile-allergens-heading">Alérgenos</p>
+            <p className="mobile-allergens-heading">
+              {dishInfoModal.kind === 'ingredients' ? 'Ingredientes' : 'Alérgenos'}
+            </p>
             <ul className="mobile-allergens-list">
-              {allergensModal.allergens.map((item) => (
-                <li key={item}>
+              {dishInfoModal.items.map((item, index) => (
+                <li key={`${item}-${index}`}>
                   <span className="mobile-allergens-icon" aria-hidden="true">
-                    <AllergenGlyph name={item} size={32} />
+                    {dishInfoModal.kind === 'ingredients' ? (
+                      <IngredientGlyph size={32} />
+                    ) : (
+                      <AllergenGlyph name={item} size={32} />
+                    )}
                   </span>
                   <span className="mobile-allergens-label">{item}</span>
                 </li>

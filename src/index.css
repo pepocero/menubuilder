@@ -5291,6 +5291,18 @@ textarea {
   color: #6b7280;
 }
 
+.mobile-menu-meta-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.4rem;
+  margin-top: 0.45rem;
+}
+
+.mobile-menu-meta-actions .mobile-menu-allergens-btn {
+  margin-top: 0;
+}
+
 .allergen-tags-field {
   display: flex;
   flex-direction: column;
@@ -5408,15 +5420,15 @@ textarea {
 .mobile-menu-allergens-btn {
   display: inline-flex;
   align-items: center;
-  gap: 0.3rem;
-  margin-top: 0.45rem;
-  min-height: 2rem;
-  padding: 0.35rem 0.65rem;
+  gap: 0.2rem;
+  margin-top: 0.35rem;
+  min-height: 1.45rem;
+  padding: 0.15rem 0.45rem;
   border: 1px solid color-mix(in srgb, var(--allergens-accent, #b45309) 45%, white);
   border-radius: 999px;
   background: color-mix(in srgb, var(--allergens-accent, #b45309) 12%, white);
   color: var(--allergens-accent, #b45309);
-  font-size: 0.72rem;
+  font-size: 0.62rem;
   font-weight: 600;
   line-height: 1;
   cursor: pointer;
@@ -5554,12 +5566,6 @@ textarea {
 }
 
 @media (max-width: 900px) {
-  .mobile-menu-allergens-btn {
-    min-height: 2.35rem;
-    padding: 0.45rem 0.8rem;
-    font-size: 0.8rem;
-  }
-
   .mobile-allergens-list {
     max-height: min(58dvh, 400px);
   }

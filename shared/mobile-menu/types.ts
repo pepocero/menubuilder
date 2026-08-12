@@ -270,6 +270,17 @@ export interface MobileMenuItemComponent extends MobileComponentBase {
    * Por defecto: `#b45309`.
    */
   allergensAccentColor?: string;
+  /**
+   * Cómo mostrar los ingredientes en la carta.
+   * `button`: chip + modal (como alérgenos). `text`: línea bajo el plato.
+   * Si falta, se trata como `text`.
+   */
+  ingredientsDisplay?: 'button' | 'text';
+  /**
+   * Color predominante del modal de ingredientes (preview / carta pública).
+   * Por defecto: `#4d7c0f`.
+   */
+  ingredientsAccentColor?: string;
   /** Color de fondo del plato. Por defecto: `#ffffff`. */
   backgroundColor?: string;
   menuImage?: {

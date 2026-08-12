@@ -377,6 +377,11 @@ function parseComponent(value: unknown): MobileComponent | null {
         isString(value.allergensAccentColor) && value.allergensAccentColor.trim()
           ? value.allergensAccentColor.trim().slice(0, 64)
           : '#b45309',
+      ingredientsDisplay: value.ingredientsDisplay === 'button' ? 'button' : 'text',
+      ingredientsAccentColor:
+        isString(value.ingredientsAccentColor) && value.ingredientsAccentColor.trim()
+          ? value.ingredientsAccentColor.trim().slice(0, 64)
+          : '#4d7c0f',
       backgroundColor:
         isString(value.backgroundColor) && value.backgroundColor.trim()
           ? value.backgroundColor.trim().slice(0, 64)
