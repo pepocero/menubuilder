@@ -1,37 +1,23 @@
-/* Service worker mínimo: requerido para que la PWA sea instalable.
- * No intercepta cartas públicas ni API: evita pantallas en blanco al abrir un QR. */
+/* PWA: el SW debe existir para poder instalar, pero NO interceptar red.
+ * Interceptar fetch rompía /assets con hash tras cada deploy (página en «Cargando…»). */
+const SW_VERSION = '2026-08-13-no-intercept';
+
 self.addEventListener('install', (event) => {
   event.waitUntil(self.skipWaiting());
 });
 
 self.addEventListener('activate', (event) => {
-  event.waitUntil(self.clients.claim());
+  event.waitUntil(
+    (async () => {
+      if ('caches' in self) {
+        const keys = await caches.keys();
+        await Promise.all(keys.map((key) => caches.delete(key)));
+      }
+      await self.clients.claim();
+    })(),
+  );
 });
 
-self.addEventListener('fetch', (event) => {
-  const request = event.request;
-  let pathname = '/';
-  try {
-    pathname = new URL(request.url).pathname;
-  } catch {
-    return;
-  }
-
-  // Dejar que el navegador gestione estas rutas sin el SW.
-  if (
-    pathname.startsWith('/p/') ||
-    pathname.startsWith('/api/') ||
-    pathname === '/sw.js' ||
-    pathname === '/manifest.webmanifest'
-  ) {
-    return;
-  }
-
-  // Navegaciones HTML: red directa (sin caché del SW).
-  if (request.mode === 'navigate') {
-    event.respondWith(fetch(request));
-    return;
-  }
-
-  event.respondWith(fetch(request));
+self.addEventListener('fetch', () => {
+  /* Intencionadamente vacío: el navegador usa la red. */
 });

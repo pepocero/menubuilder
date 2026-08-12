@@ -107,6 +107,53 @@
         Cargando…
       </p>
     </div>
+    <script>
+      /* Si un JS/CSS hasheado 404 (HTML viejo tras un deploy), quitar SW y recargar una vez. */
+      (function () {
+        var key = 'ptm-stale-asset-reload';
+        function recover() {
+          try {
+            if (sessionStorage.getItem(key)) return;
+            sessionStorage.setItem(key, '1');
+          } catch (err) {
+            return;
+          }
+          var reload = function () {
+            window.location.reload();
+          };
+          if ('serviceWorker' in navigator) {
+            navigator.serviceWorker
+              .getRegistrations()
+              .then(function (regs) {
+                return Promise.all(regs.map(function (reg) { return reg.unregister(); }));
+              })
+              .then(reload)
+              .catch(reload);
+          } else {
+            reload();
+          }
+        }
+        window.addEventListener(
+          'error',
+          function (event) {
+            var el = event.target;
+            if (!el || (el.tagName !== 'SCRIPT' && el.tagName !== 'LINK')) return;
+            var href = el.src || el.href || '';
+            if (href.indexOf('/assets/') === -1) return;
+            recover();
+          },
+          true,
+        );
+        window.setTimeout(function () {
+          var scripts = document.getElementsByTagName('script');
+          var prod = false;
+          for (var i = 0; i < scripts.length; i++) {
+            if ((scripts[i].src || '').indexOf('/assets/') !== -1) prod = true;
+          }
+          if (prod && document.getElementById('ptm-boot-status')) recover();
+        }, 12000);
+      })();
+    </script>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>

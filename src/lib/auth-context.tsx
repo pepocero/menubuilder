@@ -33,13 +33,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(true);
 
   const bootstrap = useCallback(async () => {
+    const timeoutMs = 10000;
     try {
-      const { user: refreshed } = await refreshSession();
-      setUser(refreshed);
-    } catch (err) {
-      if (err instanceof ApiError && err.status === 401) {
-        setUser(null);
-      }
+      const result = await Promise.race([
+        refreshSession(),
+        new Promise<never>((_, reject) => {
+          window.setTimeout(() => reject(new ApiError('Tiempo de espera de sesión', 0)), timeoutMs);
+        }),
+      ]);
+      setUser(result.user);
+    } catch {
+      setUser(null);
     } finally {
       setLoading(false);
     }

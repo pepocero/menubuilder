@@ -16,7 +16,7 @@
   Cache-Control: public, max-age=3600, must-revalidate
   Content-Type: application/manifest+json
 
-# Caché corta: si un 404/HTML se colara bajo /assets, no envenena un año.
+# Caché corta: un 404 de un hash viejo no debe envenenar un año.
 /assets/*
   Cache-Control: public, max-age=3600, must-revalidate
 

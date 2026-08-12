@@ -2,6 +2,8 @@
   "version": 1,
   "include": ["/*"],
   "exclude": [
+    "/assets/*",
+    "/fonts/*",
     "/menuico.png",
     "/favicon.svg",
     "/icons.svg",
