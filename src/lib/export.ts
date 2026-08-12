@@ -4,6 +4,7 @@ import {
   importJsonToCanvasData,
   serializeMenuDocument,
 } from '@shared/menu-document/converter';
+import { parseMobileMenuDocument, type MobileMenuDocument } from '@shared/mobile-menu';
 import type { CanvasData } from '@/types/canvas';
 import { normalizeCanvasData } from '@/types/canvas';
 import { jsPDF } from 'jspdf';
@@ -15,6 +16,10 @@ export function exportMenuDocumentJson(data: CanvasData, filename: string, title
   if (!doc) return;
 
   const json = serializeMenuDocument(doc);
+  downloadJsonFile(json, filename);
+}
+
+function downloadJsonFile(json: string, filename: string): void {
   const blob = new Blob([json], { type: 'application/json' });
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
@@ -25,6 +30,20 @@ export function exportMenuDocumentJson(data: CanvasData, filename: string, title
   URL.revokeObjectURL(url);
 }
 
+/** Descarga la carta móvil como JSON (copia de seguridad / traslado). */
+export function exportMobileMenuDocumentJson(
+  document: MobileMenuDocument,
+  filename: string,
+  title?: string,
+): void {
+  const payload = {
+    kind: 'paper-to-menu-mobile',
+    title: title?.trim() || undefined,
+    document,
+  };
+  downloadJsonFile(`${JSON.stringify(payload, null, 2)}\n`, filename);
+}
+
 export function buildMenuDocumentFromCanvas(
   data: CanvasData,
   title?: string,
@@ -32,22 +51,60 @@ export function buildMenuDocumentFromCanvas(
   return canvasDataToMenuDocument(data, { title });
 }
 
-/** Lee un .json (MenuDocument o CanvasData) y lo convierte a CanvasData del editor. */
-export async function parseMenuJsonFile(file: File): Promise<CanvasData> {
-  const { canvas } = await parseMenuImportFile(file);
-  return canvas;
+export type ParsedMenuImport =
+  | { kind: 'canvas'; canvas: CanvasData; title?: string }
+  | { kind: 'mobile'; document: MobileMenuDocument; title?: string };
+
+function canvasTitleFromRaw(raw: unknown): string | undefined {
+  if (!raw || typeof raw !== 'object') return undefined;
+  const obj = raw as Record<string, unknown>;
+  const meta = obj.meta;
+  if (meta && typeof meta === 'object') {
+    const metaTitle = (meta as { title?: unknown }).title;
+    if (typeof metaTitle === 'string' && metaTitle.trim()) return metaTitle.trim();
+  }
+  if (typeof obj.title === 'string' && obj.title.trim()) return obj.title.trim();
+  return undefined;
 }
 
-/** Igual que parseMenuJsonFile, además intenta recuperar el título del documento. */
-export async function parseMenuImportFile(
-  file: File,
-): Promise<{ canvas: CanvasData; title?: string }> {
+function parseExportedMobileMenu(raw: unknown): { document: MobileMenuDocument; title?: string } | null {
+  if (!raw || typeof raw !== 'object') return null;
+  const obj = raw as Record<string, unknown>;
+  if (obj.kind === 'paper-to-menu-mobile') {
+    const document = parseMobileMenuDocument(obj.document);
+    if (!document) return null;
+    const title = typeof obj.title === 'string' && obj.title.trim() ? obj.title.trim() : undefined;
+    return { document, title };
+  }
+  const document = parseMobileMenuDocument(raw);
+  if (!document) return null;
+  return { document };
+}
+
+/** Lee un .json de carta clásica (lienzo). Rechaza JSON de carta móvil. */
+export async function parseMenuJsonFile(file: File): Promise<CanvasData> {
+  const parsed = await parseMenuImportFile(file);
+  if (parsed.kind !== 'canvas') {
+    throw new Error(
+      'Este archivo es una carta móvil. Impórtalo desde Mis menús, no desde el editor clásico.',
+    );
+  }
+  return parsed.canvas;
+}
+
+/** Lee un .json exportado: carta clásica o carta móvil. */
+export async function parseMenuImportFile(file: File): Promise<ParsedMenuImport> {
   const text = await file.text();
   let raw: unknown;
   try {
     raw = JSON.parse(text);
   } catch {
     throw new Error('El archivo no es un JSON válido');
+  }
+
+  const mobile = parseExportedMobileMenu(raw);
+  if (mobile) {
+    return { kind: 'mobile', document: mobile.document, title: mobile.title };
   }
 
   const imported = importJsonToCanvasData(raw);
@@ -57,22 +114,7 @@ export async function parseMenuImportFile(
     );
   }
 
-  let title: string | undefined;
-  if (raw && typeof raw === 'object') {
-    const obj = raw as Record<string, unknown>;
-    const meta = obj.meta;
-    if (meta && typeof meta === 'object') {
-      const metaTitle = (meta as { title?: unknown }).title;
-      if (typeof metaTitle === 'string' && metaTitle.trim()) {
-        title = metaTitle.trim();
-      }
-    }
-    if (!title && typeof obj.title === 'string' && obj.title.trim()) {
-      title = obj.title.trim();
-    }
-  }
-
-  return { canvas: normalizeCanvasData(imported), title };
+  return { kind: 'canvas', canvas: normalizeCanvasData(imported), title: canvasTitleFromRaw(raw) };
 }
 
 /** Exporta una o varias páginas a un PDF (cada una con su tamaño). */

@@ -175,6 +175,33 @@ export function createAccordionFromTopLevelIds(
   };
 }
 
+/**
+ * Mueve un hijo del acordeón una posición (arriba/abajo).
+ * El índice 0 es la cabecera; el resto es el cuerpo.
+ */
+export function moveAccordionChildById(
+  components: MobileComponent[],
+  accordionId: string,
+  childId: string,
+  direction: -1 | 1,
+): MobileComponent[] | null {
+  const index = components.findIndex((c) => c.id === accordionId && c.type === 'accordion');
+  if (index < 0) return null;
+  const accordion = components[index];
+  if (accordion.type !== 'accordion') return null;
+  const from = accordion.children.findIndex((child) => child.id === childId);
+  if (from < 0) return null;
+  const to = from + direction;
+  if (to < 0 || to >= accordion.children.length) return null;
+  const children = [...accordion.children];
+  const [moved] = children.splice(from, 1);
+  if (!moved) return null;
+  children.splice(to, 0, moved);
+  const next = [...components];
+  next[index] = { ...accordion, children };
+  return next;
+}
+
 export function ungroupAccordionById(
   components: MobileComponent[],
   accordionId: string,

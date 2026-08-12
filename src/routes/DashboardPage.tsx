@@ -144,19 +144,40 @@ export function DashboardPage() {
     setImporting(true);
     setError('');
     try {
-      const { canvas, title: docTitle } = await parseMenuImportFile(file);
+      const parsed = await parseMenuImportFile(file);
       const fromName = file.name.replace(/\.json$/i, '').trim();
       const baseTitle =
-        docTitle ||
+        parsed.title ||
         (fromName && fromName !== 'menu' ? fromName : '') ||
         'Menú';
       const title = withImportedMenuTitle(baseTitle);
 
-      const { menu } = await createMenu({ title, canvas_data: canvas });
+      if (parsed.kind === 'mobile') {
+        const { menu } = await createMenu({
+          title,
+          editor_kind: 'mobile',
+          mobile_document: parsed.document,
+        });
+        try {
+          const thumbnail = await renderMobileDocumentThumbnail(parsed.document);
+          if (thumbnail) {
+            await updateMenu(menu.id, {
+              thumbnail_url: thumbnail,
+              editor_kind: 'mobile',
+              mobile_document: parsed.document,
+            });
+          }
+        } catch {
+          /* La importación ya OK; el preview puede generarse al guardar en el editor */
+        }
+        navigate(`/mobile-editor/${menu.id}`);
+        return;
+      }
 
-      // Miniatura para la tarjeta de Mis menús (create no genera preview).
+      const { menu } = await createMenu({ title, canvas_data: parsed.canvas });
+
       try {
-        const thumbnail = await renderCanvasDataThumbnail(canvas);
+        const thumbnail = await renderCanvasDataThumbnail(parsed.canvas);
         if (thumbnail) {
           await updateMenu(menu.id, { thumbnail_url: thumbnail });
         }

@@ -333,8 +333,13 @@ export function Toolbar({
         <button type="button" onClick={onExportPng} title="Exportar página activa a PNG">
           PNG
         </button>
-        <button type="button" onClick={onExportJson} title="Exportar diseño a menu.json">
-          Exportar JSON
+        <button
+          type="button"
+          className="btn-export-json"
+          onClick={onExportJson}
+          title="Exportar diseño a menu.json"
+        >
+          JSON
         </button>
         <label className={`btn-file${uploading ? ' btn-file--disabled' : ''}`} title="Importar menu.json">
           Importar JSON

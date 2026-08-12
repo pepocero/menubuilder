@@ -34,6 +34,7 @@ import {
   uploadAsset,
 } from '@/lib/api';
 import { compressImage } from '@/lib/image-compress';
+import { exportMobileMenuDocumentJson } from '@/lib/export';
 import { searchStockImages, buildDishStockSearchQuery, pickBestStockImageForDish } from '@/lib/stock';
 import {
   canRedoMobileDoc,
@@ -66,6 +67,7 @@ import {
   updateMobileComponentById,
   removeMobileComponentById,
   createAccordionFromTopLevelIds,
+  moveAccordionChildById,
   ungroupAccordionById,
   areTopLevelIdsConsecutive,
   mapAllMobileComponents,
@@ -218,6 +220,22 @@ function RandomIcon() {
         fill="currentColor"
         d="M10.59 9.17 5.41 4 4 5.41l5.17 5.17 1.42-1.41zM14.5 4l2.04 2.04L4 18.59 5.41 20 17.96 7.46 20 9.5V4h-5.5zm.33 9.41-1.41 1.41 3.13 3.13L14.5 20H20v-5.5l-2.04 2.04-3.13-3.13z"
       />
+    </svg>
+  );
+}
+
+function MoveUpIcon() {
+  return (
+    <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">
+      <path fill="currentColor" d="M7.41 15.41 12 10.83l4.59 4.58L18 14l-6-6-6 6z" />
+    </svg>
+  );
+}
+
+function MoveDownIcon() {
+  return (
+    <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">
+      <path fill="currentColor" d="M7.41 8.59 12 13.17l4.59-4.58L18 10l-6 6-6-6z" />
     </svg>
   );
 }
@@ -478,6 +496,18 @@ const MOBILE_GOOGLE_FONTS_20 = [
   'Allura',
   'Qwitcher Grypen',
 ] as const;
+
+function accordionChildPreview(child: MobileComponent): { typeLabel: string; preview: string } {
+  const typeLabel =
+    MOBILE_COMPONENT_LIBRARY.find((item) => item.type === child.type)?.label ?? child.type;
+  let preview = '';
+  if ('title' in child && typeof child.title === 'string') preview = child.title;
+  else if ('text' in child && typeof child.text === 'string') preview = child.text;
+  else if ('label' in child && typeof child.label === 'string') preview = child.label;
+  preview = preview.replace(/\s+/g, ' ').trim();
+  if (preview.length > 36) preview = `${preview.slice(0, 35)}…`;
+  return { typeLabel, preview };
+}
 
 /** Temas controlados para «Aspecto aleatorio» de platos (legibles, no caos). */
 const MENU_ITEM_STYLE_THEMES = [
@@ -1495,6 +1525,18 @@ export function MobileEditorPage() {
     setAccordionActionError('');
   }
 
+  function handleMoveAccordionChild(childId: string, direction: -1 | 1) {
+    if (!selectedAccordion) return;
+    const next = moveAccordionChildById(
+      documentRef.current.components,
+      selectedAccordion.id,
+      childId,
+      direction,
+    );
+    if (!next) return;
+    updateDoc((current) => ({ ...current, components: next }));
+  }
+
   function togglePhoneSheet(sheet: 'components' | 'props' | 'more') {
     setPhoneSheet((current) => (current === sheet ? null : sheet));
   }
@@ -2175,6 +2217,10 @@ export function MobileEditorPage() {
     if (isPhoneLayout) setPhoneSheet(null);
   }
 
+  function handleExportMobileJson() {
+    exportMobileMenuDocumentJson(documentRef.current, title || 'menu', title || undefined);
+  }
+
   function updateSelectedHidden(hidden: boolean) {
     if (!selectedId) return;
     updateDoc((current) => ({
@@ -2287,6 +2333,15 @@ export function MobileEditorPage() {
               title="Ver y eliminar archivos subidos"
             >
               Archivos
+            </button>
+            <button
+              type="button"
+              className="btn-export-json mobile-editor-desktop-only"
+              onClick={handleExportMobileJson}
+              disabled={loading}
+              title="Exportar esta carta a JSON"
+            >
+              Exportar JSON
             </button>
             <button
               type="button"
@@ -2577,7 +2632,7 @@ export function MobileEditorPage() {
                       </label>
                       {selectedAccordion.showChevron !== false && (
                         <>
-                          <label>
+                          <label className="mobile-props-color-picker-label">
                             Color de flecha
                             <input
                               type="color"
@@ -2587,21 +2642,16 @@ export function MobileEditorPage() {
                               }
                             />
                           </label>
-                          <label>
-                            Grosor de flecha
-                            <input
-                              type="number"
-                              min={1}
-                              max={8}
-                              step={1}
-                              value={selectedAccordion.chevronThickness ?? 2}
-                              onChange={(e) =>
-                                updateSelectedAccordion({
-                                  chevronThickness: Number(e.target.value),
-                                })
-                              }
-                            />
-                          </label>
+                          <NumberStepper
+                            label="Grosor de flecha"
+                            value={selectedAccordion.chevronThickness ?? 2}
+                            min={1}
+                            max={8}
+                            step={1}
+                            onChange={(chevronThickness) =>
+                              updateSelectedAccordion({ chevronThickness })
+                            }
+                          />
                           <label>
                             Sentido de la flecha
                             <select
@@ -2645,6 +2695,56 @@ export function MobileEditorPage() {
                           </small>
                         </>
                       )}
+                      <h4>Orden de elementos</h4>
+                      <small className="panel-hint">
+                        El primero es la cabecera. El resto aparece al abrir el acordeón. Usa las
+                        flechas para cambiar el orden.
+                      </small>
+                      <ul className="mobile-accordion-reorder">
+                        {selectedAccordion.children.map((child, childIndex) => {
+                          const meta = accordionChildPreview(child);
+                          const isHeader = childIndex === 0;
+                          return (
+                            <li
+                              key={child.id}
+                              className={`mobile-accordion-reorder-item${isHeader ? ' is-header' : ''}`}
+                            >
+                              <div className="mobile-accordion-reorder-meta">
+                                {isHeader ? (
+                                  <span className="mobile-accordion-reorder-badge">Cabecera</span>
+                                ) : (
+                                  <span className="mobile-accordion-reorder-type">{meta.typeLabel}</span>
+                                )}
+                                <span className="mobile-accordion-reorder-preview">
+                                  {isHeader
+                                    ? `${meta.typeLabel}${meta.preview ? ` · ${meta.preview}` : ''}`
+                                    : meta.preview || meta.typeLabel}
+                                </span>
+                              </div>
+                              <div className="mobile-accordion-reorder-moves">
+                                <button
+                                  type="button"
+                                  disabled={childIndex === 0}
+                                  onClick={() => handleMoveAccordionChild(child.id, -1)}
+                                  title="Subir"
+                                  aria-label={`Subir ${meta.typeLabel}`}
+                                >
+                                  <MoveUpIcon />
+                                </button>
+                                <button
+                                  type="button"
+                                  disabled={childIndex === selectedAccordion.children.length - 1}
+                                  onClick={() => handleMoveAccordionChild(child.id, 1)}
+                                  title="Bajar"
+                                  aria-label={`Bajar ${meta.typeLabel}`}
+                                >
+                                  <MoveDownIcon />
+                                </button>
+                              </div>
+                            </li>
+                          );
+                        })}
+                      </ul>
                       <button
                         type="button"
                         className="btn-secondary"
@@ -4002,6 +4102,18 @@ export function MobileEditorPage() {
                 title="Ver y eliminar archivos subidos"
               >
                 Archivos
+              </button>
+              <button
+                type="button"
+                className="btn-export-json"
+                disabled={loading}
+                onClick={() => {
+                  handleExportMobileJson();
+                  setPhoneSheet(null);
+                }}
+                title="Exportar esta carta a JSON"
+              >
+                Exportar JSON
               </button>
               <button
                 type="button"
