@@ -24,11 +24,14 @@ import {
 import { FontFamilyPicker } from '@/components/editor/FontFamilyPicker';
 import { MenuLineProperties } from '@/components/editor/MenuLineProperties';
 import { isMenuLineGroup } from '@/lib/menu-line';
+import { downloadFabricImage } from '@/lib/image-download';
+import { appAlert } from '@/lib/app-dialog';
 import type { Group } from 'fabric';
 
 interface PropertiesPanelProps {
   activeObject: FabricObject | null;
   selectedTextCount?: number;
+  selectedMenuLineCount?: number;
   pageIndex?: number;
   pageCount?: number;
   canPasteLayer?: boolean;
@@ -38,6 +41,7 @@ interface PropertiesPanelProps {
   onMoveToNextPage?: () => void;
   onUpdate: () => void;
   onMergeTexts?: () => void;
+  onMergeMenuLines?: () => void;
   onConvertTextToMenuLine?: () => void;
   onSendToBack?: () => void;
 }
@@ -116,6 +120,40 @@ function IndentIcon() {
   );
 }
 
+function DownloadImageIcon() {
+  return (
+    <svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true" fill="none" stroke="currentColor" strokeWidth="1.5">
+      <path d="M8 2.5v8" />
+      <path d="M5 8.5 8 11.5 11 8.5" />
+      <path d="M3 13.5h10" />
+    </svg>
+  );
+}
+
+/** Capa que sube a la página anterior (páginas apiladas + flecha). */
+function MoveLayerToPrevPageIcon() {
+  return (
+    <svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true" fill="none" stroke="currentColor" strokeWidth="1.35">
+      <rect x="2.5" y="1.5" width="7" height="5.5" rx="1" />
+      <rect x="5.5" y="9" width="7" height="5.5" rx="1" opacity="0.55" />
+      <path d="M12.5 11.5V5" strokeLinecap="round" />
+      <path d="M10.4 7.1 12.5 4.8 14.6 7.1" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  );
+}
+
+/** Capa que baja a la página siguiente. */
+function MoveLayerToNextPageIcon() {
+  return (
+    <svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true" fill="none" stroke="currentColor" strokeWidth="1.35">
+      <rect x="2.5" y="1.5" width="7" height="5.5" rx="1" opacity="0.55" />
+      <rect x="5.5" y="9" width="7" height="5.5" rx="1" />
+      <path d="M12.5 4.5V11" strokeLinecap="round" />
+      <path d="M10.4 8.9 12.5 11.2 14.6 8.9" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  );
+}
+
 function OutdentIcon() {
   return (
     <svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true">
@@ -128,6 +166,7 @@ function OutdentIcon() {
 export function PropertiesPanel({
   activeObject,
   selectedTextCount = 0,
+  selectedMenuLineCount = 0,
   pageIndex = 0,
   pageCount = 1,
   canPasteLayer = false,
@@ -137,15 +176,18 @@ export function PropertiesPanel({
   onMoveToNextPage,
   onUpdate,
   onMergeTexts,
+  onMergeMenuLines,
   onConvertTextToMenuLine,
   onSendToBack,
 }: PropertiesPanelProps) {
   const [, setTick] = useState(0);
+  const [downloadingImage, setDownloadingImage] = useState(false);
   /** Rango de texto seleccionado en el lienzo (sobrevive al foco del input Tamaño). */
   const textSelectionRef = useRef<{ start: number; end: number } | null>(null);
 
   useEffect(() => {
     textSelectionRef.current = null;
+    setDownloadingImage(false);
   }, [activeObject]);
 
   useEffect(() => {
@@ -299,24 +341,51 @@ export function PropertiesPanel({
           </div>
         )}
 
-        {(onMoveToPrevPage || onMoveToNextPage) && (
-          <div className="properties-page-transfer" role="group" aria-label="Mover de página">
-            <button
-              type="button"
-              className="btn-secondary"
-              disabled={!onMoveToPrevPage || pageIndex <= 0}
-              onClick={() => onMoveToPrevPage?.()}
-            >
-              ← Página anterior
-            </button>
-            <button
-              type="button"
-              className="btn-secondary"
-              disabled={!onMoveToNextPage || pageIndex >= pageCount - 1}
-              onClick={() => onMoveToNextPage?.()}
-            >
-              Página siguiente →
-            </button>
+        {pageCount > 1 && (onMoveToPrevPage || onMoveToNextPage) && (
+          <div className="properties-page-transfer" role="group" aria-label="Mover capa a otra página">
+            <p className="panel-hint" style={{ marginBottom: '0.35rem' }}>
+              Mover capa a otra página
+            </p>
+            <div className="properties-page-transfer-row">
+              <button
+                type="button"
+                className="btn-secondary properties-page-move-btn"
+                disabled={!onMoveToPrevPage || pageIndex <= 0}
+                title={
+                  pageIndex <= 0
+                    ? 'Ya estás en la primera página'
+                    : `Mover la capa a la página ${pageIndex}`
+                }
+                aria-label={
+                  pageIndex <= 0
+                    ? 'No hay página anterior'
+                    : `Mover capa a la página ${pageIndex}`
+                }
+                onClick={() => onMoveToPrevPage?.()}
+              >
+                <MoveLayerToPrevPageIcon />
+                <span>Pág. {pageIndex}</span>
+              </button>
+              <button
+                type="button"
+                className="btn-secondary properties-page-move-btn"
+                disabled={!onMoveToNextPage || pageIndex >= pageCount - 1}
+                title={
+                  pageIndex >= pageCount - 1
+                    ? 'Ya estás en la última página'
+                    : `Mover la capa a la página ${pageIndex + 2}`
+                }
+                aria-label={
+                  pageIndex >= pageCount - 1
+                    ? 'No hay página siguiente'
+                    : `Mover capa a la página ${pageIndex + 2}`
+                }
+                onClick={() => onMoveToNextPage?.()}
+              >
+                <MoveLayerToNextPageIcon />
+                <span>Pág. {pageIndex + 2}</span>
+              </button>
+            </div>
           </div>
         )}
 
@@ -324,6 +393,60 @@ export function PropertiesPanel({
           <button type="button" className="btn-secondary" onClick={onSendToBack}>
             Enviar al fondo
           </button>
+        )}
+      </div>
+    );
+  }
+
+  if (selectedMenuLineCount >= 2) {
+    return (
+      <div className="properties-panel">
+        <h3>Líneas de carta</h3>
+        <p className="panel-empty">
+          {selectedMenuLineCount} líneas de carta seleccionadas. Puedes unirlas en un solo
+          bloque (filas de arriba a abajo).
+        </p>
+        {onMergeMenuLines && (
+          <button
+            type="button"
+            className="btn-primary"
+            style={{ width: '100%' }}
+            title="Unir en una sola línea de carta con todas las filas"
+            onClick={onMergeMenuLines}
+          >
+            Unir líneas de carta
+          </button>
+        )}
+        {(onCopyLayer || onPasteLayer) && (
+          <div
+            className="properties-page-transfer"
+            role="group"
+            aria-label="Copiar y pegar capa"
+            style={{ marginTop: '0.75rem' }}
+          >
+            <div className="properties-page-transfer-row properties-page-transfer-row--icons">
+              <button
+                type="button"
+                className="btn-secondary properties-icon-btn"
+                disabled={!onCopyLayer}
+                title="Copiar selección (Ctrl+C)"
+                aria-label="Copiar capas"
+                onClick={() => onCopyLayer?.()}
+              >
+                <CopyLayerIcon />
+              </button>
+              <button
+                type="button"
+                className="btn-secondary properties-icon-btn"
+                disabled={!onPasteLayer || !canPasteLayer}
+                title="Pegar en esta página (Ctrl+V)"
+                aria-label="Pegar capa"
+                onClick={() => onPasteLayer?.()}
+              >
+                <PasteLayerIcon />
+              </button>
+            </div>
+          </div>
         )}
       </div>
     );
@@ -615,30 +738,50 @@ export function PropertiesPanel({
       )}
 
       {pageCount > 1 && (onMoveToPrevPage || onMoveToNextPage) && (
-        <div className="properties-page-transfer" role="group" aria-label="Mover a otra página">
+        <div className="properties-page-transfer" role="group" aria-label="Mover capa a otra página">
           <p className="panel-hint" style={{ marginBottom: '0.35rem' }}>
             Mover capa a otra página
           </p>
           <div className="properties-page-transfer-row">
             <button
               type="button"
-              className="btn-secondary"
-              disabled={!onMoveToPrevPage}
-              title={`Mover a la página ${pageIndex}`}
+              className="btn-secondary properties-page-move-btn"
+              disabled={!onMoveToPrevPage || pageIndex <= 0}
+              title={
+                pageIndex <= 0
+                  ? 'Ya estás en la primera página'
+                  : `Mover la capa a la página ${pageIndex}`
+              }
+              aria-label={
+                pageIndex <= 0
+                  ? 'No hay página anterior'
+                  : `Mover capa a la página ${pageIndex}`
+              }
               onMouseDown={preserveTextSelection}
               onClick={() => onMoveToPrevPage?.()}
             >
-              ↑ Pág. {pageIndex}
+              <MoveLayerToPrevPageIcon />
+              <span>Pág. {pageIndex}</span>
             </button>
             <button
               type="button"
-              className="btn-secondary"
-              disabled={!onMoveToNextPage}
-              title={`Mover a la página ${pageIndex + 2}`}
+              className="btn-secondary properties-page-move-btn"
+              disabled={!onMoveToNextPage || pageIndex >= pageCount - 1}
+              title={
+                pageIndex >= pageCount - 1
+                  ? 'Ya estás en la última página'
+                  : `Mover la capa a la página ${pageIndex + 2}`
+              }
+              aria-label={
+                pageIndex >= pageCount - 1
+                  ? 'No hay página siguiente'
+                  : `Mover capa a la página ${pageIndex + 2}`
+              }
               onMouseDown={preserveTextSelection}
               onClick={() => onMoveToNextPage?.()}
             >
-              ↓ Pág. {pageIndex + 2}
+              <MoveLayerToNextPageIcon />
+              <span>Pág. {pageIndex + 2}</span>
             </button>
           </div>
         </div>
@@ -1144,6 +1287,33 @@ export function PropertiesPanel({
           <p className="panel-hint">
             Imagen seleccionada. Usa «Ajustar a A4» para llenar el lienzo (formato carta).
           </p>
+          <button
+            type="button"
+            className="btn-secondary"
+            style={{ width: '100%', marginBottom: '0.75rem' }}
+            disabled={downloadingImage}
+            title="Descargar esta imagen al ordenador"
+            aria-label={downloadingImage ? 'Descargando imagen' : 'Descargar imagen'}
+            onClick={() => {
+              if (downloadingImage) return;
+              setDownloadingImage(true);
+              void downloadFabricImage(activeObject as FabricImage)
+                .catch(() => {
+                  void appAlert('No se pudo descargar la imagen. Prueba de nuevo o usa otra copia del archivo.', {
+                    title: 'Descargar imagen',
+                    variant: 'warning',
+                  });
+                })
+                .finally(() => setDownloadingImage(false));
+            }}
+          >
+            <span
+              style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: '0.4rem' }}
+            >
+              <DownloadImageIcon />
+              {downloadingImage ? 'Descargando…' : 'Descargar'}
+            </span>
+          </button>
           <button
             type="button"
             className="btn-primary"

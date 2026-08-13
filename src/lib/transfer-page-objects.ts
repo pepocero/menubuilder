@@ -15,6 +15,20 @@ export function isPageTransferInFlight(): boolean {
   return transferInFlight;
 }
 
+/**
+ * Detección robusta de selección múltiple.
+ * No usar solo `instanceof`: con Vite/Fabric puede fallar por duplicado de módulo
+ * y entonces se tratan left/top relativos de los hijos como absolutos → esquina.
+ */
+export function isCanvasActiveSelection(
+  obj: FabricObject | null | undefined,
+): obj is ActiveSelection {
+  if (!obj) return false;
+  if (obj instanceof ActiveSelection) return true;
+  if (obj.type === 'activeSelection' || obj.type === 'ActiveSelection') return true;
+  return 'multiSelectionStacking' in obj;
+}
+
 function getObjectHeight(obj: FabricObject): number {
   if (typeof obj.getScaledHeight === 'function') {
     const h = obj.getScaledHeight();
@@ -33,6 +47,8 @@ function getObjectWidth(obj: FabricObject): number {
 
 /**
  * ¿La mayor parte del objeto ya cruzó el borde superior/inferior?
+ * Usa bounds de escena (respeta origin center/left).
+ * Umbral alto: solo si casi ha salido del todo (≥85 %).
  */
 export function detectPageSpill(
   canvas: Canvas,
@@ -42,14 +58,16 @@ export function detectPageSpill(
   const { height } = getCanvasLogicalSize(canvas);
   if (height <= 0) return null;
 
-  const top = target.top ?? 0;
-  const h = getObjectHeight(target);
-  const bottom = top + h;
+  const bounds = getObjectSceneBounds(target);
+  const visibleTop = Math.max(bounds.top, 0);
+  const visibleBottom = Math.min(bounds.top + bounds.height, height);
+  const visible = Math.max(0, visibleBottom - visibleTop);
+  const ratio = visible / Math.max(1, bounds.height);
 
-  // ≥50 % por debajo del borde inferior
-  if (top + h * 0.5 > height) return 'next';
-  // ≥50 % por encima del borde superior
-  if (bottom - h * 0.5 < 0) return 'prev';
+  // Casi fuera por abajo → página siguiente
+  if (bounds.top + bounds.height * 0.15 > height && ratio < 0.15) return 'next';
+  // Casi fuera por arriba → página anterior
+  if (bounds.top + bounds.height * 0.85 < 0 && ratio < 0.15) return 'prev';
   return null;
 }
 
@@ -78,13 +96,14 @@ export function resolveDropPageIndex(
     }
   }
 
-  // Si el puntero está claramente por debajo/arriba de la página origen,
-  // elegir la página adyacente más cercana.
+  // Si el puntero está claramente en el hueco entre páginas (no sobre ninguna),
+  // solo entonces elegir la adyacente — margen amplio para no saltar al rozar el borde.
   const fromRect = blocks[fromIndex].getBoundingClientRect();
-  if (clientY > fromRect.bottom + 8 && fromIndex + 1 < blocks.length) {
+  const gap = 40;
+  if (clientY > fromRect.bottom + gap && fromIndex + 1 < blocks.length) {
     return fromIndex + 1;
   }
-  if (clientY < fromRect.top - 8 && fromIndex > 0) {
+  if (clientY < fromRect.top - gap && fromIndex > 0) {
     return fromIndex - 1;
   }
   return null;
@@ -92,7 +111,7 @@ export function resolveDropPageIndex(
 
 function collectTransferObjects(fromCanvas: Canvas): FabricObject[] {
   const active = fromCanvas.getActiveObject();
-  if (active instanceof ActiveSelection) {
+  if (isCanvasActiveSelection(active)) {
     const members = [...active.getObjects()];
     fromCanvas.discardActiveObject();
     return members.filter((o) => fromCanvas.getObjects().includes(o));
@@ -189,35 +208,90 @@ export async function transferObjectsBetweenPages(options: {
   }
 }
 
-/** Si el objeto quedó fuera del lienzo al arrastrar, lo devuelve dentro. */
+/**
+ * Rectángulo en coordenadas del lienzo (sin zoom de viewport).
+ * Evita getBoundingRect() que incluye el transform del canvas.
+ */
+function getObjectSceneBounds(obj: FabricObject): {
+  left: number;
+  top: number;
+  width: number;
+  height: number;
+} {
+  const w = getObjectWidth(obj);
+  const h = getObjectHeight(obj);
+  const left = obj.left ?? 0;
+  const top = obj.top ?? 0;
+  const originX = obj.originX ?? 'left';
+  const originY = obj.originY ?? 'top';
+  const ox =
+    originX === 'center' ? left - w / 2 : originX === 'right' ? left - w : left;
+  const oy =
+    originY === 'center' ? top - h / 2 : originY === 'bottom' ? top - h : top;
+  return { left: ox, top: oy, width: w, height: h };
+}
+
+/** Parte mínima que debe seguir viéndose en la página (permite colgar fuera). */
+const MIN_VISIBLE_RATIO = 0.2;
+const MIN_VISIBLE_PX = 24;
+
+function softClampAxis(size: number, pageSize: number): { min: number; max: number } {
+  const keep = Math.max(
+    MIN_VISIBLE_PX,
+    Math.min(size, Math.round(size * MIN_VISIBLE_RATIO)),
+  );
+  return {
+    min: keep - size,
+    max: pageSize - keep,
+  };
+}
+
+function applySoftClampDelta(
+  obj: FabricObject,
+  pageWidth: number,
+  pageHeight: number,
+): boolean {
+  const bounds = getObjectSceneBounds(obj);
+  const xRange = softClampAxis(bounds.width, pageWidth);
+  const yRange = softClampAxis(bounds.height, pageHeight);
+  let dx = 0;
+  let dy = 0;
+  if (bounds.left < xRange.min) dx = xRange.min - bounds.left;
+  else if (bounds.left > xRange.max) dx = xRange.max - bounds.left;
+  if (bounds.top < yRange.min) dy = yRange.min - bounds.top;
+  else if (bounds.top > yRange.max) dy = yRange.max - bounds.top;
+  if (dx === 0 && dy === 0) return false;
+  obj.set({
+    left: (obj.left ?? 0) + dx,
+    top: (obj.top ?? 0) + dy,
+  });
+  obj.setCoords();
+  return true;
+}
+
+/**
+ * Evita que la capa se pierda del todo fuera del lienzo.
+ * Permite colgar parte fuera (p. ej. imagen a caballo del borde).
+ */
 export function clampActiveObjectsIntoPage(canvas: Canvas): boolean {
   const { width, height } = getCanvasLogicalSize(canvas);
   const active = canvas.getActiveObject();
   if (!active) return false;
 
-  // En ActiveSelection los hijos tienen coords relativas al grupo.
-  // Hay que clampear la selección entera; si no, al tratar left/top de cada
-  // miembro como absolutos se apilan (p. ej. al mover con flechas).
-  const objects: FabricObject[] =
-    active instanceof ActiveSelection
-      ? [active]
-      : canvas.getActiveObjects().length > 0
-        ? canvas.getActiveObjects()
-        : [active];
+  // En ActiveSelection los hijos tienen coords relativas al grupo:
+  // clampear la selección entera.
+  if (isCanvasActiveSelection(active)) {
+    const changed = applySoftClampDelta(active, width, height);
+    if (changed) canvas.requestRenderAll();
+    return changed;
+  }
+
+  const objects =
+    canvas.getActiveObjects().length > 0 ? canvas.getActiveObjects() : [active];
 
   let changed = false;
   for (const obj of objects) {
-    const h = getObjectHeight(obj);
-    const w = getObjectWidth(obj);
-    const left = obj.left ?? 0;
-    const top = obj.top ?? 0;
-    const nextLeft = Math.max(-w * 0.25, Math.min(left, width - w * 0.25));
-    const nextTop = Math.max(0, Math.min(top, Math.max(height - h, 0)));
-    if (nextLeft !== left || nextTop !== top) {
-      obj.set({ left: nextLeft, top: nextTop });
-      obj.setCoords();
-      changed = true;
-    }
+    if (applySoftClampDelta(obj, width, height)) changed = true;
   }
   if (changed) canvas.requestRenderAll();
   return changed;

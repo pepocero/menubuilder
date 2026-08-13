@@ -29,6 +29,7 @@ import { appAlert, appConfirm } from '@/lib/app-dialog';
 import {
   clampActiveObjectsIntoPage,
   clampLayerIntoPage,
+  isCanvasActiveSelection,
   transferObjectsBetweenPages,
   type PageSpillDirection,
 } from '@/lib/transfer-page-objects';
@@ -50,10 +51,16 @@ import {
   mergeSelectedTextLayers,
 } from '@/lib/merge-text-layers';
 import {
+  canMergeSelectedMenuLines,
+  getSelectedMenuLineGroups,
+  mergeSelectedMenuLines,
+} from '@/lib/merge-menu-lines';
+import {
   canConvertTextToMenuLine,
   convertTextObjectToMenuLine,
 } from '@/lib/text-to-menu-line';
 import { compressImage, dataUrlToBlob, generateThumbnail } from '@/lib/image-compress';
+import { downloadFabricImage } from '@/lib/image-download';
 import { getPageSize, ptToCm } from '@/lib/page-size';
 import {
   canRedoHistory,
@@ -592,7 +599,7 @@ export function EditorPage() {
     let objects: FabricObject[];
     let restore: FabricObject[] | null = null;
 
-    if (active instanceof ActiveSelection) {
+    if (isCanvasActiveSelection(active)) {
       restore = [...active.getObjects()];
       canvas.discardActiveObject();
       objects = restore.filter((o) => canvas.getObjects().includes(o));
@@ -955,6 +962,16 @@ export function EditorPage() {
     handleChange();
   }
 
+  function handleMergeMenuLines() {
+    const canvas = getActiveCanvas();
+    if (!canvas) return;
+    const merged = mergeSelectedMenuLines(canvas);
+    if (!merged) return;
+    setInteractionMode('move');
+    setActiveObject(merged);
+    handleChange();
+  }
+
   function handleConvertTextToMenuLine() {
     const canvas = getActiveCanvas();
     if (!canvas) return;
@@ -1162,6 +1179,18 @@ export function EditorPage() {
     ensureA4Canvas(canvas);
     fitImageToA4(activeObject as FabricImage, canvas, 'cover');
     handleChange();
+  }
+
+  async function handleDownloadImage() {
+    if (!activeObject || !isImageObject(activeObject)) return;
+    try {
+      await downloadFabricImage(activeObject as FabricImage);
+    } catch {
+      await appAlert(
+        'No se pudo descargar la imagen. Prueba de nuevo o usa otra copia del archivo.',
+        { title: 'Descargar imagen', variant: 'warning' },
+      );
+    }
   }
 
   function assetUrlMatches(layerSrc: string | undefined, assetUrl: string | null): boolean {
@@ -1701,9 +1730,14 @@ export function EditorPage() {
         onOpenImportMenu={() => setImportOpen(true)}
         onOpenAssets={() => setAssetsOpen(true)}
         onFitImageToA4={handleFitImageToA4}
+        onDownloadImage={() => {
+          void handleDownloadImage();
+        }}
         canFitImage={!!activeObject && isImageObject(activeObject)}
         onMergeTexts={handleMergeTexts}
         canMergeTexts={canMergeSelectedTextLayers(getActiveCanvas())}
+        onMergeMenuLines={handleMergeMenuLines}
+        canMergeMenuLines={canMergeSelectedMenuLines(getActiveCanvas())}
         onConvertTextToMenuLine={handleConvertTextToMenuLine}
         canConvertTextToMenuLine={canConvertTextToMenuLine(getActiveCanvas())}
         onChangeBackground={handleChangeBackground}
@@ -1901,6 +1935,7 @@ export function EditorPage() {
           <PropertiesPanel
             activeObject={activeObject}
             selectedTextCount={getSelectedTextObjects(getActiveCanvas()).length}
+            selectedMenuLineCount={getSelectedMenuLineGroups(getActiveCanvas()).length}
             pageIndex={activePageIndex}
             pageCount={pages.length}
             canPasteLayer={clipboardLayerCount > 0}
@@ -1926,6 +1961,7 @@ export function EditorPage() {
             }
             onUpdate={handleChange}
             onMergeTexts={handleMergeTexts}
+            onMergeMenuLines={handleMergeMenuLines}
             onConvertTextToMenuLine={handleConvertTextToMenuLine}
             onSendToBack={
               activeObject ? () => handleSendToBack(activeObject) : undefined

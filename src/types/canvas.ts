@@ -82,7 +82,7 @@ export interface MenuLineColumnStyle {
   fontFamily: string;
   fontSize: number;
   color: string;
-  align: 'left' | 'center' | 'right';
+  align: 'left' | 'center' | 'right' | 'justify';
   fontWeight?: string;
   fontStyle?: string;
 }

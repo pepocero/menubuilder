@@ -9,6 +9,8 @@ export interface LayerObjectData {
   shape?: string;
   border?: unknown;
   menuLineRole?: 'left' | 'center' | 'right' | 'ingredients';
+  /** Alineación persistida de la celda de ingredientes (el layout de Fabric no debe pisarla). */
+  menuLineTextAlign?: 'left' | 'center' | 'right' | 'justify';
   menuLineLeader?: 'dots' | 'dashes' | 'spaces' | 'custom';
   /** Símbolo a repetir cuando el leader es `custom`. */
   menuLineLeaderUnit?: string;

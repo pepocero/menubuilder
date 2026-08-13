@@ -25,7 +25,6 @@ import { hydrateDesign } from '@/lib/canvas/render-design';
 import type { CanvasInteractionMode } from '@/components/editor/EditorZoomControls';
 import {
   clampActiveObjectsIntoPage,
-  detectPageSpill,
   isPageTransferInFlight,
   resolveDropPageIndex,
 } from '@/lib/transfer-page-objects';
@@ -248,6 +247,8 @@ export const CanvasEditor = forwardRef<CanvasEditorHandle, CanvasEditorProps>(
 
         const spillHandler = onSpillOffPageRef.current;
         if (spillHandler) {
+          // Solo transferir si el puntero está sobre otra página (intención clara).
+          // No saltar solo porque la capa cuelga del borde (permite colgar parcialmente).
           const dropIndex = resolveDropPageIndex(
             lastPointer.x,
             lastPointer.y,
@@ -255,15 +256,6 @@ export const CanvasEditor = forwardRef<CanvasEditorHandle, CanvasEditorProps>(
           );
           if (dropIndex != null) {
             spillHandler({ type: 'index', index: dropIndex });
-            return true;
-          }
-
-          const spill = detectPageSpill(canvas, target ?? canvas.getActiveObject());
-          const canSpill =
-            (spill === 'next' && canSpillNextRef.current) ||
-            (spill === 'prev' && canSpillPrevRef.current);
-          if (spill && canSpill) {
-            spillHandler({ type: 'direction', direction: spill });
             return true;
           }
         }

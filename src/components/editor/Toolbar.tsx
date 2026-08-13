@@ -1,3 +1,4 @@
+import { useEffect, useRef, useState, type ChangeEvent, type ReactNode } from 'react';
 import type { CanvasInteractionMode } from '@/components/editor/EditorZoomControls';
 import { MenuLineConvertIcon } from '@/components/editor/MenuLineToolIcons';
 
@@ -25,9 +26,12 @@ interface ToolbarProps {
   onOpenImportMenu: () => void;
   onOpenAssets: () => void;
   onFitImageToA4: () => void;
+  onDownloadImage: () => void;
   canFitImage: boolean;
   onMergeTexts: () => void;
   canMergeTexts: boolean;
+  onMergeMenuLines: () => void;
+  canMergeMenuLines: boolean;
   onConvertTextToMenuLine: () => void;
   canConvertTextToMenuLine: boolean;
   onChangeBackground: (color: string) => void;
@@ -49,6 +53,59 @@ interface ToolbarProps {
   uploadProgress?: UploadProgressState | null;
 }
 
+type MenuId = 'edit' | 'insert' | 'image' | 'page' | 'file';
+
+function ChevronIcon() {
+  return (
+    <svg viewBox="0 0 12 12" width="10" height="10" aria-hidden="true" focusable="false">
+      <path fill="currentColor" d="M2.1 4.1 6 8l3.9-3.9L8.7 2.9 6 5.6 3.3 2.9z" />
+    </svg>
+  );
+}
+
+function ToolbarDropdown({
+  id,
+  label,
+  openMenu,
+  setOpenMenu,
+  align = 'start',
+  badge,
+  children,
+}: {
+  id: MenuId;
+  label: string;
+  openMenu: MenuId | null;
+  setOpenMenu: (id: MenuId | null) => void;
+  align?: 'start' | 'end';
+  badge?: string;
+  children: ReactNode;
+}) {
+  const open = openMenu === id;
+  return (
+    <div className={`toolbar-dropdown${open ? ' is-open' : ''}`}>
+      <button
+        type="button"
+        className="toolbar-dropdown-trigger"
+        aria-haspopup="menu"
+        aria-expanded={open}
+        onClick={() => setOpenMenu(open ? null : id)}
+      >
+        <span>{label}</span>
+        {badge ? <span className="toolbar-dropdown-badge">{badge}</span> : null}
+        <ChevronIcon />
+      </button>
+      {open && (
+        <div
+          className={`toolbar-dropdown-panel${align === 'end' ? ' toolbar-dropdown-panel--end' : ''}`}
+          role="menu"
+        >
+          {children}
+        </div>
+      )}
+    </div>
+  );
+}
+
 export function Toolbar({
   interactionMode,
   onInteractionModeChange,
@@ -68,9 +125,12 @@ export function Toolbar({
   onOpenImportMenu,
   onOpenAssets,
   onFitImageToA4,
+  onDownloadImage,
   canFitImage,
   onMergeTexts,
   canMergeTexts,
+  onMergeMenuLines,
+  canMergeMenuLines,
   onConvertTextToMenuLine,
   canConvertTextToMenuLine,
   onChangeBackground,
@@ -92,17 +152,42 @@ export function Toolbar({
   uploadProgress = null,
 }: ToolbarProps) {
   const uploading = !!uploadProgress;
+  const [openMenu, setOpenMenu] = useState<MenuId | null>(null);
+  const barRef = useRef<HTMLDivElement>(null);
 
-  function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
+  useEffect(() => {
+    if (!openMenu) return;
+    function onPointerDown(event: PointerEvent) {
+      if (!barRef.current?.contains(event.target as Node)) setOpenMenu(null);
+    }
+    function onKeyDown(event: KeyboardEvent) {
+      if (event.key === 'Escape') setOpenMenu(null);
+    }
+    document.addEventListener('pointerdown', onPointerDown);
+    document.addEventListener('keydown', onKeyDown);
+    return () => {
+      document.removeEventListener('pointerdown', onPointerDown);
+      document.removeEventListener('keydown', onKeyDown);
+    };
+  }, [openMenu]);
+
+  function runAndClose(action: () => void) {
+    action();
+    setOpenMenu(null);
+  }
+
+  function handleFileChange(e: ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
     if (file && !uploading) onUploadImage(file);
     e.target.value = '';
+    setOpenMenu(null);
   }
 
-  function handleJsonImportChange(e: React.ChangeEvent<HTMLInputElement>) {
+  function handleJsonImportChange(e: ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
     if (file && !uploading) onImportJson(file);
     e.target.value = '';
+    setOpenMenu(null);
   }
 
   const phaseLabel =
@@ -119,9 +204,8 @@ export function Toolbar({
               : '';
 
   return (
-    <div className="toolbar">
+    <div className="toolbar" ref={barRef}>
       <div className="toolbar-group" role="group" aria-label="Modo del lienzo">
-        <span className="toolbar-label">Lienzo</span>
         <button
           type="button"
           className={interactionMode === 'move' ? 'is-active' : undefined}
@@ -143,7 +227,6 @@ export function Toolbar({
       </div>
 
       <div className="toolbar-group">
-        <span className="toolbar-label">Editar</span>
         <button
           type="button"
           onClick={onUndo}
@@ -162,198 +245,364 @@ export function Toolbar({
         >
           ↷
         </button>
-        <button
-          type="button"
-          onClick={onClearCanvas}
-          disabled={!canClearCanvas}
-          title="Quitar todas las capas de la página activa"
-        >
-          Limpiar lienzo
-        </button>
       </div>
 
-      <div className="toolbar-group">
-        <span className="toolbar-label">Añadir</span>
-        <button type="button" onClick={onAddText} title="Texto">
-          T
-        </button>
-        <button
-          type="button"
-          className="toolbar-icon-btn toolbar-icon-btn--menu-line"
-          onClick={onAddMenuLine}
-          title="Línea de carta (plato ··· precio)"
-          aria-label="Añadir línea de carta"
-        >
-          <img
-            src="/menuico.png"
-            alt=""
-            className="toolbar-menu-line-icon"
-            width={24}
-            height={24}
-            draggable={false}
-          />
-        </button>
-        <button type="button" onClick={onAddRect} title="Rectángulo">
-          ▭
-        </button>
-        <button type="button" onClick={onAddLine} title="Línea">
-          ─
-        </button>
-        <button type="button" onClick={onAddCircle} title="Círculo">
-          ○
-        </button>
-        <button
-          type="button"
-          onClick={onMergeTexts}
-          disabled={!canMergeTexts}
-          title="Unir las capas de texto seleccionadas en una sola (orden de arriba a abajo)"
-        >
-          Unir textos
-        </button>
-        <button
-          type="button"
-          className="toolbar-icon-btn"
-          onClick={onConvertTextToMenuLine}
-          disabled={!canConvertTextToMenuLine}
-          title="Convertir el texto seleccionado en línea de carta (plato ··· precio por cada fila)"
-          aria-label="Convertir texto a línea de carta"
-        >
-          <MenuLineConvertIcon />
-        </button>
-      </div>
-
-      <div className="toolbar-group">
-        <span className="toolbar-label">Imagen</span>
-        <label className={`btn-file${uploading ? ' btn-file--disabled' : ''}`}>
-          {uploading ? `${uploadProgress.percent}%` : 'Subir'}
-          <input
-            type="file"
-            accept="image/*"
-            onChange={handleFileChange}
-            hidden
-            disabled={uploading}
-          />
-        </label>
-        {uploadProgress && (
-          <div
-            className="upload-progress"
-            role="status"
-            aria-live="polite"
-            title={`${phaseLabel}: ${uploadProgress.percent}%`}
+      <div className="toolbar-menubar" role="menubar" aria-label="Menús del editor">
+        <ToolbarDropdown id="edit" label="Editar" openMenu={openMenu} setOpenMenu={setOpenMenu}>
+          <button
+            type="button"
+            role="menuitem"
+            className="toolbar-menu-item"
+            disabled={!canMergeTexts}
+            title="Unir las capas de texto seleccionadas en una sola (orden de arriba a abajo)"
+            onClick={() => runAndClose(onMergeTexts)}
           >
-            <div className="upload-progress-track">
-              <div
-                className="upload-progress-bar"
-                style={{ width: `${uploadProgress.percent}%` }}
-              />
-            </div>
-            <span className="upload-progress-label">
-              {phaseLabel} {uploadProgress.percent}%
+            <span className="toolbar-menu-item-icon" aria-hidden="true">
+              ☰
             </span>
+            Unir textos
+          </button>
+          <button
+            type="button"
+            role="menuitem"
+            className="toolbar-menu-item"
+            disabled={!canMergeMenuLines}
+            title="Unir las líneas de carta seleccionadas en un solo bloque (orden de arriba a abajo)"
+            onClick={() => runAndClose(onMergeMenuLines)}
+          >
+            <span className="toolbar-menu-item-icon" aria-hidden="true">
+              ☰€
+            </span>
+            Unir líneas de carta
+          </button>
+          <button
+            type="button"
+            role="menuitem"
+            className="toolbar-menu-item"
+            disabled={!canConvertTextToMenuLine}
+            title="Convertir el texto seleccionado en línea de carta (plato ··· precio por cada fila)"
+            onClick={() => runAndClose(onConvertTextToMenuLine)}
+          >
+            <span className="toolbar-menu-item-icon" aria-hidden="true">
+              <MenuLineConvertIcon />
+            </span>
+            Convertir a línea de carta
+          </button>
+          <div className="toolbar-menu-sep" role="separator" />
+          <button
+            type="button"
+            role="menuitem"
+            className="toolbar-menu-item toolbar-menu-item--danger"
+            disabled={!canClearCanvas}
+            title="Quitar todas las capas de la página activa"
+            onClick={() => runAndClose(onClearCanvas)}
+          >
+            <span className="toolbar-menu-item-icon" aria-hidden="true">
+              ⌫
+            </span>
+            Limpiar lienzo
+          </button>
+        </ToolbarDropdown>
+
+        <ToolbarDropdown id="insert" label="Insertar" openMenu={openMenu} setOpenMenu={setOpenMenu}>
+          <button
+            type="button"
+            role="menuitem"
+            className="toolbar-menu-item"
+            title="Texto"
+            onClick={() => runAndClose(onAddText)}
+          >
+            <span className="toolbar-menu-item-icon" aria-hidden="true">
+              T
+            </span>
+            Texto
+          </button>
+          <button
+            type="button"
+            role="menuitem"
+            className="toolbar-menu-item"
+            title="Línea de carta (plato ··· precio)"
+            onClick={() => runAndClose(onAddMenuLine)}
+          >
+            <span className="toolbar-menu-item-icon toolbar-menu-item-icon--menu-line" aria-hidden="true">
+              <img src="/menuico.png" alt="" width={18} height={18} draggable={false} />
+            </span>
+            Línea de carta
+          </button>
+          <div className="toolbar-menu-sep" role="separator" />
+          <button
+            type="button"
+            role="menuitem"
+            className="toolbar-menu-item"
+            title="Rectángulo"
+            onClick={() => runAndClose(onAddRect)}
+          >
+            <span className="toolbar-menu-item-icon" aria-hidden="true">
+              ▭
+            </span>
+            Rectángulo
+          </button>
+          <button
+            type="button"
+            role="menuitem"
+            className="toolbar-menu-item"
+            title="Línea"
+            onClick={() => runAndClose(onAddLine)}
+          >
+            <span className="toolbar-menu-item-icon" aria-hidden="true">
+              ─
+            </span>
+            Línea
+          </button>
+          <button
+            type="button"
+            role="menuitem"
+            className="toolbar-menu-item"
+            title="Círculo"
+            onClick={() => runAndClose(onAddCircle)}
+          >
+            <span className="toolbar-menu-item-icon" aria-hidden="true">
+              ○
+            </span>
+            Círculo
+          </button>
+        </ToolbarDropdown>
+
+        <ToolbarDropdown id="image" label="Imagen" openMenu={openMenu} setOpenMenu={setOpenMenu}>
+          <label
+            className={`toolbar-menu-item${uploading ? ' is-disabled' : ''}`}
+            role="menuitem"
+            title="Subir imagen"
+          >
+            <span className="toolbar-menu-item-icon" aria-hidden="true">
+              ↑
+            </span>
+            {uploading ? `${uploadProgress.percent}%` : 'Subir'}
+            <input type="file" accept="image/*" onChange={handleFileChange} hidden disabled={uploading} />
+          </label>
+          <button
+            type="button"
+            role="menuitem"
+            className="toolbar-menu-item"
+            disabled={uploading}
+            onClick={() => runAndClose(onOpenStock)}
+          >
+            <span className="toolbar-menu-item-icon" aria-hidden="true">
+              ▦
+            </span>
+            Stock
+          </button>
+          <button
+            type="button"
+            role="menuitem"
+            className="toolbar-menu-item toolbar-menu-item--accent"
+            disabled={uploading}
+            title="Importar carta desde imagen con OCR"
+            onClick={() => runAndClose(onOpenImportMenu)}
+          >
+            <span className="toolbar-menu-item-icon" aria-hidden="true">
+              ☰
+            </span>
+            Importar carta
+          </button>
+          <button
+            type="button"
+            role="menuitem"
+            className="toolbar-menu-item"
+            disabled={uploading}
+            title="Ver y eliminar archivos subidos"
+            onClick={() => runAndClose(onOpenAssets)}
+          >
+            <span className="toolbar-menu-item-icon" aria-hidden="true">
+              📁
+            </span>
+            Archivos
+          </button>
+          <div className="toolbar-menu-sep" role="separator" />
+          <button
+            type="button"
+            role="menuitem"
+            className="toolbar-menu-item"
+            disabled={!canFitImage}
+            title="Descargar la imagen seleccionada al ordenador"
+            onClick={() => runAndClose(onDownloadImage)}
+          >
+            <span className="toolbar-menu-item-icon" aria-hidden="true">
+              ↓
+            </span>
+            Descargar
+          </button>
+          <button
+            type="button"
+            role="menuitem"
+            className="toolbar-menu-item"
+            disabled={!canFitImage}
+            title="Ajustar la imagen seleccionada al tamaño A4 del lienzo"
+            onClick={() => runAndClose(onFitImageToA4)}
+          >
+            <span className="toolbar-menu-item-icon" aria-hidden="true">
+              ▣
+            </span>
+            Ajustar a A4
+          </button>
+        </ToolbarDropdown>
+
+        <ToolbarDropdown
+          id="page"
+          label="Página"
+          badge={`${pageIndex + 1}/${pageCount}`}
+          openMenu={openMenu}
+          setOpenMenu={setOpenMenu}
+        >
+          <button
+            type="button"
+            role="menuitem"
+            className="toolbar-menu-item"
+            title="Añadir página A4 debajo"
+            onClick={() => runAndClose(onAddPage)}
+          >
+            <span className="toolbar-menu-item-icon" aria-hidden="true">
+              +
+            </span>
+            Añadir página
+          </button>
+          <button
+            type="button"
+            role="menuitem"
+            className="toolbar-menu-item"
+            disabled={!canDeletePage}
+            title="Eliminar página activa"
+            onClick={() => runAndClose(onDeletePage)}
+          >
+            <span className="toolbar-menu-item-icon" aria-hidden="true">
+              −
+            </span>
+            Eliminar página
+          </button>
+          <button
+            type="button"
+            role="menuitem"
+            className="toolbar-menu-item"
+            disabled={!canMovePageUp}
+            title="Subir página activa (antes en el menú)"
+            onClick={() => runAndClose(onMovePageUp)}
+          >
+            <span className="toolbar-menu-item-icon" aria-hidden="true">
+              ↑
+            </span>
+            Subir página
+          </button>
+          <button
+            type="button"
+            role="menuitem"
+            className="toolbar-menu-item"
+            disabled={!canMovePageDown}
+            title="Bajar página activa (después en el menú)"
+            onClick={() => runAndClose(onMovePageDown)}
+          >
+            <span className="toolbar-menu-item-icon" aria-hidden="true">
+              ↓
+            </span>
+            Bajar página
+          </button>
+          <div className="toolbar-menu-sep" role="separator" />
+          <label className="toolbar-menu-item toolbar-menu-item--color">
+            <span className="toolbar-menu-item-icon" aria-hidden="true">
+              <span className="toolbar-menu-swatch" style={{ background: backgroundColor }} />
+            </span>
+            Color de fondo
+            <input
+              type="color"
+              value={backgroundColor}
+              onChange={(e) => onChangeBackground(e.target.value)}
+              title="Color de fondo de la página activa"
+            />
+          </label>
+        </ToolbarDropdown>
+
+        <ToolbarDropdown
+          id="file"
+          label="Archivo"
+          align="end"
+          openMenu={openMenu}
+          setOpenMenu={setOpenMenu}
+        >
+          <button
+            type="button"
+            role="menuitem"
+            className="toolbar-menu-item"
+            title="Exportar página activa a PNG"
+            onClick={() => runAndClose(onExportPng)}
+          >
+            <span className="toolbar-menu-item-icon" aria-hidden="true">
+              PNG
+            </span>
+            Exportar PNG
+          </button>
+          <button
+            type="button"
+            role="menuitem"
+            className="toolbar-menu-item"
+            title="Exportar todas las páginas a PDF"
+            onClick={() => runAndClose(onExportPdf)}
+          >
+            <span className="toolbar-menu-item-icon" aria-hidden="true">
+              PDF
+            </span>
+            Exportar PDF
+          </button>
+          <button
+            type="button"
+            role="menuitem"
+            className="toolbar-menu-item"
+            title="Exportar diseño a menu.json"
+            onClick={() => runAndClose(onExportJson)}
+          >
+            <span className="toolbar-menu-item-icon" aria-hidden="true">
+              JSON
+            </span>
+            Exportar JSON
+          </button>
+          <label
+            className={`toolbar-menu-item${uploading ? ' is-disabled' : ''}`}
+            role="menuitem"
+            title="Importar menu.json"
+          >
+            <span className="toolbar-menu-item-icon" aria-hidden="true">
+              ↓
+            </span>
+            Importar JSON
+            <input
+              type="file"
+              accept="application/json,.json"
+              onChange={handleJsonImportChange}
+              hidden
+              disabled={uploading}
+            />
+          </label>
+        </ToolbarDropdown>
+      </div>
+
+      {uploadProgress && (
+        <div
+          className="upload-progress"
+          role="status"
+          aria-live="polite"
+          title={`${phaseLabel}: ${uploadProgress.percent}%`}
+        >
+          <div className="upload-progress-track">
+            <div className="upload-progress-bar" style={{ width: `${uploadProgress.percent}%` }} />
           </div>
-        )}
-        <button type="button" onClick={onOpenStock} disabled={uploading}>
-          Stock
-        </button>
-        <button
-          type="button"
-          className="btn-primary"
-          onClick={onOpenImportMenu}
-          disabled={uploading}
-          title="Importar carta desde imagen con OCR"
-        >
-          Importar carta
-        </button>
-        <button
-          type="button"
-          onClick={onOpenAssets}
-          disabled={uploading}
-          title="Ver y eliminar archivos subidos"
-        >
-          Archivos
-        </button>
-        <button
-          type="button"
-          onClick={onFitImageToA4}
-          disabled={!canFitImage}
-          title="Ajustar la imagen seleccionada al tamaño A4 del lienzo"
-        >
-          Ajustar a A4
-        </button>
-      </div>
-
-      <div className="toolbar-group">
-        <span className="toolbar-label">Fondo</span>
-        <input
-          type="color"
-          value={backgroundColor}
-          onChange={(e) => onChangeBackground(e.target.value)}
-          title="Color de fondo de la página activa"
-        />
-      </div>
-
-      <div className="toolbar-group">
-        <span className="toolbar-label">Páginas</span>
-        <span className="toolbar-badge" title="Página activa / total">
-          {pageIndex + 1}/{pageCount}
-        </span>
-        <button type="button" onClick={onAddPage} title="Añadir página A4 debajo">
-          + Página
-        </button>
-        <button
-          type="button"
-          onClick={onDeletePage}
-          disabled={!canDeletePage}
-          title="Eliminar página activa"
-        >
-          − Página
-        </button>
-        <button
-          type="button"
-          onClick={onMovePageUp}
-          disabled={!canMovePageUp}
-          title="Subir página activa (antes en el menú)"
-        >
-          ↑ Página
-        </button>
-        <button
-          type="button"
-          onClick={onMovePageDown}
-          disabled={!canMovePageDown}
-          title="Bajar página activa (después en el menú)"
-        >
-          ↓ Página
-        </button>
-      </div>
+          <span className="upload-progress-label">
+            {phaseLabel} {uploadProgress.percent}%
+          </span>
+        </div>
+      )}
 
       <div className="toolbar-group toolbar-right">
         <span className="toolbar-badge" title="Formato del espacio de trabajo">
           A4
         </span>
-        <button type="button" onClick={onExportPng} title="Exportar página activa a PNG">
-          PNG
-        </button>
-        <button
-          type="button"
-          className="btn-export-json"
-          onClick={onExportJson}
-          title="Exportar diseño a menu.json"
-        >
-          JSON
-        </button>
-        <label className={`btn-file${uploading ? ' btn-file--disabled' : ''}`} title="Importar menu.json">
-          Importar JSON
-          <input
-            type="file"
-            accept="application/json,.json"
-            onChange={handleJsonImportChange}
-            hidden
-            disabled={uploading}
-          />
-        </label>
-        <button type="button" onClick={onExportPdf} title="Exportar todas las páginas a PDF">
-          PDF
-        </button>
         <button type="button" className="btn-primary" onClick={onOpenQr}>
           QR / Publicar
         </button>

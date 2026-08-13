@@ -116,7 +116,7 @@ export function DocsPage() {
             <h3>Crear texto</h3>
             <ol>
               <li>
-                En la barra, grupo <strong>Añadir</strong>, pulsa <strong>T</strong>.
+                En la barra, menú <strong>Insertar</strong>, pulsa <strong>Texto</strong>.
               </li>
               <li>Aparece una caja en el lienzo. Haz doble clic (o edita en propiedades) para escribir.</li>
             </ol>
@@ -131,6 +131,12 @@ export function DocsPage() {
               Si tienes varias cajas de texto seleccionadas, <strong>Unir textos</strong> las
               combina en una sola (de arriba a abajo). Útil tras importar una carta por OCR o pegar
               trozos sueltos.
+            </p>
+            <h3>Unir líneas de carta</h3>
+            <p>
+              Con <kbd>Shift</kbd> puedes seleccionar dos o más <strong>líneas de carta</strong>.
+              El botón <strong>Unir líneas de carta</strong> (panel o menú Editar) crea un solo
+              bloque con todas las filas, en orden de arriba a abajo.
             </p>
             <p className="docs-callout">
               El texto libre <strong>no</strong> alinea solo el nombre del plato con el precio. Para
@@ -186,7 +192,7 @@ Bacó - Pernil dolç - Xorxíço - Xampinyons`}
             </p>
             <h3>Crear una línea de carta vacía</h3>
             <p>
-              En <strong>Añadir</strong>, el botón con el icono de menú (fondo lila) inserta un
+              En <strong>Insertar</strong>, <strong>Línea de carta</strong> inserta un
               bloque con una fila de ejemplo. Luego editas filas y textos en el panel derecho.
             </p>
           </section>
@@ -200,7 +206,7 @@ Bacó - Pernil dolç - Xorxíço - Xampinyons`}
             <ol>
               <li>Selecciona <strong>una sola</strong> caja de texto.</li>
               <li>
-                Pulsa el botón de conversión en la barra (flecha + plato ··· €) o{' '}
+                Pulsa <strong>Convertir a línea de carta</strong> en el menú <strong>Editar</strong> de la barra, o{' '}
                 <strong>→ Línea de carta</strong> en propiedades.
               </li>
             </ol>
@@ -309,16 +315,19 @@ Bacó - Pernil dolç - Xorxíço - Xampinyons`}
                 <strong>Archivos</strong> — gestionar imágenes ya subidas.
               </li>
               <li>
+                <strong>Descargar</strong> — guarda en tu ordenador la imagen seleccionada (el
+                archivo original).
+              </li>
+              <li>
                 <strong>Ajustar a A4</strong> — encaja la imagen seleccionada al tamaño de la página.
               </li>
               <li>
                 Formas: <strong>rectángulo</strong>, <strong>línea</strong> y <strong>círculo</strong>{' '}
-                en Añadir.
+                en Insertar.
               </li>
             </ul>
             <p>
-              El color de <strong>Fondo</strong> de la página se cambia con el selector de color de
-              la barra.
+              El color de <strong>fondo</strong> de la página se cambia en el menú <strong>Página</strong>.
             </p>
           </section>
 

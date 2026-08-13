@@ -73,7 +73,7 @@ function normalizeColumnStyle(
 ): MenuLineColumnStyle {
   const s = (raw && typeof raw === 'object' ? raw : {}) as Record<string, unknown>;
   const align =
-    s.align === 'center' || s.align === 'right' || s.align === 'left'
+    s.align === 'center' || s.align === 'right' || s.align === 'left' || s.align === 'justify'
       ? s.align
       : fallback.align;
   return {
@@ -414,6 +414,31 @@ export function setMenuLineLeaderUnit(
   });
 }
 
+function readBoxAlign(box: Textbox): MenuLineColumnStyle['align'] {
+  const align = box.textAlign;
+  if (align === 'center' || align === 'right' || align === 'justify' || align === 'left') {
+    return align;
+  }
+  return 'left';
+}
+
+function resolveIngredientsAlign(
+  align: MenuLineColumnStyle['align'] | string | undefined,
+): MenuLineColumnStyle['align'] {
+  if (align === 'center' || align === 'right' || align === 'justify' || align === 'left') {
+    return align;
+  }
+  return 'left';
+}
+
+function readIngredientsAlign(box: Textbox): MenuLineColumnStyle['align'] {
+  const stored = getLayerObjectData(box).menuLineTextAlign;
+  if (stored === 'center' || stored === 'right' || stored === 'justify' || stored === 'left') {
+    return stored;
+  }
+  return resolveIngredientsAlign(box.textAlign);
+}
+
 function applyColumnStyle(box: Textbox, style: MenuLineColumnStyle): void {
   box.set({
     fontFamily: style.fontFamily,
@@ -426,16 +451,24 @@ function applyColumnStyle(box: Textbox, style: MenuLineColumnStyle): void {
         ? style.fontStyle
         : 'normal',
   });
+  if (getLayerObjectData(box).menuLineRole === 'ingredients') {
+    setLayerObjectData(box, {
+      menuLineTextAlign: resolveIngredientsAlign(style.align),
+    });
+  }
 }
 
 function readCellFromBox(box: Textbox): MenuLineCell {
+  const role = getLayerObjectData(box).menuLineRole;
+  const align =
+    role === 'ingredients' ? readIngredientsAlign(box) : readBoxAlign(box);
   return {
     content: box.text ?? '',
     style: {
       fontFamily: box.fontFamily ?? 'Arial',
       fontSize: box.fontSize ?? 18,
       color: typeof box.fill === 'string' ? box.fill : '#333333',
-      align: (box.textAlign as MenuLineColumnStyle['align']) ?? 'left',
+      align,
       fontWeight: String(box.fontWeight ?? 'normal'),
       fontStyle: (box.fontStyle as string) || 'normal',
     },
@@ -524,6 +557,7 @@ function createIngredientsTextbox(
   cell: MenuLineCell,
   width: number,
 ): Textbox {
+  const align = resolveIngredientsAlign(cell.style.align);
   const box = new Textbox(cell.content, {
     originX: 'left',
     originY: 'top',
@@ -533,7 +567,7 @@ function createIngredientsTextbox(
     fontFamily: cell.style.fontFamily,
     fontSize: cell.style.fontSize,
     fill: cell.style.color,
-    textAlign: cell.style.align,
+    textAlign: align,
     fontWeight: cell.style.fontWeight ?? 'normal',
     fontStyle:
       cell.style.fontStyle === 'italic' || cell.style.fontStyle === 'oblique'
@@ -549,6 +583,7 @@ function createIngredientsTextbox(
   setLayerObjectData(box, {
     menuLineRole: 'ingredients',
     menuLineRowIndex: rowIndex,
+    menuLineTextAlign: align,
   });
   return box;
 }
@@ -624,7 +659,7 @@ function styleFromBox(box: Textbox): MenuLineColumnStyle {
     fontFamily: box.fontFamily ?? 'Arial',
     fontSize: box.fontSize ?? 18,
     color: typeof box.fill === 'string' ? box.fill : '#333333',
-    align: (box.textAlign as MenuLineColumnStyle['align']) ?? 'left',
+    align: readBoxAlign(box),
     fontWeight: String(box.fontWeight ?? 'normal'),
     fontStyle: (box.fontStyle as string) || 'normal',
   };
@@ -655,6 +690,11 @@ export interface MenuLineComputedWidths {
   left: number;
   center: number;
   right: number;
+}
+
+/** Ingredientes: desde el plato hasta donde empieza el precio (sin ocupar la columna del €). */
+function ingredientsLayoutWidth(widths: MenuLineComputedWidths): number {
+  return Math.max(8, widths.left + widths.center);
 }
 
 /** Precio al contenido; plato con ancho preferido; centro = resto. */
@@ -703,6 +743,24 @@ function getRowLeader(group: Group, rowIndex: number): MenuLineLeader {
     if (rowLeader) return normalizeLeader(rowLeader);
   }
   return getMenuLineLeader(group);
+}
+
+function layoutIngredientsBox(
+  box: Textbox,
+  width: number,
+  extra?: Record<string, unknown>,
+): void {
+  const align = readIngredientsAlign(box);
+  box.set({
+    scaleX: 1,
+    scaleY: 1,
+    width,
+    textAlign: align,
+    ...extra,
+  });
+  box.initDimensions();
+  box.set({ textAlign: align });
+  box.setCoords();
 }
 
 function applyFixedLayout(group: Group): void {
@@ -778,14 +836,11 @@ export function layoutMenuLineGroup(group: Group): void {
     );
 
     if (ingredientsBox && (ingredientsBox.text ?? '').trim()) {
-      ingredientsBox.set({ scaleX: 1, scaleY: 1, width: widths.total });
-      ingredientsBox.initDimensions();
-      ingredientsBox.setCoords();
+      layoutIngredientsBox(ingredientsBox, ingredientsLayoutWidth(widths));
       ingredientHeights.push(Math.max(1, ingredientsBox.height ?? 0));
     } else {
       if (ingredientsBox) {
-        ingredientsBox.set({ scaleX: 1, scaleY: 1, width: widths.total, text: '' });
-        ingredientsBox.initDimensions();
+        layoutIngredientsBox(ingredientsBox, ingredientsLayoutWidth(widths), { text: '' });
       }
       ingredientHeights.push(0);
     }
@@ -833,6 +888,7 @@ export function layoutMenuLineGroup(group: Group): void {
         left: -widths.total / 2,
         top: yCursor,
         visible: true,
+        textAlign: readIngredientsAlign(ingredientsBox),
       });
       ingredientsBox.setCoords();
       yCursor += ingH;
@@ -841,6 +897,7 @@ export function layoutMenuLineGroup(group: Group): void {
         left: -widths.total / 2,
         top: yCursor,
         visible: false,
+        textAlign: readIngredientsAlign(ingredientsBox),
       });
       ingredientsBox.setCoords();
     }
@@ -922,7 +979,7 @@ function createBoxesForLayer(
 
     if (row.ingredients?.content.trim()) {
       boxes.push(
-        createIngredientsTextbox(rowIndex, row.ingredients, widths.total),
+        createIngredientsTextbox(rowIndex, row.ingredients, ingredientsLayoutWidth(widths)),
       );
     }
   });
@@ -1120,7 +1177,7 @@ export function updateMenuLineColumnStyle(
       fontFamily: box.fontFamily ?? 'Arial',
       fontSize: box.fontSize ?? 18,
       color: typeof box.fill === 'string' ? box.fill : '#333333',
-      align: (box.textAlign as MenuLineColumnStyle['align']) ?? 'left',
+      align: readBoxAlign(box),
       fontWeight: String(box.fontWeight ?? 'normal'),
       fontStyle: (box.fontStyle as string) || 'normal',
       ...patch,
@@ -1212,29 +1269,25 @@ export function updateMenuLineIngredientsStyle(
   patch: Partial<MenuLineColumnStyle>,
   rowIndex: number | 'all' = 0,
 ): void {
-  const count = getMenuLineRowCount(group);
+  const layer = menuLineGroupToLayer(group, 1);
+  if (!layer) return;
+
   const indices =
     rowIndex === 'all'
-      ? Array.from({ length: count }, (_, i) => i)
+      ? Array.from({ length: layer.rows.length }, (_, i) => i)
       : [rowIndex];
 
-  let needsRebuild = false;
+  let changed = false;
   for (const i of indices) {
-    const box = getMenuLineColumn(group, 'ingredients', i);
-    if (!box) continue;
-    const next: MenuLineColumnStyle = {
-      fontFamily: box.fontFamily ?? 'Arial',
-      fontSize: box.fontSize ?? 14,
-      color: typeof box.fill === 'string' ? box.fill : '#666666',
-      align: (box.textAlign as MenuLineColumnStyle['align']) ?? 'left',
-      fontWeight: String(box.fontWeight ?? 'normal'),
-      fontStyle: (box.fontStyle as string) || 'normal',
-      ...patch,
+    const row = layer.rows[i];
+    if (!row?.ingredients) continue;
+    row.ingredients = {
+      ...row.ingredients,
+      style: { ...row.ingredients.style, ...patch },
     };
-    applyColumnStyle(box, next);
-    needsRebuild = true;
+    changed = true;
   }
-  if (needsRebuild) layoutMenuLineGroup(group);
+  if (changed) rebuildGroupFromLayer(group, layer);
 }
 
 export function updateMenuLineLeader(
