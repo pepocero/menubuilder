@@ -327,7 +327,7 @@ export async function deleteMenu(id: string): Promise<void> {
   await api.delete(`/api/menus/${id}`);
 }
 
-export async function duplicateMenu(id: string): Promise<{ menu: { id: string; title: string } }> {
+export async function duplicateMenu(id: string): Promise<{ menu: MenuSummary }> {
   return api.post(`/api/menus/${id}/duplicate`);
 }
 
@@ -392,11 +392,46 @@ export interface TemplateSummary {
   category: string | null;
   thumbnail_url: string | null;
   is_premium: boolean;
+  editor_kind?: 'canvas' | 'mobile';
   canvas_data?: import('@/types/canvas').CanvasData;
+  mobile_document?: import('@shared/mobile-menu').MobileMenuDocument;
+  user_id?: string | null;
+  is_public?: boolean;
+  is_system?: boolean;
+  author_name?: string | null;
+  created_at?: string;
+  updated_at?: string;
 }
 
 export async function listTemplates(): Promise<{ templates: TemplateSummary[] }> {
   return api.get('/api/templates');
+}
+
+export async function listMyTemplates(): Promise<{ templates: TemplateSummary[] }> {
+  return api.get('/api/templates/mine');
+}
+
+export async function createTemplate(data: {
+  name: string;
+  editor_kind?: 'canvas' | 'mobile';
+  canvas_data?: import('@/types/canvas').CanvasData;
+  mobile_document?: import('@shared/mobile-menu').MobileMenuDocument;
+  thumbnail_url?: string | null;
+  menu_id?: string;
+}): Promise<{ template: TemplateSummary }> {
+  return api.post('/api/templates', data);
+}
+
+export async function publishTemplate(id: string): Promise<{ template: TemplateSummary }> {
+  return api.post(`/api/templates/${id}/publish`);
+}
+
+export async function unpublishTemplate(id: string): Promise<{ template: TemplateSummary }> {
+  return api.post(`/api/templates/${id}/unpublish`);
+}
+
+export async function deleteTemplate(id: string): Promise<void> {
+  await api.delete(`/api/templates/${id}`);
 }
 
 export async function getTemplate(id: string): Promise<{ template: TemplateSummary & { canvas_data: import('@/types/canvas').CanvasData } }> {

@@ -25,14 +25,20 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
     menu.thumbnail_url ?? null,
   );
 
+  const now = new Date().toISOString();
+
   return jsonResponse(
     {
       menu: {
         id: newId,
         title: newTitle,
+        template_id: menu.template_id,
         editor_kind: menu.editor_kind ?? 'canvas',
-        canvas_data: JSON.parse(menu.canvas_data),
-        mobile_document: menu.mobile_document ? JSON.parse(menu.mobile_document) : null,
+        thumbnail_url: menu.thumbnail_url ?? null,
+        is_public: false,
+        public_slug: null,
+        created_at: now,
+        updated_at: now,
       },
     },
     201,

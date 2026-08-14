@@ -39,6 +39,7 @@ interface ToolbarProps {
   onExportPdf: () => void;
   onExportJson: () => void;
   onImportJson: (file: File) => void;
+  onSaveAsTemplate: () => void;
   onOpenQr: () => void;
   onAddPage: () => void;
   onDeletePage: () => void;
@@ -138,6 +139,7 @@ export function Toolbar({
   onExportPdf,
   onExportJson,
   onImportJson,
+  onSaveAsTemplate,
   onOpenQr,
   onAddPage,
   onDeletePage,
@@ -580,6 +582,19 @@ export function Toolbar({
               disabled={uploading}
             />
           </label>
+          <div className="toolbar-menu-sep" role="separator" />
+          <button
+            type="button"
+            role="menuitem"
+            className="toolbar-menu-item"
+            title="Guardar el diseño actual como plantilla reutilizable"
+            onClick={() => runAndClose(onSaveAsTemplate)}
+          >
+            <span className="toolbar-menu-item-icon" aria-hidden="true">
+              ▤
+            </span>
+            Guardar como plantilla
+          </button>
         </ToolbarDropdown>
       </div>
 

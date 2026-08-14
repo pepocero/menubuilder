@@ -16,14 +16,20 @@ CREATE TABLE IF NOT EXISTS refresh_tokens (
   revoked INTEGER DEFAULT 0
 );
 
--- Plantillas base (globales, catálogo inicial)
+-- Plantillas base (globales) y plantillas de usuario (comunidad)
 CREATE TABLE IF NOT EXISTS templates (
   id TEXT PRIMARY KEY,
   name TEXT NOT NULL,
   category TEXT,
   canvas_data TEXT NOT NULL,
   thumbnail_url TEXT,
-  is_premium INTEGER DEFAULT 0
+  is_premium INTEGER DEFAULT 0,
+  user_id TEXT REFERENCES users(id),
+  is_public INTEGER DEFAULT 0,
+  created_at TEXT DEFAULT (datetime('now')),
+  updated_at TEXT DEFAULT (datetime('now')),
+  editor_kind TEXT DEFAULT 'canvas',
+  mobile_document TEXT
 );
 
 -- Menús creados por cada usuario

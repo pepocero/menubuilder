@@ -50,7 +50,10 @@ export async function requireSystemAdmin(
 export function isPublicApiPath(pathname: string, method: string): boolean {
   if (pathname.startsWith('/api/auth/')) return true;
   if (pathname === '/api/templates' && method === 'GET') return true;
-  if (pathname.startsWith('/api/templates/') && method === 'GET') return true;
+  if (method === 'GET' && pathname.startsWith('/api/templates/')) {
+    const rest = pathname.slice('/api/templates/'.length);
+    if (rest && !rest.includes('/') && rest !== 'mine') return true;
+  }
   if (
     method === 'GET' &&
     (pathname === '/api/assets/file' || pathname.startsWith('/api/assets/file/'))

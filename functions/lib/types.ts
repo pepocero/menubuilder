@@ -50,6 +50,20 @@ export interface TemplateRow {
   canvas_data: string;
   thumbnail_url: string | null;
   is_premium: number;
+  user_id: string | null;
+  is_public: number;
+  created_at: string;
+  updated_at: string;
+  editor_kind: 'canvas' | 'mobile';
+  mobile_document: string | null;
+  author_name?: string | null;
+}
+
+export function isTemplateVisible(template: TemplateRow, viewerUserId?: string | null): boolean {
+  if (!template.user_id) return true;
+  if (template.is_public === 1) return true;
+  if (viewerUserId && template.user_id === viewerUserId) return true;
+  return false;
 }
 
 export interface AssetRow {

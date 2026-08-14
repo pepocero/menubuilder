@@ -17,6 +17,7 @@ import {
 } from '@/types/canvas';
 import {
   ApiError,
+  createTemplate,
   deleteAsset,
   getMenu,
   importStockImage,
@@ -85,6 +86,7 @@ import { PropertiesPanel } from '@/components/editor/PropertiesPanel';
 import { PageSizeControls } from '@/components/editor/PageSizeControls';
 import { PublicScrollControls } from '@/components/editor/PublicScrollControls';
 import { PublishQrModal } from '@/components/editor/PublishQrModal';
+import { SaveTemplateModal } from '@/components/editor/SaveTemplateModal';
 import { AssetManagerModal } from '@/components/editor/AssetManagerModal';
 import { ImportMenuModal, type ImportMenuOptions, type ImportMenuSource } from '@/components/editor/ImportMenuModal';
 import { StockImageSearch } from '@/components/editor/StockImageSearch';
@@ -115,6 +117,8 @@ export function EditorPage() {
   const [assetsOpen, setAssetsOpen] = useState(false);
   const [stockBusy, setStockBusy] = useState(false);
   const [qrOpen, setQrOpen] = useState(false);
+  const [saveTemplateOpen, setSaveTemplateOpen] = useState(false);
+  const [saveTemplateBusy, setSaveTemplateBusy] = useState(false);
   const [isPublic, setIsPublic] = useState(false);
   const [publicSlug, setPublicSlug] = useState<string | null>(null);
   const [editorError, setEditorError] = useState('');
@@ -505,12 +509,19 @@ export function EditorPage() {
 
   useEffect(() => {
     if (!menuId) return;
+    setLoading(true);
     historyByPageIdRef.current.clear();
     transferHistoryLinkRef.current = null;
     transferRedoLinkRef.current = null;
     bumpHistoryUi();
+    let redirectingToMobile = false;
     getMenu(menuId)
       .then(({ menu }) => {
+        if (menu.editor_kind === 'mobile') {
+          redirectingToMobile = true;
+          navigate(`/mobile-editor/${menuId}`, { replace: true });
+          return;
+        }
         setTitle(menu.title);
         const doc = normalizeCanvasData(menu.canvas_data);
         setPages(doc.pages);
@@ -525,7 +536,9 @@ export function EditorPage() {
         );
       })
       .catch(() => navigate('/dashboard'))
-      .finally(() => setLoading(false));
+      .finally(() => {
+        if (!redirectingToMobile) setLoading(false);
+      });
   }, [menuId, navigate, bumpHistoryUi]);
 
   // Ajustar zoom al viewport (móvil/desktop) al cargar y al cambiar orientación.
@@ -980,6 +993,37 @@ export function EditorPage() {
     setInteractionMode('move');
     setActiveObject(group);
     handleChange();
+  }
+
+  async function handleSaveAsTemplate(templateName: string) {
+    if (!menuId) return;
+    setSaveTemplateBusy(true);
+    setEditorError('');
+    try {
+      const data = collectDocument();
+      let thumbnailUrl: string | null = null;
+      const firstPng = pageRefs.current[0]?.exportPng();
+      if (firstPng) {
+        thumbnailUrl = await generateThumbnail(firstPng);
+      }
+      await createTemplate({
+        name: templateName,
+        canvas_data: data,
+        thumbnail_url: thumbnailUrl,
+        menu_id: menuId,
+      });
+      setSaveTemplateOpen(false);
+      await appAlert('Plantilla guardada. La encontrarás en Plantillas → Mis plantillas.', {
+        title: 'Plantilla creada',
+        variant: 'success',
+      });
+    } catch (err) {
+      setEditorError(
+        err instanceof ApiError ? err.message : 'No se pudo guardar la plantilla',
+      );
+    } finally {
+      setSaveTemplateBusy(false);
+    }
   }
 
   async function handleAddShape(shape: 'rect' | 'line' | 'circle') {
@@ -1747,6 +1791,7 @@ export function EditorPage() {
         onImportJson={(file) => {
           void handleImportJson(file);
         }}
+        onSaveAsTemplate={() => setSaveTemplateOpen(true)}
         onOpenQr={() => setQrOpen(true)}
         onAddPage={handleAddPage}
         onDeletePage={() => handleDeletePage()}
@@ -2075,6 +2120,16 @@ export function EditorPage() {
           }}
         />
       )}
+
+      <SaveTemplateModal
+        open={saveTemplateOpen}
+        defaultName={title.trim() || 'Mi plantilla'}
+        busy={saveTemplateBusy}
+        onClose={() => !saveTemplateBusy && setSaveTemplateOpen(false)}
+        onSave={(name) => {
+          void handleSaveAsTemplate(name);
+        }}
+      />
     </div>
   );
 }

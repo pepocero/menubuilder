@@ -233,8 +233,28 @@ export async function listPublishedMenusByUser(db: D1Database, userId: string): 
 export async function listTemplates(db: D1Database): Promise<TemplateRow[]> {
   const result = await db
     .prepare(
-      'SELECT id, name, category, canvas_data, thumbnail_url, is_premium FROM templates ORDER BY category, name',
+      `SELECT t.id, t.name, t.category, t.canvas_data, t.thumbnail_url, t.is_premium,
+              t.user_id, t.is_public, t.created_at, t.updated_at, t.editor_kind, t.mobile_document,
+              u.name AS author_name
+       FROM templates t
+       LEFT JOIN users u ON u.id = t.user_id
+       WHERE t.user_id IS NULL OR t.is_public = 1
+       ORDER BY CASE WHEN t.user_id IS NULL THEN 0 ELSE 1 END, t.category, t.name`,
     )
+    .all<TemplateRow>();
+  return result.results ?? [];
+}
+
+export async function listMyTemplates(db: D1Database, userId: string): Promise<TemplateRow[]> {
+  const result = await db
+    .prepare(
+      `SELECT id, name, category, canvas_data, thumbnail_url, is_premium,
+              user_id, is_public, created_at, updated_at, editor_kind, mobile_document
+       FROM templates
+       WHERE user_id = ?
+       ORDER BY updated_at DESC`,
+    )
+    .bind(userId)
     .all<TemplateRow>();
   return result.results ?? [];
 }
@@ -242,10 +262,62 @@ export async function listTemplates(db: D1Database): Promise<TemplateRow[]> {
 export async function getTemplateById(db: D1Database, id: string): Promise<TemplateRow | null> {
   return db
     .prepare(
-      'SELECT id, name, category, canvas_data, thumbnail_url, is_premium FROM templates WHERE id = ?',
+      `SELECT t.id, t.name, t.category, t.canvas_data, t.thumbnail_url, t.is_premium,
+              t.user_id, t.is_public, t.created_at, t.updated_at, t.editor_kind, t.mobile_document,
+              u.name AS author_name
+       FROM templates t
+       LEFT JOIN users u ON u.id = t.user_id
+       WHERE t.id = ?`,
     )
     .bind(id)
     .first<TemplateRow>();
+}
+
+export async function createUserTemplate(
+  db: D1Database,
+  id: string,
+  userId: string,
+  name: string,
+  canvasData: string,
+  thumbnailUrl: string | null,
+  editorKind: TemplateRow['editor_kind'] = 'canvas',
+  mobileDocument: string | null = null,
+): Promise<void> {
+  await db
+    .prepare(
+      `INSERT INTO templates (id, user_id, name, category, canvas_data, thumbnail_url, is_premium, is_public, editor_kind, mobile_document, created_at, updated_at)
+       VALUES (?, ?, ?, 'comunidad', ?, ?, 0, 0, ?, ?, datetime('now'), datetime('now'))`,
+    )
+    .bind(id, userId, name, canvasData, thumbnailUrl, editorKind, mobileDocument)
+    .run();
+}
+
+export async function setTemplatePublic(
+  db: D1Database,
+  id: string,
+  userId: string,
+  isPublic: boolean,
+): Promise<boolean> {
+  const result = await db
+    .prepare(
+      `UPDATE templates SET is_public = ?, updated_at = datetime('now')
+       WHERE id = ? AND user_id = ?`,
+    )
+    .bind(isPublic ? 1 : 0, id, userId)
+    .run();
+  return (result.meta.changes ?? 0) > 0;
+}
+
+export async function deleteUserTemplate(
+  db: D1Database,
+  id: string,
+  userId: string,
+): Promise<boolean> {
+  const result = await db
+    .prepare('DELETE FROM templates WHERE id = ? AND user_id = ?')
+    .bind(id, userId)
+    .run();
+  return (result.meta.changes ?? 0) > 0;
 }
 
 export async function createAsset(

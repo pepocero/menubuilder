@@ -18,7 +18,10 @@ import {
 } from '@/lib/menu-thumbnail';
 import { createDefaultMobileMenuDocument } from '@shared/mobile-menu';
 import { AppLayout } from '@/components/AppLayout';
+import { DesktopMenuIcon, MobileMenuIcon } from '@/components/MenuKindIcons';
 import { appConfirm } from '@/lib/app-dialog';
+
+type MenuKindFilter = 'all' | 'canvas' | 'mobile';
 
 export function DashboardPage() {
   const navigate = useNavigate();
@@ -27,6 +30,8 @@ export function DashboardPage() {
   const [loading, setLoading] = useState(true);
   const [importing, setImporting] = useState(false);
   const [error, setError] = useState('');
+  const [toast, setToast] = useState<string | null>(null);
+  const [kindFilter, setKindFilter] = useState<MenuKindFilter>('all');
   const backfillRef = useRef<Set<string>>(new Set());
 
   const loadMenus = useCallback(async () => {
@@ -43,6 +48,12 @@ export function DashboardPage() {
   useEffect(() => {
     loadMenus();
   }, [loadMenus]);
+
+  useEffect(() => {
+    if (!toast) return;
+    const timer = window.setTimeout(() => setToast(null), 2500);
+    return () => window.clearTimeout(timer);
+  }, [toast]);
 
   // Genera miniaturas faltantes y regenera las de cartas móviles (para incluir imágenes).
   useEffect(() => {
@@ -210,8 +221,8 @@ export function DashboardPage() {
     setError('');
     try {
       const { menu } = await duplicateMenu(id);
-      await loadMenus();
-      navigate(`/editor/${menu.id}`);
+      setMenus((prev) => [menu, ...prev.filter((m) => m.id !== menu.id)]);
+      setToast(`Copia creada: ${menu.title}`);
     } catch (err) {
       setError(err instanceof ApiError ? err.message : 'No se pudo duplicar el menú');
     }
@@ -245,6 +256,15 @@ export function DashboardPage() {
     }
   }
 
+  const canvasMenus = menus.filter((m) => m.editor_kind !== 'mobile');
+  const mobileMenus = menus.filter((m) => m.editor_kind === 'mobile');
+  const visibleMenus =
+    kindFilter === 'all'
+      ? menus
+      : kindFilter === 'mobile'
+        ? mobileMenus
+        : canvasMenus;
+
   return (
     <div className="dashboard-page">
       <AppLayout />
@@ -269,16 +289,54 @@ export function DashboardPage() {
               {importing ? 'Importando…' : 'Importar menú'}
             </button>
             <Link to="/templates" className="btn-secondary">
-              Desde plantilla
+              Plantillas
             </Link>
-            <button type="button" className="btn-secondary" onClick={handleNewBlank}>
+            <button type="button" className="btn-dashboard-canvas" onClick={handleNewBlank}>
               Nuevo menú en blanco
             </button>
-            <button type="button" className="btn-primary" onClick={handleNewMobile}>
+            <button type="button" className="btn-dashboard-mobile" onClick={handleNewMobile}>
               Nueva carta móvil
             </button>
           </div>
         </div>
+
+        {!loading && menus.length > 0 && (
+          <div
+            className="dashboard-kind-filter"
+            role="group"
+            aria-label="Filtrar por tipo de carta"
+          >
+            <button
+              type="button"
+              className={kindFilter === 'all' ? 'is-active' : undefined}
+              aria-pressed={kindFilter === 'all'}
+              onClick={() => setKindFilter('all')}
+            >
+              Todas
+              <span className="dashboard-kind-filter-count">{menus.length}</span>
+            </button>
+            <button
+              type="button"
+              className={`dashboard-kind-filter--canvas${kindFilter === 'canvas' ? ' is-active' : ''}`}
+              aria-pressed={kindFilter === 'canvas'}
+              onClick={() => setKindFilter('canvas')}
+            >
+              <DesktopMenuIcon />
+              Escritorio
+              <span className="dashboard-kind-filter-count">{canvasMenus.length}</span>
+            </button>
+            <button
+              type="button"
+              className={`dashboard-kind-filter--mobile${kindFilter === 'mobile' ? ' is-active' : ''}`}
+              aria-pressed={kindFilter === 'mobile'}
+              onClick={() => setKindFilter('mobile')}
+            >
+              <MobileMenuIcon />
+              Móvil
+              <span className="dashboard-kind-filter-count">{mobileMenus.length}</span>
+            </button>
+          </div>
+        )}
 
         {loading && <p>Cargando menús...</p>}
         {error && <div className="error-banner">{error}</div>}
@@ -292,13 +350,34 @@ export function DashboardPage() {
           </div>
         )}
 
+        {!loading && menus.length > 0 && visibleMenus.length === 0 && (
+          <div className="empty-state">
+            <p>
+              No hay cartas{' '}
+              {kindFilter === 'mobile' ? 'móviles' : 'del editor de escritorio'} con este filtro.
+            </p>
+          </div>
+        )}
+
         <div className="menu-grid">
-          {menus.map((menu) => (
-            <article key={menu.id} className="menu-card">
+          {visibleMenus.map((menu) => {
+            const isMobile = menu.editor_kind === 'mobile';
+            return (
+            <article
+              key={menu.id}
+              className={`menu-card ${isMobile ? 'menu-card--mobile' : 'menu-card--canvas'}`}
+              aria-label={`${menu.title}, carta ${isMobile ? 'móvil' : 'de escritorio'}`}
+            >
               <Link
-                to={menu.editor_kind === 'mobile' ? `/mobile-editor/${menu.id}` : `/editor/${menu.id}`}
+                to={isMobile ? `/mobile-editor/${menu.id}` : `/editor/${menu.id}`}
                 className="menu-card-link"
               >
+                <span
+                  className={`menu-card-kind-badge ${isMobile ? 'menu-card-kind-badge--mobile' : 'menu-card-kind-badge--canvas'}`}
+                  aria-hidden="true"
+                >
+                  {isMobile ? <MobileMenuIcon /> : <DesktopMenuIcon />}
+                </span>
                 <div className="menu-thumbnail">
                   {menu.thumbnail_url ? (
                     <img src={menu.thumbnail_url} alt={menu.title} />
@@ -318,9 +397,15 @@ export function DashboardPage() {
                 </button>
               </div>
             </article>
-          ))}
+            );
+          })}
         </div>
       </main>
+      {toast && (
+        <div className="app-toast" role="status" aria-live="polite">
+          {toast}
+        </div>
+      )}
     </div>
   );
 }

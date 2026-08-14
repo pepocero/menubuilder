@@ -15,8 +15,9 @@ import type { ImportMenuOptions } from '@/components/editor/ImportMenuModal';
 import { StockImageSearch } from '@/components/editor/StockImageSearch';
 import { AssetManagerModal } from '@/components/editor/AssetManagerModal';
 import { PublishQrModal } from '@/components/editor/PublishQrModal';
+import { SaveTemplateModal } from '@/components/editor/SaveTemplateModal';
 import type { CanvasInteractionMode } from '@/components/editor/EditorZoomControls';
-import { appConfirm } from '@/lib/app-dialog';
+import { appAlert, appConfirm } from '@/lib/app-dialog';
 import {
   countMobileOcrMenuItems,
   menuOcrResultToMobileComponents,
@@ -26,6 +27,7 @@ import { ensureEditorFontLoaded } from '@/lib/google-fonts';
 import { renderMobileDocumentThumbnail } from '@/lib/menu-thumbnail';
 import {
   ApiError,
+  createTemplate,
   deleteAsset,
   getMenu,
   importStockImage,
@@ -836,6 +838,8 @@ export function MobileEditorPage() {
   } | null>(null);
   const [livePreviewOpen, setLivePreviewOpen] = useState(false);
   const [qrOpen, setQrOpen] = useState(false);
+  const [saveTemplateOpen, setSaveTemplateOpen] = useState(false);
+  const [saveTemplateBusy, setSaveTemplateBusy] = useState(false);
   const [isPublic, setIsPublic] = useState(false);
   const [publicSlug, setPublicSlug] = useState<string | null>(null);
   const [imagePickerTarget, setImagePickerTarget] = useState<'image' | 'menuImage' | 'sectionBg' | null>(null);
@@ -2231,6 +2235,36 @@ export function MobileEditorPage() {
     exportMobileMenuDocumentJson(documentRef.current, title || 'menu', title || undefined);
   }
 
+  async function handleSaveAsTemplate(templateName: string) {
+    if (!menuId) return;
+    setSaveTemplateBusy(true);
+    setError('');
+    try {
+      let thumbnailUrl: string | null = null;
+      try {
+        thumbnailUrl = await renderMobileDocumentThumbnail(documentRef.current);
+      } catch {
+        /* La plantilla se guarda igual */
+      }
+      await createTemplate({
+        name: templateName,
+        editor_kind: 'mobile',
+        mobile_document: documentRef.current,
+        thumbnail_url: thumbnailUrl,
+        menu_id: menuId,
+      });
+      setSaveTemplateOpen(false);
+      await appAlert('Plantilla guardada. La encontrarás en Plantillas → Mis plantillas.', {
+        title: 'Plantilla creada',
+        variant: 'success',
+      });
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : 'No se pudo guardar la plantilla');
+    } finally {
+      setSaveTemplateBusy(false);
+    }
+  }
+
   function updateSelectedHidden(hidden: boolean) {
     if (!selectedId) return;
     updateDoc((current) => ({
@@ -2343,6 +2377,15 @@ export function MobileEditorPage() {
               title="Ver y eliminar archivos subidos"
             >
               Archivos
+            </button>
+            <button
+              type="button"
+              className="btn-secondary mobile-editor-desktop-only"
+              onClick={() => setSaveTemplateOpen(true)}
+              disabled={loading || saveTemplateBusy}
+              title="Guardar esta carta como plantilla reutilizable"
+            >
+              Guardar plantilla
             </button>
             <button
               type="button"
@@ -4202,6 +4245,18 @@ export function MobileEditorPage() {
               </button>
               <button
                 type="button"
+                className="btn-secondary"
+                disabled={loading || saveTemplateBusy}
+                onClick={() => {
+                  setPhoneSheet(null);
+                  setSaveTemplateOpen(true);
+                }}
+                title="Guardar esta carta como plantilla reutilizable"
+              >
+                Guardar plantilla
+              </button>
+              <button
+                type="button"
                 className="btn-export-json"
                 disabled={loading}
                 onClick={() => {
@@ -4361,6 +4416,16 @@ export function MobileEditorPage() {
           }}
         />
       )}
+
+      <SaveTemplateModal
+        open={saveTemplateOpen}
+        defaultName={title.trim() || 'Mi plantilla móvil'}
+        busy={saveTemplateBusy}
+        onClose={() => !saveTemplateBusy && setSaveTemplateOpen(false)}
+        onSave={(name) => {
+          void handleSaveAsTemplate(name);
+        }}
+      />
 
       {/* Hidden file input for uploads */}
       <input

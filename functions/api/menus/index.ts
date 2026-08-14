@@ -1,5 +1,5 @@
 import { createMenu, getTemplateById, listMenusByUser } from '../../lib/db';
-import { errorResponse, jsonResponse, parseJson } from '../../lib/types';
+import { errorResponse, jsonResponse, parseJson, isTemplateVisible } from '../../lib/types';
 import {
   createDefaultMobileMenuDocument,
   parseMobileMenuDocument,
@@ -77,14 +77,39 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
   const body = await parseJson<CreateMenuBody>(request);
 
   const title = body?.title?.trim() || 'Menú sin título';
-  const editorKind: 'canvas' | 'mobile' = body?.editor_kind === 'mobile' ? 'mobile' : 'canvas';
+  let editorKind: 'canvas' | 'mobile' = body?.editor_kind === 'mobile' ? 'mobile' : 'canvas';
   let canvasData = DEFAULT_CANVAS;
   let mobileDocument: MobileMenuDocument | null = null;
   let templateId: string | null = null;
 
   let thumbnailUrl: string | null = null;
 
-  if (editorKind === 'mobile') {
+  if (body?.template_id) {
+    const template = await getTemplateById(env.DB, body.template_id);
+    if (!template) {
+      return errorResponse('Plantilla no encontrada', 404);
+    }
+    if (!isTemplateVisible(template, userId)) {
+      return errorResponse('Plantilla no disponible', 404);
+    }
+    templateId = template.id;
+    thumbnailUrl = template.thumbnail_url ?? null;
+    const templateKind = template.editor_kind === 'mobile' ? 'mobile' : 'canvas';
+    if (templateKind === 'mobile') {
+      editorKind = 'mobile';
+      canvasData = template.canvas_data || DEFAULT_CANVAS;
+      if (template.mobile_document) {
+        const parsed = parseMobileMenuDocument(JSON.parse(template.mobile_document));
+        if (!parsed) return errorResponse('Plantilla móvil inválida');
+        mobileDocument = parsed;
+      } else {
+        mobileDocument = createDefaultMobileMenuDocument();
+      }
+    } else {
+      editorKind = 'canvas';
+      canvasData = template.canvas_data;
+    }
+  } else if (editorKind === 'mobile') {
     if (body?.mobile_document !== undefined) {
       const parsed = parseMobileMenuDocument(body.mobile_document);
       if (!parsed) return errorResponse('mobile_document inválido');
@@ -92,14 +117,6 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
     } else {
       mobileDocument = createDefaultMobileMenuDocument();
     }
-  } else if (body?.template_id) {
-    const template = await getTemplateById(env.DB, body.template_id);
-    if (!template) {
-      return errorResponse('Plantilla no encontrada', 404);
-    }
-    canvasData = template.canvas_data;
-    templateId = template.id;
-    thumbnailUrl = template.thumbnail_url ?? null;
   } else if (body?.canvas_data) {
     const validated = validateCanvasData(body.canvas_data);
     if (!validated) {

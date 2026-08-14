@@ -54,7 +54,7 @@ export function DocsPage() {
                 <strong>Nuevo menú en blanco</strong> — abre el editor con una página vacía.
               </li>
               <li>
-                <strong>Desde plantilla</strong> — elige un diseño de partida en{' '}
+                <strong>Plantillas</strong> — elige un diseño de partida en{' '}
                 <Link to="/templates">Plantillas</Link>.
               </li>
               <li>
