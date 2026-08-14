@@ -3,12 +3,16 @@ import {
   getMenuById,
   getTemplateById,
   listTemplates,
+  updateUserTemplateContent,
 } from '../../lib/db';
 import {
   DEFAULT_TEMPLATE_CANVAS,
   templateToJson,
   validateCanvasData,
 } from '../../lib/template-api';
+import {
+  sanitizeTemplateContentForSharing,
+} from '../../lib/template-sanitize';
 import { errorResponse, jsonResponse, parseJson } from '../../lib/types';
 import { parseMobileMenuDocument } from '../../../shared/mobile-menu';
 
@@ -39,6 +43,7 @@ export const onRequestGet: PagesFunction<Env> = async (context) => {
 
 export const onRequestPost: PagesFunction<Env> = async (context) => {
   const userId = context.data.userId as string;
+  const email = context.data.email as string;
   const body = await parseJson<CreateTemplateBody>(context.request);
   if (!body) return errorResponse('Cuerpo inválido');
 
@@ -98,6 +103,18 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
   } else if (!canvasData) {
     return errorResponse('Faltan datos del diseño (canvas_data o menu_id)');
   }
+
+  const sanitized = sanitizeTemplateContentForSharing(
+    {
+      canvasData,
+      mobileDocument,
+      thumbnailUrl,
+    },
+    email,
+  );
+  canvasData = sanitized.canvasData;
+  mobileDocument = sanitized.mobileDocument;
+  thumbnailUrl = sanitized.thumbnailUrl;
 
   const templateId = `utpl_${crypto.randomUUID().replace(/-/g, '').slice(0, 12)}`;
   await createUserTemplate(

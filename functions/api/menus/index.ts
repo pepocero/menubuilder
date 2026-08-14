@@ -1,6 +1,10 @@
 import { createMenu, getTemplateById, listMenusByUser } from '../../lib/db';
 import { errorResponse, jsonResponse, parseJson, isTemplateVisible } from '../../lib/types';
 import {
+  sanitizeTemplateContentForRecipient,
+  sanitizeTemplateContentForSharing,
+} from '../../lib/template-sanitize';
+import {
   createDefaultMobileMenuDocument,
   parseMobileMenuDocument,
   type MobileMenuDocument,
@@ -74,6 +78,7 @@ export const onRequestGet: PagesFunction<Env> = async (context) => {
 export const onRequestPost: PagesFunction<Env> = async (context) => {
   const { request, env } = context;
   const userId = context.data.userId as string;
+  const email = context.data.email as string;
   const body = await parseJson<CreateMenuBody>(request);
 
   const title = body?.title?.trim() || 'Menú sin título';
@@ -108,6 +113,45 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
     } else {
       editorKind = 'canvas';
       canvasData = template.canvas_data;
+    }
+
+    if (env.MEDIA) {
+      const sanitized = await sanitizeTemplateContentForRecipient(
+        {
+          canvasData,
+          mobileDocument: mobileDocument ? JSON.stringify(mobileDocument) : template.mobile_document,
+          thumbnailUrl,
+        },
+        {
+          env: { DB: env.DB, MEDIA: env.MEDIA },
+          request,
+          recipientUserId: userId,
+          recipientEmail: email,
+        },
+      );
+      canvasData = sanitized.canvasData;
+      thumbnailUrl = sanitized.thumbnailUrl;
+      if (sanitized.mobileDocument) {
+        const parsed = parseMobileMenuDocument(JSON.parse(sanitized.mobileDocument));
+        mobileDocument = parsed ?? mobileDocument;
+      } else if (editorKind === 'mobile') {
+        mobileDocument = createDefaultMobileMenuDocument();
+      }
+    } else {
+      const sanitized = sanitizeTemplateContentForSharing(
+        {
+          canvasData,
+          mobileDocument: mobileDocument ? JSON.stringify(mobileDocument) : template.mobile_document,
+          thumbnailUrl,
+        },
+        email,
+      );
+      canvasData = sanitized.canvasData;
+      thumbnailUrl = sanitized.thumbnailUrl;
+      if (sanitized.mobileDocument) {
+        const parsed = parseMobileMenuDocument(JSON.parse(sanitized.mobileDocument));
+        mobileDocument = parsed ?? mobileDocument;
+      }
     }
   } else if (editorKind === 'mobile') {
     if (body?.mobile_document !== undefined) {

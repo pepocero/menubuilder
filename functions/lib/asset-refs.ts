@@ -1,5 +1,8 @@
 import {
+  countForeignTemplatesReferencingAssetUrl,
   countMenusReferencingAssetUrl,
+  countOtherUsersMenusReferencingAssetUrl,
+  countTemplatesReferencingAssetUrl,
   deleteAssetRow,
   findAssetByR2Key,
   findAssetByUrl,
@@ -101,6 +104,9 @@ export async function countMenusReferencingAsset(
     if (seen.has(url)) continue;
     seen.add(url);
     total += await countMenusReferencingAssetUrl(db, userId, url, excludeMenuId);
+    total += await countTemplatesReferencingAssetUrl(db, userId, url);
+    total += await countOtherUsersMenusReferencingAssetUrl(db, userId, url);
+    total += await countForeignTemplatesReferencingAssetUrl(db, userId, url);
   }
   return total;
 }

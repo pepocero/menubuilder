@@ -16,6 +16,11 @@ import { StockImageSearch } from '@/components/editor/StockImageSearch';
 import { AssetManagerModal } from '@/components/editor/AssetManagerModal';
 import { PublishQrModal } from '@/components/editor/PublishQrModal';
 import { SaveTemplateModal } from '@/components/editor/SaveTemplateModal';
+import { useAuth } from '@/lib/auth-context';
+import {
+  describeTemplateSaveWarnings,
+  scanTemplateContentForUser,
+} from '@/lib/template-content-safety';
 import type { CanvasInteractionMode } from '@/components/editor/EditorZoomControls';
 import { appAlert, appConfirm } from '@/lib/app-dialog';
 import {
@@ -873,6 +878,20 @@ export function MobileEditorPage() {
   const documentRef = useRef(document);
   const persistTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   documentRef.current = document;
+
+  const { user } = useAuth();
+  const saveTemplateWarnings = useMemo(() => {
+    if (!saveTemplateOpen) return [];
+    try {
+      const scan = scanTemplateContentForUser(
+        { mobile_document: documentRef.current },
+        user?.email,
+      );
+      return describeTemplateSaveWarnings(scan);
+    } catch {
+      return [];
+    }
+  }, [saveTemplateOpen, user?.email, document]);
 
   useEffect(() => {
     setCustomAllergenDraft('');
@@ -4421,6 +4440,7 @@ export function MobileEditorPage() {
         open={saveTemplateOpen}
         defaultName={title.trim() || 'Mi plantilla móvil'}
         busy={saveTemplateBusy}
+        contentWarnings={saveTemplateWarnings}
         onClose={() => !saveTemplateBusy && setSaveTemplateOpen(false)}
         onSave={(name) => {
           void handleSaveAsTemplate(name);

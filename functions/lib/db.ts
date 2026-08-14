@@ -320,6 +320,24 @@ export async function deleteUserTemplate(
   return (result.meta.changes ?? 0) > 0;
 }
 
+export async function updateUserTemplateContent(
+  db: D1Database,
+  id: string,
+  userId: string,
+  canvasData: string,
+  mobileDocument: string | null,
+  thumbnailUrl: string | null,
+): Promise<boolean> {
+  const result = await db
+    .prepare(
+      `UPDATE templates SET canvas_data = ?, mobile_document = ?, thumbnail_url = ?, updated_at = datetime('now')
+       WHERE id = ? AND user_id = ?`,
+    )
+    .bind(canvasData, mobileDocument, thumbnailUrl, id, userId)
+    .run();
+  return (result.meta.changes ?? 0) > 0;
+}
+
 export async function createAsset(
   db: D1Database,
   id: string,
@@ -373,6 +391,18 @@ export async function findAssetByR2Key(
     .first<AssetRow>();
 }
 
+export async function findAssetByR2KeyAnyUser(
+  db: D1Database,
+  r2Key: string,
+): Promise<AssetRow | null> {
+  return db
+    .prepare(
+      'SELECT id, user_id, type, r2_key, url, source, created_at FROM assets WHERE r2_key = ? LIMIT 1',
+    )
+    .bind(r2Key)
+    .first<AssetRow>();
+}
+
 export async function findAssetById(
   db: D1Database,
   userId: string,
@@ -398,6 +428,78 @@ export async function deleteAssetRow(
   return (result.meta.changes ?? 0) > 0;
 }
 
+function escapeLikePattern(url: string): string {
+  return url.replace(/\\/g, '\\\\').replace(/%/g, '\\%').replace(/_/g, '\\_');
+}
+
+/** Cuenta plantillas del usuario que referencian la URL */
+export async function countTemplatesReferencingAssetUrl(
+  db: D1Database,
+  userId: string,
+  url: string,
+): Promise<number> {
+  const like = `%${escapeLikePattern(url)}%`;
+  const row = await db
+    .prepare(
+      `SELECT COUNT(*) as c FROM templates
+       WHERE user_id = ?
+         AND (
+           canvas_data LIKE ? ESCAPE '\\'
+           OR IFNULL(mobile_document, '') LIKE ? ESCAPE '\\'
+           OR IFNULL(thumbnail_url, '') LIKE ? ESCAPE '\\'
+         )`,
+    )
+    .bind(userId, like, like, like)
+    .first<{ c: number }>();
+  return row?.c ?? 0;
+}
+
+/** Menús de otros usuarios que referencian la URL */
+export async function countOtherUsersMenusReferencingAssetUrl(
+  db: D1Database,
+  userId: string,
+  url: string,
+): Promise<number> {
+  const like = `%${escapeLikePattern(url)}%`;
+  const row = await db
+    .prepare(
+      `SELECT COUNT(*) as c FROM menus
+       WHERE user_id != ?
+         AND (
+           canvas_data LIKE ? ESCAPE '\\'
+           OR IFNULL(mobile_document, '') LIKE ? ESCAPE '\\'
+           OR IFNULL(menu_document, '') LIKE ? ESCAPE '\\'
+           OR IFNULL(thumbnail_url, '') LIKE ? ESCAPE '\\'
+           OR IFNULL(export_png_url, '') LIKE ? ESCAPE '\\'
+         )`,
+    )
+    .bind(userId, like, like, like, like, like)
+    .first<{ c: number }>();
+  return row?.c ?? 0;
+}
+
+/** Plantillas ajenas (públicas o de sistema) que referencian la URL */
+export async function countForeignTemplatesReferencingAssetUrl(
+  db: D1Database,
+  userId: string,
+  url: string,
+): Promise<number> {
+  const like = `%${escapeLikePattern(url)}%`;
+  const row = await db
+    .prepare(
+      `SELECT COUNT(*) as c FROM templates
+       WHERE (user_id IS NULL OR user_id != ?)
+         AND (
+           canvas_data LIKE ? ESCAPE '\\'
+           OR IFNULL(mobile_document, '') LIKE ? ESCAPE '\\'
+           OR IFNULL(thumbnail_url, '') LIKE ? ESCAPE '\\'
+         )`,
+    )
+    .bind(userId, like, like, like)
+    .first<{ c: number }>();
+  return row?.c ?? 0;
+}
+
 /** Cuenta menús del usuario (opcionalmente excluyendo uno) que referencian la URL */
 export async function countMenusReferencingAssetUrl(
   db: D1Database,
@@ -405,9 +507,7 @@ export async function countMenusReferencingAssetUrl(
   url: string,
   excludeMenuId?: string,
 ): Promise<number> {
-  // Escapar comodines de LIKE: las URLs de R2 llevan %2F, etc.
-  const escaped = url.replace(/\\/g, '\\\\').replace(/%/g, '\\%').replace(/_/g, '\\_');
-  const like = `%${escaped}%`;
+  const like = `%${escapeLikePattern(url)}%`;
   if (excludeMenuId) {
     const row = await db
       .prepare(

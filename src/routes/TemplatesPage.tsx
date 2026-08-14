@@ -12,6 +12,12 @@ import {
   type TemplateSummary,
 } from '@/lib/api';
 import { appAlert, appConfirm } from '@/lib/app-dialog';
+import { useAuth } from '@/lib/auth-context';
+import {
+  describeTemplateContentIssues,
+  hasTemplateContentIssues,
+  scanTemplateContentForUser,
+} from '@/lib/template-content-safety';
 import { renderCanvasDataThumbnail, renderMobileDocumentThumbnail } from '@/lib/menu-thumbnail';
 import { AppLayout } from '@/components/AppLayout';
 import { DesktopMenuIcon, MobileMenuIcon } from '@/components/MenuKindIcons';
@@ -25,6 +31,7 @@ function isMobileTemplate(template: TemplateSummary): boolean {
 
 export function TemplatesPage() {
   const navigate = useNavigate();
+  const { user } = useAuth();
   const [publicTemplates, setPublicTemplates] = useState<TemplateSummary[]>([]);
   const [myTemplates, setMyTemplates] = useState<TemplateSummary[]>([]);
   const [loading, setLoading] = useState(true);
@@ -106,11 +113,11 @@ export function TemplatesPage() {
       });
 
       try {
-        let thumbnail = template.thumbnail_url ?? null;
-        if (!thumbnail && isMobile && template.mobile_document) {
-          thumbnail = await renderMobileDocumentThumbnail(template.mobile_document);
-        } else if (!thumbnail && template.canvas_data) {
-          thumbnail = await renderCanvasDataThumbnail(template.canvas_data);
+        let thumbnail = menu.thumbnail_url ?? null;
+        if (!thumbnail && isMobile && menu.mobile_document) {
+          thumbnail = await renderMobileDocumentThumbnail(menu.mobile_document);
+        } else if (!thumbnail && menu.canvas_data) {
+          thumbnail = await renderCanvasDataThumbnail(menu.canvas_data);
         }
         if (thumbnail) {
           await updateMenu(menu.id, {
@@ -129,6 +136,26 @@ export function TemplatesPage() {
   }
 
   async function handlePublish(template: TemplateSummary) {
+    const scan = scanTemplateContentForUser(
+      {
+        canvas_data: template.canvas_data,
+        mobile_document: template.mobile_document,
+        thumbnail_url: template.thumbnail_url,
+      },
+      user?.email,
+    );
+    if (hasTemplateContentIssues(scan)) {
+      const lines = describeTemplateContentIssues(scan);
+      const confirmed = await appConfirm(
+        `${lines.join('\n')}\n\n¿Publicar la plantilla de todos modos? El contenido personal se eliminará automáticamente.`,
+        {
+          title: 'Revisar plantilla',
+          confirmText: 'Publicar',
+        },
+      );
+      if (!confirmed) return;
+    }
+
     setActionId(template.id);
     try {
       await publishTemplate(template.id);

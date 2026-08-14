@@ -1731,6 +1731,27 @@ textarea {
   line-height: 1.45;
 }
 
+.save-template-modal-warnings {
+  margin: 0 0 1rem;
+  padding: 0.65rem 0.75rem;
+  border-radius: var(--radius);
+  background: #fffbeb;
+  border: 1px solid #fcd34d;
+  color: #92400e;
+  font-size: 0.85rem;
+  line-height: 1.45;
+}
+
+.save-template-modal-warnings-title {
+  margin: 0 0 0.35rem;
+  font-weight: 600;
+}
+
+.save-template-modal-warnings ul {
+  margin: 0;
+  padding-left: 1.1rem;
+}
+
 .save-template-modal-field {
   display: flex;
   flex-direction: column;

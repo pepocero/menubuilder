@@ -293,7 +293,9 @@ export async function createMenu(data: {
   menu: {
     id: string;
     title: string;
+    template_id?: string | null;
     editor_kind: 'canvas' | 'mobile';
+    thumbnail_url?: string | null;
     canvas_data: import('@/types/canvas').CanvasData;
     mobile_document: import('@shared/mobile-menu').MobileMenuDocument | null;
   };

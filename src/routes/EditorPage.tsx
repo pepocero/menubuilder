@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { ActiveSelection, type FabricObject, type FabricImage } from 'fabric';
 import type { StockImage } from '@shared/stock';
@@ -87,6 +87,11 @@ import { PageSizeControls } from '@/components/editor/PageSizeControls';
 import { PublicScrollControls } from '@/components/editor/PublicScrollControls';
 import { PublishQrModal } from '@/components/editor/PublishQrModal';
 import { SaveTemplateModal } from '@/components/editor/SaveTemplateModal';
+import { useAuth } from '@/lib/auth-context';
+import {
+  describeTemplateSaveWarnings,
+  scanTemplateContentForUser,
+} from '@/lib/template-content-safety';
 import { AssetManagerModal } from '@/components/editor/AssetManagerModal';
 import { ImportMenuModal, type ImportMenuOptions, type ImportMenuSource } from '@/components/editor/ImportMenuModal';
 import { StockImageSearch } from '@/components/editor/StockImageSearch';
@@ -193,6 +198,17 @@ export function EditorPage() {
       pages: collected.length > 0 ? collected : [createBlankPage()],
     });
   }, []);
+
+  const { user } = useAuth();
+  const saveTemplateWarnings = useMemo(() => {
+    if (!saveTemplateOpen) return [];
+    try {
+      const scan = scanTemplateContentForUser({ canvas_data: collectDocument() }, user?.email);
+      return describeTemplateSaveWarnings(scan);
+    } catch {
+      return [];
+    }
+  }, [saveTemplateOpen, user?.email, collectDocument, pages, pageScroll, pageGap, historyVersion]);
 
   const [objectsTick, setObjectsTick] = useState(0);
 
@@ -2125,6 +2141,7 @@ export function EditorPage() {
         open={saveTemplateOpen}
         defaultName={title.trim() || 'Mi plantilla'}
         busy={saveTemplateBusy}
+        contentWarnings={saveTemplateWarnings}
         onClose={() => !saveTemplateBusy && setSaveTemplateOpen(false)}
         onSave={(name) => {
           void handleSaveAsTemplate(name);

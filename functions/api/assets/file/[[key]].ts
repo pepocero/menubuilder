@@ -1,3 +1,4 @@
+import { canReadR2Asset } from '../../../lib/asset-access';
 import { errorResponse } from '../../../lib/types';
 
 /**
@@ -46,6 +47,15 @@ export const onRequestGet: PagesFunction<Env> = async (context) => {
   const r2Key = resolveR2Key(context.request, context.params as Record<string, string | string[]>);
   if (!r2Key) {
     return errorResponse('Clave de archivo requerida', 400);
+  }
+
+  if (!r2Key.startsWith('users/')) {
+    return errorResponse('Archivo no encontrado', 404);
+  }
+
+  const allowed = await canReadR2Asset(context.env, context.request, r2Key);
+  if (!allowed) {
+    return errorResponse('Acceso denegado', 403);
   }
 
   const object = await context.env.MEDIA.get(r2Key);
