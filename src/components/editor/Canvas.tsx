@@ -233,7 +233,7 @@ export const CanvasEditor = forwardRef<CanvasEditorHandle, CanvasEditorProps>(
        * Al soltar tras arrastrar: transferir a otra página o recuperar dentro del lienzo.
        * Devuelve true si se disparó transferencia (el padre hará onChange).
        */
-      const finishDragIfNeeded = (target: FabricObject | null | undefined): boolean => {
+      const finishDragIfNeeded = (): boolean => {
         if (!dragMoved || dragHandled) return false;
         dragHandled = true;
         dragMoved = false;
@@ -299,7 +299,7 @@ export const CanvasEditor = forwardRef<CanvasEditorHandle, CanvasEditorProps>(
         rememberPointer(opt.e as Event | undefined);
         // Preferimos resolver aquí: el puntero es fiable al soltar.
         if (!dragMoved || dragHandled) return;
-        const spilled = finishDragIfNeeded(canvas.getActiveObject());
+        const spilled = finishDragIfNeeded();
         if (!spilled) emitChange();
       });
 
@@ -322,7 +322,7 @@ export const CanvasEditor = forwardRef<CanvasEditorHandle, CanvasEditorProps>(
 
         // Respaldo si modified llega sin mouse:up previo.
         if ((!action || action === 'drag') && dragMoved) {
-          const spilled = finishDragIfNeeded(e.target ?? null);
+          const spilled = finishDragIfNeeded();
           if (!spilled) emitChange();
           return;
         }
