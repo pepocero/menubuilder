@@ -1330,17 +1330,37 @@ export function MobileEditorPage() {
         const RETRY_DELAY_MS = 3000;
         const MAX_RETRIES = 2;
 
+        let smoothPercent = 0;
+        let smoothTimer: ReturnType<typeof setInterval> | null = null;
+
+        function startSmooth(fromPct: number, toPct: number, durationMs: number, detail: string) {
+          smoothPercent = fromPct;
+          if (smoothTimer) clearInterval(smoothTimer);
+          const step = 200;
+          const inc = ((toPct - fromPct) / durationMs) * step;
+          smoothTimer = setInterval(() => {
+            smoothPercent = Math.min(toPct, smoothPercent + inc);
+            setOcrProgress({
+              phase: 'photos',
+              percent: Math.min(99, Math.round(smoothPercent)),
+              detail,
+            });
+          }, step);
+        }
+
+        function stopSmooth() {
+          if (smoothTimer) { clearInterval(smoothTimer); smoothTimer = null; }
+        }
+
         for (let i = 0; i < dishIndices.length; i++) {
           const dish = imported[dishIndices[i]] as import('@shared/mobile-menu').MobileMenuItemComponent;
           const dishTitle = dish.title.trim();
+          const total = dishIndices.length;
+          const detail = `${i + 1} de ${total}`;
+          const basePct = (i / total) * 100;
+          const nextPct = ((i + 1) / total) * 100;
 
-          setOcrProgress({
-            phase: 'photos',
-            percent: dishIndices.length
-              ? Math.min(99, Math.round((i / dishIndices.length) * 100))
-              : 50,
-            detail: `${i + 1} de ${dishIndices.length}`,
-          });
+          startSmooth(basePct, nextPct - 1, 8000, detail);
 
           if (i > 0) {
             await new Promise((r) => setTimeout(r, DELAY_BETWEEN_DISHES_MS));
@@ -1375,7 +1395,15 @@ export function MobileEditorPage() {
           if (!success && photosFailed === 0) {
             photosFailed += 1;
           }
+
+          stopSmooth();
+          setOcrProgress({
+            phase: 'photos',
+            percent: Math.min(99, Math.round(nextPct)),
+            detail,
+          });
         }
+        stopSmooth();
         if (photosFailed > 0) {
           console.warn(`Auto-fotos: ${photosOk} OK, ${photosFailed} sin imagen de ${dishIndices.length} platos.`);
         }

@@ -2232,7 +2232,7 @@ textarea {
   height: 100%;
   border-radius: 999px;
   background: var(--color-primary);
-  transition: width 0.15s ease-out;
+  transition: width 0.3s ease-out;
 }
 
 .upload-progress-label {
