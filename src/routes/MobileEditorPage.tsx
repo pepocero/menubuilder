@@ -1122,10 +1122,7 @@ export function MobileEditorPage() {
     }
   }
 
-  async function importAndApplyStockImage(
-    image: StockImage,
-    targetOverride?: 'image' | 'menuImage' | 'sectionBg',
-  ) {
+  async function importStockImageToUrl(image: StockImage): Promise<string> {
     // 1) Descargar Pixabay → R2 (URLs de Pixabay caducan / no hotlink)
     let assetUrl: string | undefined;
     let importedId: string | undefined;
@@ -1169,15 +1166,13 @@ export function MobileEditorPage() {
           ? serverErr
           : new Error('No se pudo importar la imagen de stock');
       }
-      applyPickedImageUrl(uploaded.asset.url, targetOverride);
-      return;
+      return uploaded.asset.url;
     }
 
     // 2) Recomprimir en cliente a perfil móvil (WebP ~1400px) y sustituir en R2
     const remote = await fetch(assetUrl!, { credentials: 'include' });
     if (!remote.ok) {
-      applyPickedImageUrl(assetUrl!, targetOverride);
-      return;
+      return assetUrl!;
     }
     const blob = await remote.blob();
     const input = new File(
@@ -1187,7 +1182,6 @@ export function MobileEditorPage() {
     );
     const compressed = await compressImage(input, undefined, 'mobile');
     const { asset: optimized } = await uploadAsset(compressed);
-    applyPickedImageUrl(optimized.url, targetOverride);
 
     if (importedId && importedId !== optimized.id) {
       try {
@@ -1196,6 +1190,15 @@ export function MobileEditorPage() {
         // La optimizada ya está en uso; el original huérfano se puede limpiar luego
       }
     }
+    return optimized.url;
+  }
+
+  async function importAndApplyStockImage(
+    image: StockImage,
+    targetOverride?: 'image' | 'menuImage' | 'sectionBg',
+  ) {
+    const url = await importStockImageToUrl(image);
+    applyPickedImageUrl(url, targetOverride);
   }
 
   async function handleStockSelect(image: StockImage) {
@@ -1213,6 +1216,14 @@ export function MobileEditorPage() {
   }
 
   /** Busca stock por el nombre del plato (query mejorado) y elige la mejor por tags. */
+  async function findStockImageForDishTitle(dishTitle: string): Promise<StockImage | null> {
+    const searchQuery = buildDishStockSearchQuery(dishTitle);
+    if (!searchQuery) return null;
+    const result = await searchStockImages(searchQuery, 1, 20);
+    if (!result.images.length) return null;
+    return pickBestStockImageForDish(dishTitle, result.images);
+  }
+
   async function autoAssignStockImageFromDishTitle() {
     if (!selected || selected.type !== 'menuItem' || uploading) return;
     const dishTitle = selected.title.trim();
@@ -1221,22 +1232,11 @@ export function MobileEditorPage() {
       return;
     }
 
-    const searchQuery = buildDishStockSearchQuery(dishTitle);
-    if (!searchQuery) {
-      setAssetsError('Escribe el nombre del plato para buscar una imagen automática.');
-      return;
-    }
-
     setImagePickerTarget('menuImage');
     setUploading(true);
     setAssetsError('');
     try {
-      const result = await searchStockImages(searchQuery, 1, 20);
-      if (!result.images.length) {
-        setAssetsError(`No se encontraron imágenes de stock para «${dishTitle}».`);
-        return;
-      }
-      const image = pickBestStockImageForDish(dishTitle, result.images);
+      const image = await findStockImageForDishTitle(dishTitle);
       if (!image) {
         setAssetsError(`No se encontraron imágenes de stock para «${dishTitle}».`);
         return;
@@ -1316,6 +1316,40 @@ export function MobileEditorPage() {
         throw new Error(
           'No se detectaron platos legibles. Prueba con fotos más nítidas y buen contraste.',
         );
+      }
+
+      if (options.autoAssignDishImages === true) {
+        const dishes = imported.filter((c) => c.type === 'menuItem' && c.title.trim());
+        for (let i = 0; i < dishes.length; i++) {
+          const dish = dishes[i];
+          if (dish.type !== 'menuItem') continue;
+          setOcrProgress({
+            phase: 'photos',
+            percent: dishes.length
+              ? Math.min(99, Math.round(((i + 0.5) / dishes.length) * 100))
+              : 50,
+            detail: `${i + 1} / ${dishes.length}`,
+          });
+          try {
+            const image = await findStockImageForDishTitle(dish.title.trim());
+            if (!image) continue;
+            const url = await importStockImageToUrl(image);
+            const base = dish.menuImage ?? {
+              src: '',
+              alt: 'Imagen del plato',
+              position: 'left' as const,
+              width: 92,
+              radius: 10,
+            };
+            dish.menuImage = {
+              ...base,
+              src: url,
+              alt: dish.title.trim() || base.alt,
+            };
+          } catch {
+            /* Un fallo de stock no debe abortar la importación del texto */
+          }
+        }
       }
 
       setOcrProgress({ phase: 'done', percent: 100, detail: `${sources.length} imagen(es)` });

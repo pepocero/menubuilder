@@ -162,6 +162,7 @@ function createMenuItem(params: {
     price,
     ingredients: params.ingredients,
     allergens: '',
+    ingredientsDisplay: 'text',
     menuImage: {
       src: '',
       alt: 'Imagen del plato',

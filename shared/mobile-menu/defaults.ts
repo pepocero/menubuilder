@@ -166,7 +166,7 @@ export function createDefaultMobileComponent(type: MobileComponent['type']): Mob
         ingredients: 'Ingrediente 1 - Ingrediente 2 - Ingrediente 3',
         allergens: '',
         allergensAccentColor: '#b45309',
-        ingredientsDisplay: 'button',
+        ingredientsDisplay: 'text',
         ingredientsAccentColor: '#4d7c0f',
         backgroundColor: '#ffffff',
         menuImage: {

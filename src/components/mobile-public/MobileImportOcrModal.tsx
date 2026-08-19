@@ -48,6 +48,8 @@ function phaseLabel(phase: string): string {
       return 'Leyendo carta con IA';
     case 'build':
       return 'Creando platos';
+    case 'photos':
+      return 'Añadiendo fotos de los platos';
     case 'done':
       return 'Importación completada';
     default:
@@ -100,6 +102,7 @@ export function MobileImportOcrModal({
   const [assetsError, setAssetsError] = useState('');
   const [selectedAssetIds, setSelectedAssetIds] = useState<string[]>([]);
   const [replaceExisting, setReplaceExisting] = useState(false);
+  const [autoAssignDishImages, setAutoAssignDishImages] = useState(false);
   const cameraInputRef = useRef<HTMLInputElement>(null);
 
   const previewUrls = useMemo(
@@ -138,6 +141,7 @@ export function MobileImportOcrModal({
       setSelectedAssetIds([]);
       setAssetsError('');
       setReplaceExisting(false);
+      setAutoAssignDishImages(false);
       setPromptExtra(MOBILE_OCR_EXTRA_HINT);
       setProvider(readStoredOcrProvider());
       return;
@@ -211,6 +215,7 @@ export function MobileImportOcrModal({
       provider,
       promptExtra: promptExtra.trim().slice(0, MENU_OCR_PROMPT_EXTRA_MAX) || undefined,
       replaceExisting,
+      autoAssignDishImages,
     };
 
     if (tab === 'library') {
@@ -310,6 +315,16 @@ export function MobileImportOcrModal({
               />
               <span className="mobile-props-checkbox-label">
                 Limpiar lienzo antes de importar (reemplazar contenido actual)
+              </span>
+            </label>
+            <label className="mobile-props-checkbox">
+              <input
+                type="checkbox"
+                checked={autoAssignDishImages}
+                onChange={(e) => setAutoAssignDishImages(e.target.checked)}
+              />
+              <span className="mobile-props-checkbox-label">
+                Añadir foto automática a cada plato (según el nombre)
               </span>
             </label>
 

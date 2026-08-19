@@ -23,6 +23,8 @@ export interface ImportMenuOptions {
   promptExtra?: string;
   /** Si true, reemplaza el contenido existente antes de importar. */
   replaceExisting?: boolean;
+  /** Si true, busca e inserta una foto de stock para cada plato reconocido. */
+  autoAssignDishImages?: boolean;
 }
 
 interface ImportMenuModalProps {
