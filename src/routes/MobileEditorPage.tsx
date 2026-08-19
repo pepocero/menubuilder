@@ -1319,36 +1319,42 @@ export function MobileEditorPage() {
       }
 
       if (options.autoAssignDishImages === true) {
-        const dishes = imported.filter((c) => c.type === 'menuItem' && c.title.trim());
-        for (let i = 0; i < dishes.length; i++) {
-          const dish = dishes[i];
-          if (dish.type !== 'menuItem') continue;
+        const dishIndices: number[] = [];
+        for (let idx = 0; idx < imported.length; idx++) {
+          const c = imported[idx];
+          if (c.type === 'menuItem' && c.title.trim()) dishIndices.push(idx);
+        }
+        let photosFailed = 0;
+        for (let i = 0; i < dishIndices.length; i++) {
+          const dish = imported[dishIndices[i]] as import('@shared/mobile-menu').MobileMenuItemComponent;
           setOcrProgress({
             phase: 'photos',
-            percent: dishes.length
-              ? Math.min(99, Math.round(((i + 0.5) / dishes.length) * 100))
+            percent: dishIndices.length
+              ? Math.min(99, Math.round(((i + 0.5) / dishIndices.length) * 100))
               : 50,
-            detail: `${i + 1} / ${dishes.length}`,
+            detail: `${i + 1} de ${dishIndices.length}`,
           });
           try {
+            if (i > 0) await new Promise((r) => setTimeout(r, 350));
             const image = await findStockImageForDishTitle(dish.title.trim());
-            if (!image) continue;
+            if (!image) { photosFailed += 1; continue; }
             const url = await importStockImageToUrl(image);
-            const base = dish.menuImage ?? {
-              src: '',
-              alt: 'Imagen del plato',
-              position: 'left' as const,
-              width: 92,
-              radius: 10,
-            };
-            dish.menuImage = {
-              ...base,
-              src: url,
-              alt: dish.title.trim() || base.alt,
+            imported[dishIndices[i]] = {
+              ...dish,
+              menuImage: {
+                src: url,
+                alt: dish.title.trim() || 'Imagen del plato',
+                position: dish.menuImage?.position ?? 'left',
+                width: dish.menuImage?.width ?? 92,
+                radius: dish.menuImage?.radius ?? 10,
+              },
             };
           } catch {
-            /* Un fallo de stock no debe abortar la importación del texto */
+            photosFailed += 1;
           }
+        }
+        if (photosFailed > 0 && photosFailed < dishIndices.length) {
+          console.warn(`Auto-fotos: ${photosFailed}/${dishIndices.length} platos sin imagen (stock no disponible).`);
         }
       }
 

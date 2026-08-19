@@ -49,7 +49,7 @@ function phaseLabel(phase: string): string {
     case 'build':
       return 'Creando platos';
     case 'photos':
-      return 'Añadiendo fotos de los platos';
+      return 'Importando foto';
     case 'done':
       return 'Importación completada';
     default:
