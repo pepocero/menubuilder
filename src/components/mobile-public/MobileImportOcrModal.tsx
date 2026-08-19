@@ -327,6 +327,11 @@ export function MobileImportOcrModal({
                 Añadir foto automática a cada plato (según el nombre)
               </span>
             </label>
+            {autoAssignDishImages && (
+              <p className="import-menu-photo-hint">
+                La búsqueda de fotos añadirá aproximadamente un minuto extra al proceso de importación.
+              </p>
+            )}
 
             <div className="import-menu-tabs" role="tablist" aria-label="Origen de la imagen">
               <button

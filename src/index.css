@@ -3128,6 +3128,17 @@ textarea {
   opacity: 0.8;
 }
 
+.import-menu-photo-hint {
+  margin: 0.25rem 0 0.5rem;
+  padding: 0.45rem 0.6rem;
+  border-radius: var(--radius);
+  background: #fffbeb;
+  border: 1px solid #fcd34d;
+  color: #92400e;
+  font-size: 0.82rem;
+  line-height: 1.4;
+}
+
 .import-menu-form--busy {
   display: none;
 }

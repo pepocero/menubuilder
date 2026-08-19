@@ -1324,37 +1324,60 @@ export function MobileEditorPage() {
           const c = imported[idx];
           if (c.type === 'menuItem' && c.title.trim()) dishIndices.push(idx);
         }
+        let photosOk = 0;
         let photosFailed = 0;
+        const DELAY_BETWEEN_DISHES_MS = 1500;
+        const RETRY_DELAY_MS = 3000;
+        const MAX_RETRIES = 2;
+
         for (let i = 0; i < dishIndices.length; i++) {
           const dish = imported[dishIndices[i]] as import('@shared/mobile-menu').MobileMenuItemComponent;
+          const dishTitle = dish.title.trim();
+
           setOcrProgress({
             phase: 'photos',
             percent: dishIndices.length
-              ? Math.min(99, Math.round(((i + 0.5) / dishIndices.length) * 100))
+              ? Math.min(99, Math.round((i / dishIndices.length) * 100))
               : 50,
             detail: `${i + 1} de ${dishIndices.length}`,
           });
-          try {
-            if (i > 0) await new Promise((r) => setTimeout(r, 350));
-            const image = await findStockImageForDishTitle(dish.title.trim());
-            if (!image) { photosFailed += 1; continue; }
-            const url = await importStockImageToUrl(image);
-            imported[dishIndices[i]] = {
-              ...dish,
-              menuImage: {
-                src: url,
-                alt: dish.title.trim() || 'Imagen del plato',
-                position: dish.menuImage?.position ?? 'left',
-                width: dish.menuImage?.width ?? 92,
-                radius: dish.menuImage?.radius ?? 10,
-              },
-            };
-          } catch {
+
+          if (i > 0) {
+            await new Promise((r) => setTimeout(r, DELAY_BETWEEN_DISHES_MS));
+          }
+
+          let success = false;
+          for (let attempt = 0; attempt <= MAX_RETRIES && !success; attempt++) {
+            if (attempt > 0) {
+              await new Promise((r) => setTimeout(r, RETRY_DELAY_MS * attempt));
+            }
+            try {
+              const image = await findStockImageForDishTitle(dishTitle);
+              if (!image) break;
+              await new Promise((r) => setTimeout(r, 500));
+              const url = await importStockImageToUrl(image);
+              imported[dishIndices[i]] = {
+                ...dish,
+                menuImage: {
+                  src: url,
+                  alt: dishTitle || 'Imagen del plato',
+                  position: dish.menuImage?.position ?? 'left',
+                  width: dish.menuImage?.width ?? 92,
+                  radius: dish.menuImage?.radius ?? 10,
+                },
+              };
+              photosOk += 1;
+              success = true;
+            } catch {
+              if (attempt === MAX_RETRIES) photosFailed += 1;
+            }
+          }
+          if (!success && photosFailed === 0) {
             photosFailed += 1;
           }
         }
-        if (photosFailed > 0 && photosFailed < dishIndices.length) {
-          console.warn(`Auto-fotos: ${photosFailed}/${dishIndices.length} platos sin imagen (stock no disponible).`);
+        if (photosFailed > 0) {
+          console.warn(`Auto-fotos: ${photosOk} OK, ${photosFailed} sin imagen de ${dishIndices.length} platos.`);
         }
       }
 
