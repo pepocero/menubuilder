@@ -1,4 +1,4 @@
-import { Suspense, lazy } from 'react';
+import { Suspense } from 'react';
 import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom';
 import { AuthProvider } from '@/lib/auth-context';
 import { DocumentSeo } from '@/components/DocumentSeo';
@@ -10,26 +10,37 @@ import {
 import { LandingPage } from '@/routes/LandingPage';
 import { PublicMenuPage } from '@/routes/PublicMenuPage';
 import { AppDialogHost } from '@/components/ui/AppDialogHost';
+import { clearChunkReloadFlag, lazyWithRetry } from '@/lib/lazy-retry';
 
-const AdminUsersPage = lazy(() =>
+const AdminUsersPage = lazyWithRetry(() =>
   import('@/routes/AdminUsersPage').then((m) => ({ default: m.AdminUsersPage })),
 );
-const DashboardPage = lazy(() =>
+const DashboardPage = lazyWithRetry(() =>
   import('@/routes/DashboardPage').then((m) => ({ default: m.DashboardPage })),
 );
-const DocsPage = lazy(() => import('@/routes/DocsPage').then((m) => ({ default: m.DocsPage })));
-const EditorPage = lazy(() => import('@/routes/EditorPage').then((m) => ({ default: m.EditorPage })));
-const LoginPage = lazy(() => import('@/routes/LoginPage').then((m) => ({ default: m.LoginPage })));
-const MobileEditorPage = lazy(() =>
+const DocsPage = lazyWithRetry(() =>
+  import('@/routes/DocsPage').then((m) => ({ default: m.DocsPage })),
+);
+const EditorPage = lazyWithRetry(() =>
+  import('@/routes/EditorPage').then((m) => ({ default: m.EditorPage })),
+);
+const LoginPage = lazyWithRetry(() =>
+  import('@/routes/LoginPage').then((m) => ({ default: m.LoginPage })),
+);
+const MobileEditorPage = lazyWithRetry(() =>
   import('@/routes/MobileEditorPage').then((m) => ({ default: m.MobileEditorPage })),
 );
-const QrsPage = lazy(() => import('@/routes/QrsPage').then((m) => ({ default: m.QrsPage })));
-const RegisterPage = lazy(() =>
+const QrsPage = lazyWithRetry(() =>
+  import('@/routes/QrsPage').then((m) => ({ default: m.QrsPage })),
+);
+const RegisterPage = lazyWithRetry(() =>
   import('@/routes/RegisterPage').then((m) => ({ default: m.RegisterPage })),
 );
-const TemplatesPage = lazy(() =>
+const TemplatesPage = lazyWithRetry(() =>
   import('@/routes/TemplatesPage').then((m) => ({ default: m.TemplatesPage })),
 );
+
+clearChunkReloadFlag();
 
 function RouteLoading({ label = 'Cargando…' }: { label?: string }) {
   return (
@@ -70,7 +81,6 @@ export default function App() {
               <Route path="/admin/users" element={<AdminUsersPage />} />
             </Route>
 
-            {/* Eager: sin lazy chunk extra. Crítico para QR en móvil. */}
             <Route path="/p/:slug" element={<PublicMenuPage />} />
 
             <Route path="*" element={<Navigate to="/" replace />} />
