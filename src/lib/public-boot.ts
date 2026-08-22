@@ -1,46 +1,66 @@
 /**
  * Arranque seguro de cartas públicas (/p/…).
- *
- * En móviles (sobre todo al abrir un QR), un Service Worker que controla la
- * pestaña puede dejar la SPA en blanco hasta recargar. Aquí:
- * 1) no dejamos que el SW controle /p/
- * 2) si había un controlador, recargamos UNA vez por ruta en la sesión
+ * No debe bloquear el montaje de React: en móvil, getRegistrations() puede tardar
+ * o colgarse y dejaba la página en «Cargando…» del index.html para siempre.
  */
-export async function preparePublicMenuClient(): Promise<'reloading' | 'ok'> {
-  if (typeof window === 'undefined') return 'ok';
-  if (!window.location.pathname.startsWith('/p/')) return 'ok';
 
-  const bootKey = `ptm-public-boot:${window.location.pathname}${window.location.search}`;
+const SW_CLEANUP_TIMEOUT_MS = 2500;
 
-  try {
-    if (!('serviceWorker' in navigator)) return 'ok';
+function withTimeout<T>(promise: Promise<T>, ms: number): Promise<T | null> {
+  return Promise.race([
+    promise,
+    new Promise<null>((resolve) => {
+      window.setTimeout(() => resolve(null), ms);
+    }),
+  ]);
+}
 
-    const hadController = !!navigator.serviceWorker.controller;
-    const registrations = await navigator.serviceWorker.getRegistrations();
-    if (registrations.length > 0) {
-      await Promise.all(registrations.map((reg) => reg.unregister()));
-    }
+/** Limpia SW/cachés en segundo plano (nunca recarga ni bloquea). */
+export function cleanupPublicMenuClientInBackground(): void {
+  if (typeof window === 'undefined') return;
+  if (!window.location.pathname.startsWith('/p/')) return;
 
-    if ('caches' in window) {
-      const keys = await caches.keys();
-      if (keys.length > 0) {
-        await Promise.all(keys.map((key) => caches.delete(key)));
+  void (async () => {
+    try {
+      if (!('serviceWorker' in navigator)) return;
+
+      const registrations = await withTimeout(navigator.serviceWorker.getRegistrations(), SW_CLEANUP_TIMEOUT_MS);
+      if (registrations && registrations.length > 0) {
+        await withTimeout(
+          Promise.all(registrations.map((reg) => reg.unregister())),
+          SW_CLEANUP_TIMEOUT_MS,
+        );
       }
-    }
 
-    if (hadController && !sessionStorage.getItem(bootKey)) {
-      sessionStorage.setItem(bootKey, '1');
-      window.location.reload();
-      return 'reloading';
+      if ('caches' in window) {
+        const keys = await withTimeout(caches.keys(), SW_CLEANUP_TIMEOUT_MS);
+        if (keys && keys.length > 0) {
+          await withTimeout(Promise.all(keys.map((key) => caches.delete(key))), SW_CLEANUP_TIMEOUT_MS);
+        }
+      }
+    } catch {
+      /* best-effort */
     }
-  } catch {
-    /* Si falla la limpieza, seguimos: mejor carta lenta que bloqueo total. */
-  }
+  })();
+}
 
+/** @deprecated Ya no bloquea ni recarga; conservado por compatibilidad. */
+export async function preparePublicMenuClient(): Promise<'reloading' | 'ok'> {
+  cleanupPublicMenuClientInBackground();
   return 'ok';
 }
 
 export function shouldRegisterServiceWorker(): boolean {
   if (typeof window === 'undefined') return false;
   return !window.location.pathname.startsWith('/p/');
+}
+
+export function isPublicMenuPath(): boolean {
+  if (typeof window === 'undefined') return false;
+  return window.location.pathname.startsWith('/p/');
+}
+
+export function clearPublicBootPlaceholder(): void {
+  if (typeof document === 'undefined') return;
+  document.getElementById('ptm-boot-status')?.remove();
 }

@@ -108,12 +108,43 @@
       </p>
     </div>
     <script>
-      /* Si un JS/CSS hasheado 404 (HTML viejo tras un deploy), quitar SW y recargar una vez. */
+      /* Si un JS/CSS hasheado 404 (HTML viejo tras un deploy), quitar SW y recargar. */
       (function () {
-        var key = 'ptm-stale-asset-reload';
+        var isPublicMenu = /^\/p\//.test(window.location.pathname);
+        var key = isPublicMenu ? 'ptm-stale-asset-reload-public' : 'ptm-stale-asset-reload';
+        var bootTimeoutMs = isPublicMenu ? 22000 : 12000;
+
+        function setBootHint(message, showRetry) {
+          var el = document.getElementById('ptm-boot-status');
+          if (!el) return;
+          el.textContent = message;
+          if (!showRetry || document.getElementById('ptm-boot-retry')) return;
+          var btn = document.createElement('button');
+          btn.id = 'ptm-boot-retry';
+          btn.type = 'button';
+          btn.textContent = 'Reintentar';
+          btn.style.cssText =
+            'display:block;margin:1rem auto 0;padding:0.55rem 1rem;border-radius:8px;border:1px solid #ccc;background:#fff;font:inherit;cursor:pointer';
+          btn.onclick = function () {
+            try {
+              sessionStorage.removeItem(key);
+            } catch (err) {}
+            window.location.reload();
+          };
+          el.insertAdjacentElement('afterend', btn);
+        }
+
         function recover() {
           try {
-            if (sessionStorage.getItem(key)) return;
+            if (sessionStorage.getItem(key)) {
+              setBootHint(
+                isPublicMenu
+                  ? 'No se pudo iniciar la carta. Comprueba la conexión e inténtalo de nuevo.'
+                  : 'No se pudo cargar la aplicación. Inténtalo de nuevo.',
+                true,
+              );
+              return;
+            }
             sessionStorage.setItem(key, '1');
           } catch (err) {
             return;
@@ -133,6 +164,7 @@
             reload();
           }
         }
+
         window.addEventListener(
           'error',
           function (event) {
@@ -144,6 +176,7 @@
           },
           true,
         );
+
         window.setTimeout(function () {
           var scripts = document.getElementsByTagName('script');
           var prod = false;
@@ -151,7 +184,7 @@
             if ((scripts[i].src || '').indexOf('/assets/') !== -1) prod = true;
           }
           if (prod && document.getElementById('ptm-boot-status')) recover();
-        }, 12000);
+        }, bootTimeoutMs);
       })();
     </script>
     <script type="module" src="/src/main.tsx"></script>

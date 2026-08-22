@@ -1,25 +1,42 @@
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 import { initPwaInstallCapture, registerServiceWorker } from '@/lib/pwa';
-import { preparePublicMenuClient, shouldRegisterServiceWorker } from '@/lib/public-boot';
+import {
+  cleanupPublicMenuClientInBackground,
+  clearPublicBootPlaceholder,
+  isPublicMenuPath,
+  shouldRegisterServiceWorker,
+} from '@/lib/public-boot';
 import App from './App';
 import './index.css';
 
-async function boot() {
-  const publicBoot = await preparePublicMenuClient();
-  if (publicBoot === 'reloading') return;
-
-  // Captura beforeinstallprompt solo fuera de cartas públicas.
-  if (shouldRegisterServiceWorker()) {
-    initPwaInstallCapture();
-    void registerServiceWorker();
-  }
-
-  createRoot(document.getElementById('root')!).render(
+function mountApp() {
+  const rootEl = document.getElementById('root');
+  if (!rootEl) return;
+  clearPublicBootPlaceholder();
+  createRoot(rootEl).render(
     <StrictMode>
       <App />
     </StrictMode>,
   );
 }
 
-void boot();
+function boot() {
+  const isPublic = isPublicMenuPath();
+
+  if (isPublic) {
+    // QR móvil: montar React al instante; limpiar SW sin bloquear ni recargar.
+    mountApp();
+    cleanupPublicMenuClientInBackground();
+    return;
+  }
+
+  if (shouldRegisterServiceWorker()) {
+    initPwaInstallCapture();
+    void registerServiceWorker();
+  }
+
+  mountApp();
+}
+
+boot();

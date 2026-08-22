@@ -1,9 +1,8 @@
-import { useEffect, useRef, useState } from 'react';
+import { Suspense, lazy, useEffect, useRef, useState } from 'react';
 import { useParams } from 'react-router-dom';
-import { HtmlRenderer } from '@/components/html-renderer';
 import { MobilePublicView } from '@/components/mobile-public/MobilePublicView';
-import { PublicPageView } from '@/components/public/PublicPageView';
 import { ApiError } from '@/lib/api';
+import { clearPublicBootPlaceholder } from '@/lib/public-boot';
 import { SITE_NAME, applyPageSeo } from '@/lib/seo';
 import type { MenuPage, PageGap, PageScrollDirection } from '@/types/canvas';
 import {
@@ -14,6 +13,13 @@ import {
 import { parseMenuDocument, type MenuDocument } from '@shared/menu-document';
 import { parseMobileMenuDocument, type MobileMenuDocument } from '@shared/mobile-menu';
 import { rewriteAssetUrlsForPublicSlug, toPublicMenuAssetUrl } from '@shared/public-menu-assets';
+
+const PublicPageView = lazy(() =>
+  import('@/components/public/PublicPageView').then((m) => ({ default: m.PublicPageView })),
+);
+const HtmlRenderer = lazy(() =>
+  import('@/components/html-renderer').then((m) => ({ default: m.HtmlRenderer })),
+);
 
 interface PublicMenuPayload {
   title: string;
@@ -201,6 +207,10 @@ export function PublicMenuPage() {
   const loadGenerationRef = useRef(0);
 
   useEffect(() => {
+    clearPublicBootPlaceholder();
+  }, []);
+
+  useEffect(() => {
     if (!slug) {
       setLoading(false);
       setError('Enlace de carta no válido.');
@@ -376,10 +386,12 @@ export function PublicMenuPage() {
           >
             {pages.map((page) => (
               <div key={page.id} className="public-page-block">
-                <PublicPageView
-                  page={page}
-                  fit={pageScroll === 'horizontal' ? 'contain' : 'width'}
-                />
+                <Suspense fallback={<p className="public-menu-status">Cargando página…</p>}>
+                  <PublicPageView
+                    page={page}
+                    fit={pageScroll === 'horizontal' ? 'contain' : 'width'}
+                  />
+                </Suspense>
               </div>
             ))}
           </div>
@@ -388,7 +400,9 @@ export function PublicMenuPage() {
         {!loading && !error && showMobile && <MobilePublicView document={mobileDocument!} />}
 
         {!loading && !error && showDocument && (
-          <HtmlRenderer document={menuDocument!} showTitle={false} />
+          <Suspense fallback={<p className="public-menu-status">Cargando carta…</p>}>
+            <HtmlRenderer document={menuDocument!} showTitle={false} />
+          </Suspense>
         )}
 
         {!loading && !error && showPng && (
