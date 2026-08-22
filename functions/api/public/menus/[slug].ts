@@ -1,4 +1,4 @@
-import { normalizeAssetUrl, normalizeAssetUrlsInValue } from '../../../shared/asset-url';
+import { normalizeAssetUrl, normalizeAssetUrlsInValue } from '../../../../shared/asset-url';
 import { getPublicMenuBySlug } from '../../../lib/db';
 import { errorResponse, jsonResponse } from '../../../lib/types';
 
