@@ -55,11 +55,11 @@ export function isPublicApiPath(pathname: string, method: string): boolean {
     if (rest && !rest.includes('/') && rest !== 'mine') return true;
   }
   if (
-    method === 'GET' &&
+    (method === 'GET' || method === 'HEAD') &&
     (pathname === '/api/assets/file' || pathname.startsWith('/api/assets/file/'))
   ) {
     return true;
   }
-  if (pathname.startsWith('/api/public/') && method === 'GET') return true;
+  if (pathname.startsWith('/api/public/') && (method === 'GET' || method === 'HEAD')) return true;
   return false;
 }

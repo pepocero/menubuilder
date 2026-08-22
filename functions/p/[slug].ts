@@ -13,6 +13,18 @@ import { parseMobileMenuDocument } from '../../shared/mobile-menu';
  * ?spa=1 fuerza la SPA completa (escritorio o versión animada).
  */
 export const onRequestGet: PagesFunction<Env> = async (context) => {
+  return servePublicMenuPage(context);
+};
+
+export const onRequestHead: PagesFunction<Env> = async (context) => {
+  const response = await servePublicMenuPage(context);
+  return new Response(null, {
+    status: response.status,
+    headers: response.headers,
+  });
+};
+
+async function servePublicMenuPage(context: EventContext<Env, string, Record<string, unknown>>): Promise<Response> {
   const slug = (context.params.slug as string)?.trim();
   if (!slug) {
     return new Response('Slug requerido', { status: 400 });
