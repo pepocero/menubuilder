@@ -429,6 +429,10 @@ export interface MobileAccordionComponent extends MobileComponentBase {
    * - `right`: colapsada →, abierta ↓ (giro 90°).
    */
   chevronDirection?: MobileAccordionChevronDirection;
+  /** Sombra en la flecha (misma fórmula que sombra de texto). */
+  chevronShadow?: boolean;
+  /** Intensidad 1–10. Solo aplica si chevronShadow es true. */
+  chevronShadowIntensity?: number;
 }
 
 /** Hijos válidos de un acordeón (cualquier componente excepto otro acordeón). */

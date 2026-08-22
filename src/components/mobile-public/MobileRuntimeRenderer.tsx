@@ -1,6 +1,8 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type PointerEvent as ReactPointerEvent, type ReactNode } from 'react';
 import {
   defaultMenuItemFieldTypography,
+  mobileDropShadowFilter,
+  mobileTextShadowCss,
   resolveSectionBgStretchMode,
   resolveSectionBorderStyle,
   resolveSectionMinHeight,
@@ -51,12 +53,8 @@ function typographyStyle(component: MobileComponent): CSSProperties {
 
 function textShadowStyle(t: MobileTypographyConfig): CSSProperties {
   if (!t.textShadow) return {};
-  const intensity = Math.max(1, Math.min(10, t.textShadowIntensity ?? 4));
-  const y = Math.max(1, Math.round(intensity * 0.45));
-  const blur = Math.max(2, Math.round(intensity * 1.2));
-  const alpha = Math.min(0.9, 0.2 + intensity * 0.07);
   return {
-    textShadow: `0 ${y}px ${blur}px rgba(0, 0, 0, ${alpha.toFixed(2)})`,
+    textShadow: mobileTextShadowCss(t.textShadowIntensity),
   };
 }
 
@@ -674,6 +672,10 @@ function AccordionRuntime({
       ? 'none'
       : component.chevronAnimation;
   const chevronDirection = component.chevronDirection === 'right' ? 'right' : 'down';
+  const chevronShadowStyle: CSSProperties =
+    component.chevronShadow === true
+      ? { filter: mobileDropShadowFilter(component.chevronShadowIntensity) }
+      : {};
   const headerIsSection = header?.type === 'section';
   const selectedBodyChildId =
     editable && selectedId && body.some((child) => child.id === selectedId) ? selectedId : null;
@@ -737,7 +739,7 @@ function AccordionRuntime({
               open ? ' is-open' : ''
             }`}
             aria-hidden="true"
-            style={{ color: chevronColor }}
+            style={{ color: chevronColor, ...chevronShadowStyle }}
           >
             <svg viewBox="0 0 24 24" width="22" height="22" fill="none">
               <path

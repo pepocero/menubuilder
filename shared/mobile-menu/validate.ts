@@ -468,6 +468,15 @@ function parseComponent(value: unknown): MobileComponent | null {
         : undefined,
       chevronAnimation: parseChevronAnimation(value.chevronAnimation),
       chevronDirection: parseChevronDirection(value.chevronDirection),
+      ...(value.chevronShadow === true ? { chevronShadow: true } : {}),
+      ...(value.chevronShadow === true && isNumber(value.chevronShadowIntensity)
+        ? {
+            chevronShadowIntensity: Math.max(
+              1,
+              Math.min(10, Math.round(value.chevronShadowIntensity)),
+            ),
+          }
+        : {}),
       animation: parseAnimation(value.animation),
       effect: parseEffect(value.effect),
       typography: parseTypography(value.typography),

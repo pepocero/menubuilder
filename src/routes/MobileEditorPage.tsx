@@ -2277,6 +2277,8 @@ export function MobileEditorPage() {
     chevronThickness?: number;
     chevronAnimation?: MobileAccordionChevronAnimation;
     chevronDirection?: MobileAccordionChevronDirection;
+    chevronShadow?: boolean;
+    chevronShadowIntensity?: number;
   }) {
     if (!selectedId || selectedNode?.type !== 'accordion') return;
     updateDoc((current) => ({
@@ -2297,6 +2299,10 @@ export function MobileEditorPage() {
         }
         if (patch.chevronDirection !== undefined) {
           next.chevronDirection = patch.chevronDirection;
+        }
+        if (patch.chevronShadow === false) {
+          delete next.chevronShadow;
+          delete next.chevronShadowIntensity;
         }
         return next;
       }),
@@ -2871,6 +2877,45 @@ export function MobileEditorPage() {
                               <option value="spin">Balanceo</option>
                             </select>
                           </label>
+                          <label className="mobile-props-checkbox">
+                            <input
+                              type="checkbox"
+                              checked={selectedAccordion.chevronShadow === true}
+                              onChange={(e) =>
+                                updateSelectedAccordion(
+                                  e.target.checked
+                                    ? {
+                                        chevronShadow: true,
+                                        chevronShadowIntensity:
+                                          selectedAccordion.chevronShadowIntensity ?? 4,
+                                      }
+                                    : { chevronShadow: false },
+                                )
+                              }
+                            />
+                            <span className="mobile-props-checkbox-label">Sombra de flecha</span>
+                          </label>
+                          {selectedAccordion.chevronShadow === true && (
+                            <label>
+                              Intensidad de la sombra
+                              <input
+                                type="range"
+                                min={1}
+                                max={10}
+                                step={1}
+                                value={selectedAccordion.chevronShadowIntensity ?? 4}
+                                onChange={(e) =>
+                                  updateSelectedAccordion({
+                                    chevronShadow: true,
+                                    chevronShadowIntensity: Number(e.target.value),
+                                  })
+                                }
+                              />
+                              <span className="panel-hint">
+                                {selectedAccordion.chevronShadowIntensity ?? 4} / 10
+                              </span>
+                            </label>
+                          )}
                           <small className="panel-hint">
                             La animación en reposo solo actúa con el acordeón colapsado. Al abrir/cerrar
                             gira según el sentido elegido.
