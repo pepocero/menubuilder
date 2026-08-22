@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useParams } from 'react-router-dom';
 import { HtmlRenderer } from '@/components/html-renderer';
 import { MobilePublicView } from '@/components/mobile-public/MobilePublicView';
@@ -27,6 +27,9 @@ interface PublicMenuPayload {
   public_slug: string;
 }
 
+const FETCH_TIMEOUT_MS = 15_000;
+const MAX_FETCH_ATTEMPTS = 3;
+
 /** Fetch público sin cookies/refresh de auth (más fiable en móviles / Brave). */
 async function fetchPublicMenu(slug: string, signal?: AbortSignal): Promise<PublicMenuPayload> {
   const response = await fetch(`/api/public/menus/${encodeURIComponent(slug)}`, {
@@ -43,6 +46,23 @@ async function fetchPublicMenu(slug: string, signal?: AbortSignal): Promise<Publ
     throw new ApiError(data.error ?? 'Carta no disponible', response.status || 404);
   }
   return data.menu;
+}
+
+async function fetchPublicMenuWithTimeout(
+  slug: string,
+  parentSignal?: AbortSignal,
+): Promise<PublicMenuPayload> {
+  const timeout = new AbortController();
+  const onParentAbort = () => timeout.abort();
+  parentSignal?.addEventListener('abort', onParentAbort);
+  const timer = window.setTimeout(() => timeout.abort(), FETCH_TIMEOUT_MS);
+
+  try {
+    return await fetchPublicMenu(slug, timeout.signal);
+  } finally {
+    window.clearTimeout(timer);
+    parentSignal?.removeEventListener('abort', onParentAbort);
+  }
 }
 
 function isHttpUrl(value: string | null | undefined): value is string {
@@ -63,14 +83,16 @@ function coerceMobileDocument(raw: unknown): MobileMenuDocument | null {
   return null;
 }
 
+function visibleCanvasPages(canvasData: unknown): MenuPage[] {
+  if (!validateCanvasData(canvasData)) return [];
+  return normalizeCanvasData(canvasData).pages.filter((page) => page.hidden !== true);
+}
+
 function hasRenderableContent(menu: PublicMenuPayload): boolean {
-  if (menu.editor_kind === 'mobile') {
-    return !!coerceMobileDocument(menu.mobile_document);
+  if (menu.editor_kind === 'mobile' && coerceMobileDocument(menu.mobile_document)) {
+    return true;
   }
-  if (validateCanvasData(menu.canvas_data)) {
-    const canvasDoc = normalizeCanvasData(menu.canvas_data);
-    return canvasDoc.pages.some((page) => page.hidden !== true);
-  }
+  if (visibleCanvasPages(menu.canvas_data).length > 0) return true;
   if (parseMenuDocument(menu.menu_document)) return true;
   return isHttpUrl(menu.export_png_url);
 }
@@ -79,6 +101,83 @@ function wait(ms: number) {
   return new Promise<void>((resolve) => {
     window.setTimeout(resolve, ms);
   });
+}
+
+type AppliedMenuState = {
+  mobileDocument: MobileMenuDocument | null;
+  menuDocument: MenuDocument | null;
+  pages: MenuPage[];
+  pageScroll: PageScrollDirection;
+  pageGap: PageGap;
+  exportPngUrl: string | null;
+  title: string;
+};
+
+function buildAppliedMenuState(menu: PublicMenuPayload, slug: string): AppliedMenuState | null {
+  const safeTitle = menu.title?.trim() || 'Carta digital';
+  const publicSlug = menu.public_slug || slug;
+  const exportUrl = isHttpUrl(menu.export_png_url) ? menu.export_png_url : null;
+  const exportPngUrl = exportUrl ? toPublicMenuAssetUrl(publicSlug, exportUrl) : null;
+
+  if (menu.editor_kind === 'mobile') {
+    const mobileDoc = coerceMobileDocument(menu.mobile_document);
+    if (mobileDoc) {
+      return {
+        title: safeTitle,
+        mobileDocument: rewriteAssetUrlsForPublicSlug(mobileDoc, publicSlug) as MobileMenuDocument,
+        menuDocument: null,
+        pages: [],
+        pageScroll: 'vertical',
+        pageGap: 0,
+        exportPngUrl,
+      };
+    }
+  }
+
+  const canvasPages = visibleCanvasPages(
+    rewriteAssetUrlsForPublicSlug(menu.canvas_data, publicSlug),
+  );
+  if (canvasPages.length > 0) {
+    const canvasDoc = normalizeCanvasData(
+      rewriteAssetUrlsForPublicSlug(menu.canvas_data, publicSlug),
+    );
+    return {
+      title: safeTitle,
+      mobileDocument: null,
+      menuDocument: null,
+      pages: canvasPages,
+      pageScroll: canvasDoc.pageScroll ?? 'vertical',
+      pageGap: normalizePageGap(canvasDoc.pageGap),
+      exportPngUrl,
+    };
+  }
+
+  const storedDoc = parseMenuDocument(menu.menu_document);
+  if (storedDoc) {
+    return {
+      title: safeTitle,
+      mobileDocument: null,
+      menuDocument: rewriteAssetUrlsForPublicSlug(storedDoc, publicSlug) as MenuDocument,
+      pages: [],
+      pageScroll: 'vertical',
+      pageGap: 0,
+      exportPngUrl,
+    };
+  }
+
+  if (exportPngUrl) {
+    return {
+      title: safeTitle,
+      mobileDocument: null,
+      menuDocument: null,
+      pages: [],
+      pageScroll: 'vertical',
+      pageGap: 0,
+      exportPngUrl,
+    };
+  }
+
+  return null;
 }
 
 /**
@@ -99,147 +198,117 @@ export function PublicMenuPage() {
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(true);
   const [loadNonce, setLoadNonce] = useState(0);
+  const loadGenerationRef = useRef(0);
 
   useEffect(() => {
-    if (!slug) return;
-    let disposed = false;
-    const abort = new AbortController();
+    if (!slug) {
+      setLoading(false);
+      setError('Enlace de carta no válido.');
+      return;
+    }
 
-    const applyMenu = (menu: PublicMenuPayload) => {
-      const safeTitle = menu.title?.trim() || 'Carta digital';
-      setTitle(safeTitle);
+    const generation = ++loadGenerationRef.current;
+    const abort = new AbortController();
+    let finished = false;
+
+    const finish = (next: { loading: boolean; error?: string }) => {
+      if (finished || loadGenerationRef.current !== generation) return;
+      finished = true;
+      setLoading(next.loading);
+      if (next.error !== undefined) setError(next.error);
+    };
+
+    const applyState = (state: AppliedMenuState) => {
+      if (loadGenerationRef.current !== generation) return;
+      setTitle(state.title);
       applyPageSeo({
-        title: safeTitle,
-        description: `${safeTitle} — carta de menú digital publicada con ${SITE_NAME}.`,
+        title: state.title,
+        description: `${state.title} — carta de menú digital publicada con ${SITE_NAME}.`,
         path: `/p/${slug}`,
         index: true,
       });
-
-      const publicSlug = menu.public_slug || slug!;
-      const exportUrl = isHttpUrl(menu.export_png_url) ? menu.export_png_url : null;
-      setExportPngUrl(exportUrl ? toPublicMenuAssetUrl(publicSlug, exportUrl) : null);
-
-      if (menu.editor_kind === 'mobile') {
-        const mobileDoc = coerceMobileDocument(menu.mobile_document);
-        if (mobileDoc) {
-          setMobileDocument(
-            rewriteAssetUrlsForPublicSlug(mobileDoc, publicSlug) as MobileMenuDocument,
-          );
-          setMenuDocument(null);
-          setPages([]);
-          setPageScroll('vertical');
-          setPageGap(0);
-          return true;
-        }
-        setMobileDocument(null);
-        setMenuDocument(null);
-        setPages([]);
-        return false;
-      }
-
-      if (validateCanvasData(menu.canvas_data)) {
-        const canvasDoc = normalizeCanvasData(
-          rewriteAssetUrlsForPublicSlug(menu.canvas_data, publicSlug),
-        );
-        setPages(canvasDoc.pages.filter((page) => page.hidden !== true));
-        setPageScroll(canvasDoc.pageScroll ?? 'vertical');
-        setPageGap(normalizePageGap(canvasDoc.pageGap));
-        setMenuDocument(null);
-        setMobileDocument(null);
-        return true;
-      }
-
-      const storedDoc = parseMenuDocument(menu.menu_document);
-      if (storedDoc) {
-        setMenuDocument(
-          rewriteAssetUrlsForPublicSlug(storedDoc, publicSlug) as MenuDocument,
-        );
-        setMobileDocument(null);
-        setPages([]);
-        setPageScroll('vertical');
-        setPageGap(0);
-        return true;
-      }
-
-      setMenuDocument(null);
-      setMobileDocument(null);
-      setPages([]);
-      setPageScroll('vertical');
-      setPageGap(0);
-      return isHttpUrl(menu.export_png_url);
+      setMobileDocument(state.mobileDocument);
+      setMenuDocument(state.menuDocument);
+      setPages(state.pages);
+      setPageScroll(state.pageScroll);
+      setPageGap(state.pageGap);
+      setExportPngUrl(state.exportPngUrl);
     };
 
     (async () => {
       setLoading(true);
       setError('');
-      try {
-        let menu: PublicMenuPayload | null = null;
-        let lastError: unknown = null;
 
-        // Varios intentos: al abrir desde cámara/QR la primera petición a veces falla o llega vacía.
-        for (let attempt = 0; attempt < 3; attempt += 1) {
-          if (disposed || abort.signal.aborted) return;
-          const attemptAbort = new AbortController();
-          const onParentAbort = () => attemptAbort.abort();
-          abort.signal.addEventListener('abort', onParentAbort);
-          const timeout = window.setTimeout(() => attemptAbort.abort(), 12000);
+      let menu: PublicMenuPayload | null = null;
+
+      try {
+        for (let attempt = 0; attempt < MAX_FETCH_ATTEMPTS; attempt += 1) {
+          if (abort.signal.aborted || loadGenerationRef.current !== generation) return;
+
           try {
-            menu = await fetchPublicMenu(slug, attemptAbort.signal);
+            menu = await fetchPublicMenuWithTimeout(slug, abort.signal);
             if (hasRenderableContent(menu)) break;
             menu = null;
-          } catch (err) {
-            lastError = err;
+          } catch {
             menu = null;
-            if (abort.signal.aborted) return;
-          } finally {
-            window.clearTimeout(timeout);
-            abort.signal.removeEventListener('abort', onParentAbort);
+            if (abort.signal.aborted || loadGenerationRef.current !== generation) return;
           }
-          await wait(350 + attempt * 250);
-        }
 
-        if (disposed || abort.signal.aborted) return;
-
-        if (!menu) {
-          // Último intento limpio.
-          try {
-            menu = await fetchPublicMenu(slug, abort.signal);
-          } catch (err) {
-            lastError = err;
+          if (attempt < MAX_FETCH_ATTEMPTS - 1) {
+            await wait(300 + attempt * 200);
           }
         }
 
-        if (disposed || abort.signal.aborted) return;
+        if (abort.signal.aborted || loadGenerationRef.current !== generation) return;
 
         if (!menu) {
-          throw lastError instanceof Error
-            ? lastError
-            : new ApiError('Carta no disponible', 404);
+          menu = await fetchPublicMenuWithTimeout(slug, abort.signal);
         }
+
+        if (abort.signal.aborted || loadGenerationRef.current !== generation) return;
 
         if (!hasRenderableContent(menu)) {
-          await wait(450);
-          if (disposed || abort.signal.aborted) return;
-          menu = await fetchPublicMenu(slug, abort.signal);
-          if (disposed || abort.signal.aborted) return;
+          await wait(400);
+          if (abort.signal.aborted || loadGenerationRef.current !== generation) return;
+          menu = await fetchPublicMenuWithTimeout(slug, abort.signal);
         }
 
-        const ok = applyMenu(menu);
-        if (!ok && !hasRenderableContent(menu)) {
-          setError('Esta carta no está disponible o ya no es pública.');
+        if (abort.signal.aborted || loadGenerationRef.current !== generation) return;
+
+        const applied = buildAppliedMenuState(menu, slug);
+        if (!applied) {
+          finish({
+            loading: false,
+            error: 'Esta carta no está disponible o ya no es pública.',
+          });
+          return;
         }
-        if (!disposed) setLoading(false);
-      } catch {
-        if (!disposed) {
-          setError('Esta carta no está disponible o ya no es pública.');
-          setLoading(false);
-        }
+
+        applyState(applied);
+        finish({ loading: false, error: '' });
+      } catch (err) {
+        if (abort.signal.aborted || loadGenerationRef.current !== generation) return;
+        const message =
+          err instanceof ApiError
+            ? err.message
+            : err instanceof DOMException && err.name === 'AbortError'
+              ? 'Tiempo de espera agotado al cargar la carta.'
+              : 'Esta carta no está disponible o ya no es pública.';
+        finish({ loading: false, error: message });
       }
     })();
 
+    const watchdog = window.setTimeout(() => {
+      if (loadGenerationRef.current !== generation || finished) return;
+      finish({
+        loading: false,
+        error: 'La carta tarda demasiado en cargar. Comprueba tu conexión e inténtalo de nuevo.',
+      });
+    }, FETCH_TIMEOUT_MS * MAX_FETCH_ATTEMPTS + 8_000);
+
     return () => {
-      disposed = true;
       abort.abort();
+      window.clearTimeout(watchdog);
     };
   }, [slug, loadNonce]);
 
@@ -251,7 +320,6 @@ export function PublicMenuPage() {
     const onVisible = () => {
       if (document.visibilityState !== 'visible') return;
       if (loading || error) return;
-      // Si tras volver no hay nada renderizable, forzar recarga de datos.
       const empty =
         pages.length === 0 && !mobileDocument && !menuDocument && !exportPngUrl;
       if (empty) setLoadNonce((n) => n + 1);
@@ -263,21 +331,6 @@ export function PublicMenuPage() {
       document.removeEventListener('visibilitychange', onVisible);
     };
   }, [loading, error, pages.length, mobileDocument, menuDocument, exportPngUrl]);
-
-  // Si la carta quedó vacía tras “cargar”, un reload único suele arreglar WebViews rotos.
-  useEffect(() => {
-    if (loading || error || !slug) return;
-    const empty =
-      pages.length === 0 && !mobileDocument && !menuDocument && !exportPngUrl;
-    if (!empty) return;
-    const key = `ptm-public-empty-reload:${slug}`;
-    if (sessionStorage.getItem(key)) return;
-    const timer = window.setTimeout(() => {
-      sessionStorage.setItem(key, '1');
-      window.location.reload();
-    }, 1200);
-    return () => window.clearTimeout(timer);
-  }, [loading, error, slug, pages.length, mobileDocument, menuDocument, exportPngUrl]);
 
   const showPages = pages.length > 0;
   const showMobile = !!mobileDocument;
