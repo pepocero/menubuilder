@@ -10,9 +10,9 @@ import {
   normalizePageGap,
   validateCanvasData,
 } from '@/types/canvas';
+import { normalizeAssetUrl, normalizeAssetUrlsInValue } from '@shared/asset-url';
 import { parseMenuDocument, type MenuDocument } from '@shared/menu-document';
 import { parseMobileMenuDocument, type MobileMenuDocument } from '@shared/mobile-menu';
-import { rewriteAssetUrlsForPublicSlug, toPublicMenuAssetUrl } from '@shared/public-menu-assets';
 
 const PublicPageView = lazy(() =>
   import('@/components/public/PublicPageView').then((m) => ({ default: m.PublicPageView })),
@@ -119,18 +119,19 @@ type AppliedMenuState = {
   title: string;
 };
 
-function buildAppliedMenuState(menu: PublicMenuPayload, slug: string): AppliedMenuState | null {
+function buildAppliedMenuState(menu: PublicMenuPayload, _slug: string): AppliedMenuState | null {
   const safeTitle = menu.title?.trim() || 'Carta digital';
-  const publicSlug = menu.public_slug || slug;
   const exportUrl = isHttpUrl(menu.export_png_url) ? menu.export_png_url : null;
-  const exportPngUrl = exportUrl ? toPublicMenuAssetUrl(publicSlug, exportUrl) : null;
+  const exportPngUrl = exportUrl ? normalizeAssetUrl(exportUrl) : null;
 
   if (menu.editor_kind === 'mobile') {
-    const mobileDoc = coerceMobileDocument(menu.mobile_document);
+    const mobileDoc = coerceMobileDocument(
+      normalizeAssetUrlsInValue(menu.mobile_document),
+    );
     if (mobileDoc) {
       return {
         title: safeTitle,
-        mobileDocument: rewriteAssetUrlsForPublicSlug(mobileDoc, publicSlug) as MobileMenuDocument,
+        mobileDocument: mobileDoc,
         menuDocument: null,
         pages: [],
         pageScroll: 'vertical',
@@ -140,13 +141,10 @@ function buildAppliedMenuState(menu: PublicMenuPayload, slug: string): AppliedMe
     }
   }
 
-  const canvasPages = visibleCanvasPages(
-    rewriteAssetUrlsForPublicSlug(menu.canvas_data, publicSlug),
-  );
+  const normalizedCanvas = normalizeAssetUrlsInValue(menu.canvas_data);
+  const canvasPages = visibleCanvasPages(normalizedCanvas);
   if (canvasPages.length > 0) {
-    const canvasDoc = normalizeCanvasData(
-      rewriteAssetUrlsForPublicSlug(menu.canvas_data, publicSlug),
-    );
+    const canvasDoc = normalizeCanvasData(normalizedCanvas);
     return {
       title: safeTitle,
       mobileDocument: null,
@@ -158,12 +156,12 @@ function buildAppliedMenuState(menu: PublicMenuPayload, slug: string): AppliedMe
     };
   }
 
-  const storedDoc = parseMenuDocument(menu.menu_document);
+  const storedDoc = parseMenuDocument(normalizeAssetUrlsInValue(menu.menu_document));
   if (storedDoc) {
     return {
       title: safeTitle,
       mobileDocument: null,
-      menuDocument: rewriteAssetUrlsForPublicSlug(storedDoc, publicSlug) as MenuDocument,
+      menuDocument: storedDoc,
       pages: [],
       pageScroll: 'vertical',
       pageGap: 0,

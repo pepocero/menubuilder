@@ -43,25 +43,14 @@ function resolveR2Key(
   return null;
 }
 
-export const onRequestGet: PagesFunction<Env> = async (context) => {
+async function serveAsset(context: EventContext<Env, string, Record<string, unknown>>): Promise<Response> {
   const r2Key = resolveR2Key(context.request, context.params as Record<string, string | string[]>);
   if (!r2Key) {
     return errorResponse('Clave de archivo requerida', 400);
   }
 
-  if (!r2Key.startsWith('users/')) {
+  if (!(await canReadR2Asset(context.env, context.request, r2Key))) {
     return errorResponse('Archivo no encontrado', 404);
-  }
-
-  let allowed = false;
-  try {
-    allowed = await canReadR2Asset(context.env, context.request, r2Key);
-  } catch (err) {
-    console.error('canReadR2Asset', r2Key, err);
-    return errorResponse('Error al comprobar acceso', 500);
-  }
-  if (!allowed) {
-    return errorResponse('Acceso denegado', 403);
   }
 
   const object = await context.env.MEDIA.get(r2Key);
@@ -71,8 +60,20 @@ export const onRequestGet: PagesFunction<Env> = async (context) => {
 
   const headers = new Headers();
   object.writeHttpMetadata(headers);
-  headers.set('Cache-Control', 'public, max-age=31536000');
+  headers.set('Cache-Control', 'public, max-age=31536000, immutable');
   headers.set('Content-Disposition', 'inline');
+  headers.set('Access-Control-Allow-Origin', '*');
+  // Evita que proxies móviles corten descargas parciales de imágenes.
+  if (object.size != null) {
+    headers.set('Content-Length', String(object.size));
+  }
 
   return new Response(object.body, { headers });
+}
+
+export const onRequestGet: PagesFunction<Env> = async (context) => serveAsset(context);
+
+export const onRequestHead: PagesFunction<Env> = async (context) => {
+  const response = await serveAsset(context);
+  return new Response(null, { status: response.status, headers: response.headers });
 };

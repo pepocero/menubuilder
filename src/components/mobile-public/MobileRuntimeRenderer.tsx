@@ -15,6 +15,7 @@ import {
   type MobileTypographyConfig,
 } from '@shared/mobile-menu';
 import { ensureEditorFontLoaded } from '@/lib/google-fonts';
+import { normalizeAssetUrl } from '@/lib/asset-url';
 import { AllergenGlyph } from '@/components/mobile-public/AllergenGlyph';
 
 interface MobileRuntimeRendererProps {
@@ -260,7 +261,7 @@ function SectionBackgroundImage({
     stretchMode?: 'none' | 'cover' | 'horizontal' | 'vertical' | 'both';
   };
 }) {
-  const src = image?.src?.trim();
+  const src = normalizeAssetUrl(image?.src?.trim());
   const frameRef = useRef<HTMLDivElement>(null);
   const imgRef = useRef<HTMLImageElement>(null);
   const [axisTransform, setAxisTransform] = useState('none');
@@ -446,7 +447,7 @@ function renderComponent(
       return component.src ? (
         <img
           className="mobile-block mobile-block-image"
-          src={component.src}
+          src={normalizeAssetUrl(component.src)}
           alt={component.alt}
           style={{ borderRadius: `${component.radius}px` }}
           loading="lazy"
@@ -478,7 +479,7 @@ function renderComponent(
           {hasMenuImage && (
             <img
               className="mobile-menu-item-thumb"
-              src={component.menuImage!.src}
+              src={normalizeAssetUrl(component.menuImage!.src)}
               alt={component.menuImage?.alt || 'Imagen del plato'}
               style={{
                 width: `${component.menuImage?.width ?? 92}px`,
@@ -488,7 +489,11 @@ function renderComponent(
               loading="lazy"
               decoding="async"
               draggable={false}
-              onClick={onImageClick ? () => onImageClick(component.menuImage!.src) : undefined}
+              onClick={
+                onImageClick
+                  ? () => onImageClick(normalizeAssetUrl(component.menuImage!.src))
+                  : undefined
+              }
             />
           )}
           <div className="mobile-menu-item-content">
@@ -1798,7 +1803,7 @@ export function MobileRuntimeRenderer({
       )}
       {lightboxSrc && (
         <div className="mobile-image-lightbox" onClick={() => setLightboxSrc(null)}>
-          <img src={lightboxSrc} alt="" onClick={(e) => e.stopPropagation()} />
+          <img src={normalizeAssetUrl(lightboxSrc)} alt="" onClick={(e) => e.stopPropagation()} />
           <button type="button" className="mobile-image-lightbox-close" onClick={() => setLightboxSrc(null)}>✕</button>
         </div>
       )}

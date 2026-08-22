@@ -8,6 +8,7 @@ import {
   SystemAdminRoute,
 } from '@/components/ProtectedRoute';
 import { LandingPage } from '@/routes/LandingPage';
+import { PublicMenuPage } from '@/routes/PublicMenuPage';
 import { AppDialogHost } from '@/components/ui/AppDialogHost';
 
 const AdminUsersPage = lazy(() =>
@@ -21,9 +22,6 @@ const EditorPage = lazy(() => import('@/routes/EditorPage').then((m) => ({ defau
 const LoginPage = lazy(() => import('@/routes/LoginPage').then((m) => ({ default: m.LoginPage })));
 const MobileEditorPage = lazy(() =>
   import('@/routes/MobileEditorPage').then((m) => ({ default: m.MobileEditorPage })),
-);
-const PublicMenuPage = lazy(() =>
-  import('@/routes/PublicMenuPage').then((m) => ({ default: m.PublicMenuPage })),
 );
 const QrsPage = lazy(() => import('@/routes/QrsPage').then((m) => ({ default: m.QrsPage })));
 const RegisterPage = lazy(() =>
@@ -72,14 +70,8 @@ export default function App() {
               <Route path="/admin/users" element={<AdminUsersPage />} />
             </Route>
 
-            <Route
-              path="/p/:slug"
-              element={
-                <Suspense fallback={<RouteLoading label="Cargando carta…" />}>
-                  <PublicMenuPage />
-                </Suspense>
-              }
-            />
+            {/* Eager: sin lazy chunk extra. Crítico para QR en móvil. */}
+            <Route path="/p/:slug" element={<PublicMenuPage />} />
 
             <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>

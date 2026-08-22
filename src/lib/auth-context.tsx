@@ -15,6 +15,7 @@ import {
   register as apiRegister,
   type User,
 } from '@/lib/api';
+import { isPublicMenuPath } from '@/lib/public-boot';
 import { isSystemAdminEmail, isSystemAdminRole } from '@shared/roles';
 
 interface AuthContextValue {
@@ -30,9 +31,17 @@ const AuthContext = createContext<AuthContextValue | null>(null);
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(() => !isPublicMenuPath());
 
   const bootstrap = useCallback(async () => {
+    // Cartas públicas (/p/…): no llamar a refresh. Evita saturar /api/auth
+    // cuando muchas personas escanean el QR a la vez.
+    if (isPublicMenuPath()) {
+      setUser(null);
+      setLoading(false);
+      return;
+    }
+
     const timeoutMs = 10000;
     try {
       const result = await Promise.race([
@@ -72,7 +81,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     () => ({
       user,
       loading,
-      // Preferir role del API; fallback por email por si la sesión es antigua.
       isSystemAdmin:
         isSystemAdminRole(user?.role) ||
         (!!user?.email && isSystemAdminEmail(user.email)),

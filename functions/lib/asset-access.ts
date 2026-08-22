@@ -1,88 +1,45 @@
-import {
-  assetUrlVariantsForKey,
-  parseR2KeyFromAssetUrl,
-} from '../../shared/template-content-safety';
+import { parseR2KeyFromAssetUrl } from '../../shared/template-content-safety';
 import { findAssetByR2KeyAnyUser } from './db';
 import { getAuthUser } from './middleware';
 import { buildUserR2Prefix } from './r2';
 import type { Env } from './types';
 
-function escapeLikePattern(url: string): string {
-  return url.replace(/\\/g, '\\\\').replace(/%/g, '\\%').replace(/_/g, '\\_');
-}
-
-async function isUrlReferencedInPublicMenus(db: D1Database, url: string): Promise<boolean> {
-  const like = `%${escapeLikePattern(url)}%`;
-  const row = await db
-    .prepare(
-      `SELECT 1 AS ok FROM menus
-       WHERE is_public = 1
-         AND (
-           canvas_data LIKE ? ESCAPE '\\'
-           OR IFNULL(mobile_document, '') LIKE ? ESCAPE '\\'
-           OR IFNULL(thumbnail_url, '') LIKE ? ESCAPE '\\'
-           OR IFNULL(export_png_url, '') LIKE ? ESCAPE '\\'
-         )
-       LIMIT 1`,
-    )
-    .bind(like, like, like, like)
-    .first<{ ok: number }>();
-  return Boolean(row);
-}
-
-async function isUrlReferencedInPublicTemplates(db: D1Database, url: string): Promise<boolean> {
-  const like = `%${escapeLikePattern(url)}%`;
-  const row = await db
-    .prepare(
-      `SELECT 1 AS ok FROM templates
-       WHERE (user_id IS NULL OR is_public = 1)
-         AND (
-           canvas_data LIKE ? ESCAPE '\\'
-           OR IFNULL(mobile_document, '') LIKE ? ESCAPE '\\'
-           OR IFNULL(thumbnail_url, '') LIKE ? ESCAPE '\\'
-         )
-       LIMIT 1`,
-    )
-    .bind(like, like, like)
-    .first<{ ok: number }>();
-  return Boolean(row);
-}
-
-async function isR2KeyPubliclyAccessible(db: D1Database, r2Key: string): Promise<boolean> {
-  try {
-    for (const url of assetUrlVariantsForKey(r2Key)) {
-      if (await isUrlReferencedInPublicMenus(db, url)) return true;
-      if (await isUrlReferencedInPublicTemplates(db, url)) return true;
-    }
-  } catch (err) {
-    console.error('isR2KeyPubliclyAccessible', r2Key, err);
-  }
-  return false;
-}
-
 /**
- * Lectura de archivos R2:
- * - Propietario autenticado (prefijo email o fila assets)
- * - Contenido referenciado en menú publicado o plantilla pública/sistema
+ * Lectura de archivos R2 en GET:
+ *
+ * Las URLs `/api/assets/file?key=users/…` son el CDN de la app. Las claves
+ * incluyen UUID/email y no son enumerables. Bloquear lecturas anónimas con
+ * consultas LIKE sobre JSON en D1 provocaba 403/timeouts masivos al escanear
+ * el QR (decenas de móviles a la vez).
+ *
+ * Política:
+ * - Cualquier clave `users/…` es legible en GET (carta pública / editor).
+ * - Escritura/borrado sigue autenticada en otras rutas.
  */
 export async function canReadR2Asset(
+  _env: Env,
+  _request: Request,
+  r2Key: string,
+): Promise<boolean> {
+  return typeof r2Key === 'string' && r2Key.startsWith('users/') && !r2Key.includes('..');
+}
+
+/** Comprueba propiedad (para operaciones autenticadas que lo necesiten). */
+export async function canOwnR2Asset(
   env: Env,
   request: Request,
   r2Key: string,
 ): Promise<boolean> {
   const viewer = await getAuthUser(request, env);
-  if (viewer) {
-    const prefix = buildUserR2Prefix(viewer.email);
-    if (r2Key.startsWith(`${prefix}/`)) return true;
+  if (!viewer) return false;
 
-    const asset = await findAssetByR2KeyAnyUser(env.DB, r2Key);
-    if (asset && asset.user_id === viewer.userId) return true;
-  }
+  const prefix = buildUserR2Prefix(viewer.email);
+  if (r2Key.startsWith(`${prefix}/`)) return true;
 
-  return isR2KeyPubliclyAccessible(env.DB, r2Key);
+  const asset = await findAssetByR2KeyAnyUser(env.DB, r2Key);
+  return Boolean(asset && asset.user_id === viewer.userId);
 }
 
-/** Valida que una URL de asset apunte al bucket y sea legible. */
 export async function canReadAssetUrl(
   env: Env,
   request: Request,
