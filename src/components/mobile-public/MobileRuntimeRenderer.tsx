@@ -1,8 +1,11 @@
-import { useEffect, useMemo, useRef, useState, type CSSProperties, type PointerEvent as ReactPointerEvent, type ReactNode } from 'react';
+import { useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type PointerEvent as ReactPointerEvent, type ReactNode } from 'react';
 import {
   defaultMenuItemFieldTypography,
+  resolveSectionBgStretchMode,
   resolveSectionBorderStyle,
   resolveSectionMinHeight,
+  sectionBgHasHorizontalStretch,
+  sectionBgHasVerticalStretch,
   type MobileComponent,
   type MobileEffectConfig,
   type MobileInteractionAction,
@@ -255,15 +258,89 @@ function SectionBackgroundImage({
   image?: {
     src: string;
     align: 'left' | 'center' | 'right';
-    stretch: boolean;
+    stretch?: boolean;
+    stretchMode?: 'none' | 'cover' | 'horizontal' | 'vertical' | 'both';
   };
 }) {
   const src = image?.src?.trim();
-  if (!src) return null;
+  const frameRef = useRef<HTMLDivElement>(null);
+  const imgRef = useRef<HTMLImageElement>(null);
+  const [axisTransform, setAxisTransform] = useState('none');
+
   const align = image?.align === 'left' || image?.align === 'right' ? image.align : 'center';
+  const stretchMode = resolveSectionBgStretchMode(image);
+  const stretchH = sectionBgHasHorizontalStretch(stretchMode) && stretchMode !== 'cover';
+  const stretchV = sectionBgHasVerticalStretch(stretchMode) && stretchMode !== 'cover';
+  const isAxisStretch = stretchH || stretchV;
+
+  useLayoutEffect(() => {
+    if (!isAxisStretch || !src) {
+      setAxisTransform('none');
+      return;
+    }
+
+    const frame = frameRef.current;
+    const img = imgRef.current;
+    if (!frame || !img) return;
+
+    const update = () => {
+      const cw = frame.clientWidth;
+      const ch = frame.clientHeight;
+      const iw = img.naturalWidth;
+      const ih = img.naturalHeight;
+      if (!cw || !ch || !iw || !ih) return;
+
+      // Base: contain. Cada eje activo estira desde el centro hasta llenar ese eje.
+      const contain = Math.min(cw / iw, ch / ih);
+      const drawnW = iw * contain;
+      const drawnH = ih * contain;
+      const fillX = drawnW > 0 ? cw / drawnW : 1;
+      const fillY = drawnH > 0 ? ch / drawnH : 1;
+
+      const sx = stretchH ? fillX : 1;
+      const sy = stretchV ? fillY : 1;
+      setAxisTransform(`scale(${sx}, ${sy})`);
+    };
+
+    const onLoad = () => update();
+    if (img.complete && img.naturalWidth > 0) update();
+    else img.addEventListener('load', onLoad);
+
+    const ro = new ResizeObserver(update);
+    ro.observe(frame);
+
+    return () => {
+      img.removeEventListener('load', onLoad);
+      ro.disconnect();
+    };
+  }, [isAxisStretch, stretchH, stretchV, src]);
+
+  if (!src) return null;
+
+  if (isAxisStretch) {
+    const objectPosition =
+      align === 'left' ? 'left center' : align === 'right' ? 'right center' : 'center center';
+    return (
+      <div ref={frameRef} className="mobile-section-bg-frame" aria-hidden="true">
+        <img
+          ref={imgRef}
+          className="mobile-section-bg-axis"
+          src={src}
+          alt=""
+          draggable={false}
+          decoding="async"
+          style={{
+            objectPosition,
+            transform: axisTransform,
+          }}
+        />
+      </div>
+    );
+  }
+
   return (
     <img
-      className={`mobile-section-bg align-${align}${image?.stretch !== false ? ' is-stretch' : ''}`}
+      className={`mobile-section-bg align-${align}${stretchMode === 'cover' ? ' is-stretch' : ''}`}
       src={src}
       alt=""
       draggable={false}

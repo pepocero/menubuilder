@@ -13,6 +13,7 @@ import {
 } from '@/types/canvas';
 import { parseMenuDocument, type MenuDocument } from '@shared/menu-document';
 import { parseMobileMenuDocument, type MobileMenuDocument } from '@shared/mobile-menu';
+import { rewriteAssetUrlsForPublicSlug, toPublicMenuAssetUrl } from '@shared/public-menu-assets';
 
 interface PublicMenuPayload {
   title: string;
@@ -114,12 +115,16 @@ export function PublicMenuPage() {
         index: true,
       });
 
-      setExportPngUrl(isHttpUrl(menu.export_png_url) ? menu.export_png_url : null);
+      const publicSlug = menu.public_slug || slug!;
+      const exportUrl = isHttpUrl(menu.export_png_url) ? menu.export_png_url : null;
+      setExportPngUrl(exportUrl ? toPublicMenuAssetUrl(publicSlug, exportUrl) : null);
 
       if (menu.editor_kind === 'mobile') {
         const mobileDoc = coerceMobileDocument(menu.mobile_document);
         if (mobileDoc) {
-          setMobileDocument(mobileDoc);
+          setMobileDocument(
+            rewriteAssetUrlsForPublicSlug(mobileDoc, publicSlug) as MobileMenuDocument,
+          );
           setMenuDocument(null);
           setPages([]);
           setPageScroll('vertical');
@@ -133,7 +138,9 @@ export function PublicMenuPage() {
       }
 
       if (validateCanvasData(menu.canvas_data)) {
-        const canvasDoc = normalizeCanvasData(menu.canvas_data);
+        const canvasDoc = normalizeCanvasData(
+          rewriteAssetUrlsForPublicSlug(menu.canvas_data, publicSlug),
+        );
         setPages(canvasDoc.pages.filter((page) => page.hidden !== true));
         setPageScroll(canvasDoc.pageScroll ?? 'vertical');
         setPageGap(normalizePageGap(canvasDoc.pageGap));
@@ -144,7 +151,9 @@ export function PublicMenuPage() {
 
       const storedDoc = parseMenuDocument(menu.menu_document);
       if (storedDoc) {
-        setMenuDocument(storedDoc);
+        setMenuDocument(
+          rewriteAssetUrlsForPublicSlug(storedDoc, publicSlug) as MenuDocument,
+        );
         setMobileDocument(null);
         setPages([]);
         setPageScroll('vertical');

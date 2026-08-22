@@ -179,16 +179,28 @@ function parseMenuItemImage(value: unknown): {
 function parseSectionBackgroundImage(value: unknown): {
   src: string;
   align: 'left' | 'center' | 'right';
+  stretchMode: import('./types').MobileSectionBgStretchMode;
   stretch: boolean;
 } | undefined {
   if (!isObject(value)) return undefined;
   if (!isString(value.src)) return undefined;
   const align: 'left' | 'center' | 'right' =
     value.align === 'left' || value.align === 'right' ? value.align : 'center';
+  const stretchMode =
+    value.stretchMode === 'none' ||
+    value.stretchMode === 'cover' ||
+    value.stretchMode === 'horizontal' ||
+    value.stretchMode === 'vertical' ||
+    value.stretchMode === 'both'
+      ? value.stretchMode
+      : value.stretch === false
+        ? 'none'
+        : 'cover';
   return {
     src: value.src.trim().slice(0, 4096),
     align,
-    stretch: value.stretch !== false,
+    stretchMode,
+    stretch: stretchMode !== 'none',
   };
 }
 

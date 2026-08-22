@@ -79,6 +79,10 @@ import {
   areTopLevelIdsConsecutive,
   mapAllMobileComponents,
   countMobileComponentsByType,
+  resolveSectionBgStretchMode,
+  sectionBgHasHorizontalStretch,
+  sectionBgHasVerticalStretch,
+  toggleSectionBgStretchAxis,
   type MobileAnimationConfig,
   type MobileAnimationPreset,
   type MobileAnimationTrigger,
@@ -92,6 +96,7 @@ import {
   type MobileInteractionAction,
   type MobileInteractionActionType,
   type MobileMenuDocument,
+  type MobileSectionBgStretchMode,
   type MobileSectionBorderLine,
   type MobileSectionBorderRound,
   type MobileSectionSize,
@@ -773,7 +778,7 @@ function buildRandomSectionStyle(): {
   textOffsetX: number;
   textOffsetY: number;
   typography: MobileTypographyConfig;
-  imageLayout: { align: 'left' | 'center' | 'right'; stretch: boolean };
+  imageLayout: { align: 'left' | 'center' | 'right'; stretchMode: MobileSectionBgStretchMode };
 } {
   const theme = pickRandom(SECTION_STYLE_THEMES);
   const titleFont = (MOBILE_GOOGLE_FONTS_20 as readonly string[]).includes(theme.titleFont)
@@ -811,7 +816,7 @@ function buildRandomSectionStyle(): {
     typography,
     imageLayout: {
       align: pickRandom(['left', 'center', 'center', 'right'] as const),
-      stretch: Math.random() < 0.75,
+      stretchMode: pickRandom(['cover', 'cover', 'horizontal', 'vertical', 'both', 'none'] as const),
     },
   };
 }
@@ -1964,7 +1969,8 @@ export function MobileEditorPage() {
           backgroundImage: {
             src: component.backgroundImage?.src ?? '',
             align: style.imageLayout.align,
-            stretch: style.imageLayout.stretch,
+            stretchMode: style.imageLayout.stretchMode,
+            stretch: style.imageLayout.stretchMode !== 'none',
           },
         };
       }),
@@ -2082,7 +2088,7 @@ export function MobileEditorPage() {
       align: (source.backgroundImage?.align === 'left' || source.backgroundImage?.align === 'right'
         ? source.backgroundImage.align
         : 'center') as 'left' | 'center' | 'right',
-      stretch: source.backgroundImage?.stretch !== false,
+      stretchMode: resolveSectionBgStretchMode(source.backgroundImage),
     };
 
     if (styleTypography?.fontFamily) ensureEditorFontLoaded(styleTypography.fontFamily);
@@ -2104,7 +2110,8 @@ export function MobileEditorPage() {
           backgroundImage: {
             src: component.backgroundImage?.src ?? '',
             align: imageLayout.align,
-            stretch: imageLayout.stretch,
+            stretchMode: imageLayout.stretchMode,
+            stretch: imageLayout.stretchMode !== 'none',
           },
         };
       }),
@@ -2158,6 +2165,7 @@ export function MobileEditorPage() {
     patch: Partial<{
       src: string;
       align: 'left' | 'center' | 'right';
+      stretchMode: MobileSectionBgStretchMode;
       stretch: boolean;
     }>,
   ) {
@@ -2177,13 +2185,24 @@ export function MobileEditorPage() {
         const base = component.backgroundImage ?? {
           src: '',
           align: 'center' as const,
+          stretchMode: 'cover' as const,
           stretch: true,
         };
+        const nextMode =
+          patch.stretchMode !== undefined
+            ? patch.stretchMode
+            : patch.stretch !== undefined
+              ? patch.stretch
+                ? 'cover'
+                : 'none'
+              : resolveSectionBgStretchMode(base);
         return {
           ...component,
           backgroundImage: {
             ...base,
             ...patch,
+            stretchMode: nextMode,
+            stretch: nextMode !== 'none',
           },
         };
       }),
@@ -3519,28 +3538,83 @@ export function MobileEditorPage() {
                           <div className="mobile-props-field">
                             <span className="mobile-props-field-label">Ajuste</span>
                             <div className="wysiwyg-align-group" role="group" aria-label="Ajuste de imagen de fondo">
-                              <button
-                                type="button"
-                                className={selected.backgroundImage.stretch !== false ? 'is-active' : undefined}
-                                onClick={() =>
-                                  updateSelectedSectionBackground({
-                                    stretch: selected.backgroundImage?.stretch === false,
-                                  })
-                                }
-                                aria-pressed={selected.backgroundImage.stretch !== false}
-                                title="Estirar para ocupar todo el componente"
-                                aria-label="Estirar para ocupar todo el componente"
-                              >
-                                <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true">
-                                  <path
-                                    fill="currentColor"
-                                    d="M7 14H5v5h5v-2H7v-3zm-2-4h2V7h3V5H5v5zm12 7h-3v2h5v-5h-2v3zM14 5v2h3v3h2V5h-5z"
-                                  />
-                                </svg>
-                              </button>
+                              {(() => {
+                                const stretchMode = resolveSectionBgStretchMode(selected.backgroundImage);
+                                const hasH = sectionBgHasHorizontalStretch(stretchMode);
+                                const hasV = sectionBgHasVerticalStretch(stretchMode);
+                                return (
+                                  <>
+                                    <button
+                                      type="button"
+                                      className={stretchMode === 'cover' ? 'is-active' : undefined}
+                                      onClick={() =>
+                                        updateSelectedSectionBackground({
+                                          stretchMode: stretchMode === 'cover' ? 'none' : 'cover',
+                                        })
+                                      }
+                                      aria-pressed={stretchMode === 'cover'}
+                                      title="Cubrir toda la sección"
+                                      aria-label="Cubrir toda la sección"
+                                    >
+                                      <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true">
+                                        <path
+                                          fill="currentColor"
+                                          d="M7 14H5v5h5v-2H7v-3zm-2-4h2V7h3V5H5v5zm12 7h-3v2h5v-5h-2v3zM14 5v2h3v3h2V5h-5z"
+                                        />
+                                      </svg>
+                                    </button>
+                                    <button
+                                      type="button"
+                                      className={hasH ? 'is-active' : undefined}
+                                      onClick={() =>
+                                        updateSelectedSectionBackground({
+                                          stretchMode: toggleSectionBgStretchAxis(
+                                            stretchMode,
+                                            'horizontal',
+                                          ),
+                                        })
+                                      }
+                                      aria-pressed={hasH}
+                                      title="Estirar horizontal desde el centro (combinable)"
+                                      aria-label="Estirar horizontal desde el centro"
+                                    >
+                                      <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true">
+                                        <path
+                                          fill="currentColor"
+                                          d="M4 11v2h7v3l4-4-4-4v3H4zm16 2v-2h-7V8l-4 4 4 4v-3h7z"
+                                        />
+                                      </svg>
+                                    </button>
+                                    <button
+                                      type="button"
+                                      className={hasV ? 'is-active' : undefined}
+                                      onClick={() =>
+                                        updateSelectedSectionBackground({
+                                          stretchMode: toggleSectionBgStretchAxis(
+                                            stretchMode,
+                                            'vertical',
+                                          ),
+                                        })
+                                      }
+                                      aria-pressed={hasV}
+                                      title="Estirar vertical desde el centro (combinable)"
+                                      aria-label="Estirar vertical desde el centro"
+                                    >
+                                      <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true">
+                                        <path
+                                          fill="currentColor"
+                                          d="M11 4h2v7h3l-4 4-4-4h3V4zm2 16h-2v-7H8l4-4 4 4h-3v7z"
+                                        />
+                                      </svg>
+                                    </button>
+                                  </>
+                                );
+                              })()}
                             </div>
                             <small className="panel-hint">
-                              Activo: la imagen cubre toda la sección. Desactivado: se adapta sin recortar.
+                              Cubrir: llena y recorta. Horizontal y Vertical se pueden combinar: cada uno
+                              estira su eje desde el centro; juntos cubren toda la zona. Sin selección: se
+                              adapta sin recortar.
                             </small>
                           </div>
                         </>

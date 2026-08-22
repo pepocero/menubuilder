@@ -123,8 +123,16 @@ export interface MobileSectionComponent extends MobileComponentBase {
   backgroundImage?: {
     src: string;
     align: 'left' | 'center' | 'right';
-    /** Si es true, la imagen cubre todo el componente. */
-    stretch: boolean;
+    /**
+     * Modo de ajuste:
+     * - none: adaptar sin recortar (contain)
+     * - cover: cubrir toda la sección (comportamiento anterior de stretch=true)
+     * - horizontal: llenar el ancho desde el centro (escala proporcional)
+     * - vertical: llenar el alto desde el centro (escala proporcional)
+     */
+    stretchMode?: MobileSectionBgStretchMode;
+    /** @deprecated Preferir stretchMode. true ≈ cover, false ≈ none. */
+    stretch?: boolean;
   };
   /**
    * Margen izquierdo del título (px). Puede ser negativo.
@@ -140,6 +148,59 @@ export interface MobileSectionComponent extends MobileComponentBase {
 
 /** Tamaños de sección móvil. Por defecto en nuevas secciones: `s` (Pequeño). */
 export type MobileSectionSize = 'auto' | 's' | 'm' | 'l' | 'xl';
+
+/** Ajuste de imagen de fondo de sección. */
+export type MobileSectionBgStretchMode =
+  | 'none'
+  | 'cover'
+  | 'horizontal'
+  | 'vertical'
+  | 'both';
+
+export function resolveSectionBgStretchMode(
+  backgroundImage?: {
+    stretchMode?: MobileSectionBgStretchMode | string;
+    stretch?: boolean;
+  } | null,
+): MobileSectionBgStretchMode {
+  const mode = backgroundImage?.stretchMode;
+  if (
+    mode === 'none' ||
+    mode === 'cover' ||
+    mode === 'horizontal' ||
+    mode === 'vertical' ||
+    mode === 'both'
+  ) {
+    return mode;
+  }
+  return backgroundImage?.stretch === false ? 'none' : 'cover';
+}
+
+export function sectionBgHasHorizontalStretch(mode: MobileSectionBgStretchMode): boolean {
+  return mode === 'horizontal' || mode === 'both';
+}
+
+export function sectionBgHasVerticalStretch(mode: MobileSectionBgStretchMode): boolean {
+  return mode === 'vertical' || mode === 'both';
+}
+
+/** Activa/desactiva el eje horizontal sin quitar el vertical (y viceversa). */
+export function toggleSectionBgStretchAxis(
+  current: MobileSectionBgStretchMode,
+  axis: 'horizontal' | 'vertical',
+): MobileSectionBgStretchMode {
+  const hasH = sectionBgHasHorizontalStretch(current) && current !== 'cover';
+  const hasV = sectionBgHasVerticalStretch(current) && current !== 'cover';
+  // Partir de cover/none como base sin ejes
+  let nextH = current === 'cover' ? false : hasH;
+  let nextV = current === 'cover' ? false : hasV;
+  if (axis === 'horizontal') nextH = !nextH;
+  else nextV = !nextV;
+  if (nextH && nextV) return 'both';
+  if (nextH) return 'horizontal';
+  if (nextV) return 'vertical';
+  return 'none';
+}
 
 export const MOBILE_SECTION_SIZE_OPTIONS: ReadonlyArray<{
   id: MobileSectionSize;

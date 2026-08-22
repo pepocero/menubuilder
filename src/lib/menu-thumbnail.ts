@@ -1,5 +1,6 @@
 import type { CanvasData } from '@/types/canvas';
 import type { MobileComponent, MobileMenuDocument } from '@shared/mobile-menu';
+import { resolveSectionBgStretchMode } from '@shared/mobile-menu';
 import { generateThumbnail } from '@/lib/image-compress';
 import { renderMenuPageToDataUrl } from '@/lib/render-menu-page';
 import { normalizeAssetUrl } from '@/lib/asset-url';
@@ -105,13 +106,35 @@ function drawCoverImage(
   y: number,
   w: number,
   h: number,
-  cover: boolean,
+  mode: 'none' | 'cover' | 'horizontal' | 'vertical' | 'both' | boolean,
 ) {
-  const scale = cover
-    ? Math.max(w / img.naturalWidth, h / img.naturalHeight)
-    : Math.min(w / img.naturalWidth, h / img.naturalHeight);
-  const dw = img.naturalWidth * scale;
-  const dh = img.naturalHeight * scale;
+  const stretchMode =
+    mode === true
+      ? 'cover'
+      : mode === false
+        ? 'none'
+        : mode;
+  const iw = img.naturalWidth || 1;
+  const ih = img.naturalHeight || 1;
+
+  if (stretchMode === 'both') {
+    // Estira ambos ejes para cubrir la zona (puede distorsionar).
+    ctx.drawImage(img, x, y, w, h);
+    return;
+  }
+
+  let scale: number;
+  if (stretchMode === 'horizontal') {
+    scale = w / iw;
+  } else if (stretchMode === 'vertical') {
+    scale = h / ih;
+  } else if (stretchMode === 'cover') {
+    scale = Math.max(w / iw, h / ih);
+  } else {
+    scale = Math.min(w / iw, h / ih);
+  }
+  const dw = iw * scale;
+  const dh = ih * scale;
   ctx.drawImage(img, x + (w - dw) / 2, y + (h - dh) / 2, dw, dh);
 }
 
@@ -213,7 +236,15 @@ async function drawMobileComponentThumb(
       if (bgSrc) {
         const img = await loadImage(bgSrc);
         if (img) {
-          drawCoverImage(ctx, img, x, y, width, minH, component.backgroundImage?.stretch !== false);
+          drawCoverImage(
+            ctx,
+            img,
+            x,
+            y,
+            width,
+            minH,
+            resolveSectionBgStretchMode(component.backgroundImage),
+          );
         }
       }
       ctx.restore();

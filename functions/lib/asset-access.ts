@@ -49,9 +49,13 @@ async function isUrlReferencedInPublicTemplates(db: D1Database, url: string): Pr
 }
 
 async function isR2KeyPubliclyAccessible(db: D1Database, r2Key: string): Promise<boolean> {
-  for (const url of assetUrlVariantsForKey(r2Key)) {
-    if (await isUrlReferencedInPublicMenus(db, url)) return true;
-    if (await isUrlReferencedInPublicTemplates(db, url)) return true;
+  try {
+    for (const url of assetUrlVariantsForKey(r2Key)) {
+      if (await isUrlReferencedInPublicMenus(db, url)) return true;
+      if (await isUrlReferencedInPublicTemplates(db, url)) return true;
+    }
+  } catch (err) {
+    console.error('isR2KeyPubliclyAccessible', r2Key, err);
   }
   return false;
 }

@@ -79,10 +79,14 @@ export function sanitizePublicMenuUrl(url: string): string {
 }
 
 export function assetUrlVariantsForKey(r2Key: string): string[] {
-  return [
-    `/api/assets/file?key=${encodeURIComponent(r2Key)}`,
-    `/api/assets/file/${encodeURIComponent(r2Key)}`,
-  ];
+  const encoded = encodeURIComponent(r2Key);
+  const variants = new Set<string>([
+    `/api/assets/file?key=${encoded}`,
+    `/api/assets/file/${encoded}`,
+    r2Key,
+    encoded,
+  ]);
+  return [...variants];
 }
 
 export function belongsToUserR2Prefix(r2Key: string, userStorageFolder: string): boolean {

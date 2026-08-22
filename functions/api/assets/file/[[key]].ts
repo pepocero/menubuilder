@@ -53,7 +53,13 @@ export const onRequestGet: PagesFunction<Env> = async (context) => {
     return errorResponse('Archivo no encontrado', 404);
   }
 
-  const allowed = await canReadR2Asset(context.env, context.request, r2Key);
+  let allowed = false;
+  try {
+    allowed = await canReadR2Asset(context.env, context.request, r2Key);
+  } catch (err) {
+    console.error('canReadR2Asset', r2Key, err);
+    return errorResponse('Error al comprobar acceso', 500);
+  }
   if (!allowed) {
     return errorResponse('Acceso denegado', 403);
   }

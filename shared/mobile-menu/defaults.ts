@@ -118,6 +118,7 @@ export function createDefaultMobileComponent(type: MobileComponent['type']): Mob
         backgroundImage: {
           src: '',
           align: 'center',
+          stretchMode: 'cover',
           stretch: true,
         },
         action: defaultSectionAction(),
