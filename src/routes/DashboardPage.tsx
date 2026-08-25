@@ -20,6 +20,7 @@ import { createDefaultMobileMenuDocument } from '@shared/mobile-menu';
 import { AppLayout } from '@/components/AppLayout';
 import { DesktopMenuIcon, MobileMenuIcon } from '@/components/MenuKindIcons';
 import { appConfirm } from '@/lib/app-dialog';
+import { resetBodyScrollLock } from '@/lib/body-scroll-lock';
 
 type MenuKindFilter = 'all' | 'canvas' | 'mobile';
 
@@ -46,7 +47,14 @@ export function DashboardPage() {
   }, []);
 
   useEffect(() => {
+    // Por si el editor móvil dejó el body con overflow:hidden al pulsar atrás.
+    resetBodyScrollLock();
     loadMenus();
+    const onPageShow = (event: PageTransitionEvent) => {
+      if (event.persisted) resetBodyScrollLock();
+    };
+    window.addEventListener('pageshow', onPageShow);
+    return () => window.removeEventListener('pageshow', onPageShow);
   }, [loadMenus]);
 
   useEffect(() => {

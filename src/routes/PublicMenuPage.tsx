@@ -1,6 +1,7 @@
 import { Suspense, lazy, useEffect, useRef, useState } from 'react';
 import { useParams } from 'react-router-dom';
 import { MobilePublicView } from '@/components/mobile-public/MobilePublicView';
+import { PublicMenuFooter } from '@/components/public/PublicMenuFooter';
 import { ApiError } from '@/lib/api';
 import { clearPublicBootPlaceholder } from '@/lib/public-boot';
 import { SITE_NAME, applyPageSeo } from '@/lib/seo';
@@ -344,6 +345,7 @@ export function PublicMenuPage() {
   const showMobile = !!mobileDocument;
   const showDocument = !showMobile && !showPages && !!menuDocument;
   const showPng = !showMobile && !showPages && !showDocument && !!exportPngUrl;
+  const showFooter = !loading && !error && (showPages || showMobile || showDocument || showPng);
 
   return (
     <div
@@ -419,6 +421,7 @@ export function PublicMenuPage() {
           <p className="public-menu-status">Esta carta no tiene contenido para mostrar.</p>
         )}
       </main>
+      {showFooter && <PublicMenuFooter />}
     </div>
   );
 }

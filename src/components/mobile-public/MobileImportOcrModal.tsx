@@ -10,6 +10,7 @@ import {
   type MenuOcrProviderChoice,
 } from '@shared/ocr-providers';
 import { ApiError, listAssets, type AssetSummary } from '@/lib/api';
+import { useBodyScrollLock } from '@/lib/use-body-scroll-lock';
 import type { ImportMenuOptions } from '@/components/editor/ImportMenuModal';
 
 export type MobileOcrImportSource =
@@ -150,14 +151,7 @@ export function MobileImportOcrModal({
     void loadAssets();
   }, [open, loadAssets]);
 
-  useEffect(() => {
-    if (!open) return;
-    const prev = globalThis.document.body.style.overflow;
-    globalThis.document.body.style.overflow = 'hidden';
-    return () => {
-      globalThis.document.body.style.overflow = prev;
-    };
-  }, [open]);
+  useBodyScrollLock(open);
 
   useEffect(() => {
     if (!open) return;

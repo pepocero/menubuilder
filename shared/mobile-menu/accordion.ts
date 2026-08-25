@@ -202,6 +202,116 @@ export function moveAccordionChildById(
   return next;
 }
 
+export type MobileActionAnchorKind = 'section' | 'text' | 'button' | 'menuItem';
+
+export interface MobileActionAnchor {
+  id: string;
+  index: number;
+  kind: MobileActionAnchorKind;
+  typeLabel: string;
+  label: string;
+  preview: string;
+}
+
+function isActionAnchorKind(type: MobileComponent['type']): type is MobileActionAnchorKind {
+  return type === 'section' || type === 'text' || type === 'button' || type === 'menuItem';
+}
+
+function typeLabelForAnchor(kind: MobileActionAnchorKind): string {
+  if (kind === 'section') return 'Sección';
+  if (kind === 'text') return 'Texto';
+  if (kind === 'button') return 'Botón';
+  return 'Plato';
+}
+
+function clipAnchorText(value: string, max = 48): string {
+  const next = value.replace(/\s+/g, ' ').trim();
+  if (next.length <= max) return next;
+  return `${next.slice(0, max - 1).trimEnd()}…`;
+}
+
+function componentAnchorLabel(
+  component: Extract<MobileComponent, { type: MobileActionAnchorKind }>,
+  ordinal: number,
+): string {
+  if (component.type === 'section') return component.title.trim() || `Sección ${ordinal}`;
+  if (component.type === 'text') {
+    const line = component.text.replace(/\s+/g, ' ').trim();
+    return line || `Texto ${ordinal}`;
+  }
+  if (component.type === 'button') return component.label.trim() || `Botón ${ordinal}`;
+  return component.title.trim() || `Plato ${ordinal}`;
+}
+
+function sectionFollowPreview(items: MobileComponent[]): string {
+  for (const next of items) {
+    if (next.type === 'section') break;
+    if (next.type === 'heading' && next.text.trim()) return next.text.trim();
+    if (next.type === 'text' && next.text.trim()) return next.text.trim();
+    if (next.type === 'menuItem' && next.title.trim()) return next.title.trim();
+  }
+  return '';
+}
+
+/**
+ * Destinos de «Ir a…»: sección, texto, botón y plato, también dentro de acordeones.
+ * El runtime hace scroll por `id`.
+ */
+export function listSelectableActionAnchors(
+  components: MobileComponent[],
+): MobileActionAnchor[] {
+  const anchors: MobileActionAnchor[] = [];
+  const ordinals: Record<MobileActionAnchorKind, number> = {
+    section: 0,
+    text: 0,
+    button: 0,
+    menuItem: 0,
+  };
+  let index = 0;
+
+  const push = (
+    component: Extract<MobileComponent, { type: MobileActionAnchorKind }>,
+    preview: string,
+  ) => {
+    const kind = component.type;
+    ordinals[kind] += 1;
+    index += 1;
+    anchors.push({
+      id: component.id,
+      index,
+      kind,
+      typeLabel: typeLabelForAnchor(kind),
+      label: clipAnchorText(componentAnchorLabel(component, ordinals[kind])),
+      preview: clipAnchorText(preview),
+    });
+  };
+
+  const visit = (items: MobileComponent[], inAccordion: boolean) => {
+    for (let i = 0; i < items.length; i += 1) {
+      const component = items[i];
+      if (component.type === 'accordion') {
+        visit(component.children, true);
+        continue;
+      }
+      if (!isActionAnchorKind(component.type)) continue;
+      if (component.type === 'section') {
+        const follow = sectionFollowPreview(items.slice(i + 1));
+        const fallback = inAccordion
+          ? i === 0
+            ? 'Cabecera de acordeón'
+            : 'Dentro del acordeón'
+          : '';
+        push(component, follow || fallback);
+        continue;
+      }
+      push(component, inAccordion ? 'En acordeón' : '');
+    }
+  };
+
+  visit(components, false);
+  return anchors;
+}
+
 export function ungroupAccordionById(
   components: MobileComponent[],
   accordionId: string,

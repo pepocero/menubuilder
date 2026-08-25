@@ -1,0 +1,28 @@
+---
+description: No interferir con la URL pública de la carta (/p/)
+alwaysApply: true
+---
+
+# Estabilidad de la URL pública
+
+La carta pública (`/p/{slug}` y APIs `/api/public/...`) **ya funciona** en producción (móviles, QR, sin login).
+
+## Obligatorio
+
+- Todo cambio nuevo (editor, acordeones, acciones, assets, auth, middleware, SW, deploy) **no debe romper ni degradar** la URL pública.
+- No tocar el camino público salvo que el usuario lo pida **explícitamente**.
+- Si un cambio puede afectar lo público, **preguntar antes** o aislarlo solo al editor / rutas autenticadas.
+
+## Zonas sensibles (no modificar sin petición explícita)
+
+- `src/routes/PublicMenuPage.tsx`, vistas públicas móviles
+- `functions/api/public/**`, `functions/lib/asset-access.ts`, lectura pública de assets R2
+- Auth en rutas `/p/` (no forzar login/refresh)
+- Service worker, `_headers`, middleware de assets estáticos
+- Normalización de URLs de imágenes para la carta pública
+
+## Al añadir features en el editor / runtime compartido
+
+- Preferir que el runtime público solo gane comportamiento si es **backward-compatible** (p. ej. scroll a sección cabecera de acordeón).
+- No introducir dependencias de sesión, consultas D1 pesadas por asset, ni bloqueos de carga en el flujo público.
+- Tras cambios en código compartido con la vista pública, verificar mentalmente: ¿sigue abriendo `/p/{slug}` sin login y mostrando imágenes?

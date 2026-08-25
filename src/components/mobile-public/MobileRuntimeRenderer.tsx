@@ -419,14 +419,33 @@ function renderComponent(
           ? component.listStyle
           : 'none';
       const indentPx = Math.max(0, Math.min(96, component.indentPx ?? 0));
-      const indentStyle = indentPx > 0 ? { paddingLeft: `${indentPx}px` } : undefined;
+      const borderStyle = resolveSectionBorderStyle(
+        component.borderLine ?? 'none',
+        component.borderRound ?? 'none',
+      );
+      const hasBox = !!borderStyle.border || !!borderStyle.borderRadius;
+      const textStyle: CSSProperties = {
+        ...typographyStyle(component),
+        ...borderStyle,
+        ...(indentPx > 0 ? { paddingLeft: `${indentPx}px` } : {}),
+        ...(hasBox
+          ? {
+              boxSizing: 'border-box',
+              width: '100%',
+              paddingTop: 8,
+              paddingRight: 10,
+              paddingBottom: 8,
+              paddingLeft: indentPx > 0 ? indentPx : 10,
+            }
+          : {}),
+      };
       if (listMode !== 'none') {
         const items = component.text.split(/\r?\n/);
         const ListTag = listMode === 'number' ? 'ol' : 'ul';
         return (
           <ListTag
             className={`mobile-block mobile-block-text is-list is-list-${listMode}`}
-            style={{ ...typographyStyle(component), ...indentStyle }}
+            style={textStyle}
           >
             {items.map((item, index) => (
               <li key={`text-li-${index}`}>{item || '\u00A0'}</li>
@@ -435,10 +454,7 @@ function renderComponent(
         );
       }
       return (
-        <p
-          className="mobile-block mobile-block-text"
-          style={{ ...typographyStyle(component), ...indentStyle }}
-        >
+        <p className="mobile-block mobile-block-text" style={textStyle}>
           {component.text}
         </p>
       );
@@ -699,6 +715,19 @@ function AccordionRuntime({
     }
   }, [animationPreview, previewPlay, component.children]);
 
+  // «Ir a sección» hacia la cabecera (o un hijo): abrir el acordeón antes del scroll.
+  useEffect(() => {
+    const onScrollToSection = (event: Event) => {
+      const sectionId = (event as CustomEvent<{ sectionId?: string }>).detail?.sectionId?.trim();
+      if (!sectionId) return;
+      if (component.children.some((child) => child.id === sectionId)) {
+        setOpen(true);
+      }
+    };
+    window.addEventListener('ptm-scroll-to-section', onScrollToSection);
+    return () => window.removeEventListener('ptm-scroll-to-section', onScrollToSection);
+  }, [component.children]);
+
   function toggle() {
     setOpen((current) => !current);
     onSelectAccordion?.();
@@ -715,6 +744,10 @@ function AccordionRuntime({
         role="button"
         tabIndex={0}
         aria-expanded={open}
+        data-component-id={header?.id}
+        ref={(el) => {
+          if (header?.id) registerNodeRef?.(header.id, el);
+        }}
         onClick={(e) => {
           e.stopPropagation();
           toggle();
@@ -1513,8 +1546,25 @@ export function MobileRuntimeRenderer({
     if (action.type === 'section') {
       const sectionId = action.sectionId?.trim();
       if (!sectionId) return;
-      const target = rootRef.current?.querySelector<HTMLElement>(`[data-component-id="${sectionId}"]`);
-      target?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      const scrollToTarget = () => {
+        const target = rootRef.current?.querySelector<HTMLElement>(
+          `[data-component-id="${sectionId}"]`,
+        );
+        if (!target || target.closest('[hidden]')) return false;
+        target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        return true;
+      };
+      // Permite que los acordeones abran su panel si el destino es su cabecera/hijo.
+      window.dispatchEvent(
+        new CustomEvent('ptm-scroll-to-section', { detail: { sectionId } }),
+      );
+      if (scrollToTarget()) return;
+      requestAnimationFrame(() => {
+        if (scrollToTarget()) return;
+        window.setTimeout(() => {
+          scrollToTarget();
+        }, 80);
+      });
       return;
     }
     const modal = action.modal;

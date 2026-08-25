@@ -9,6 +9,7 @@ import {
   subscribeInstallPrompt,
   type BeforeInstallPromptEvent,
 } from '@/lib/pwa';
+import { resetBodyScrollLock } from '@/lib/body-scroll-lock';
 
 function BurgerIcon({ open }: { open: boolean }) {
   if (open) {
@@ -51,6 +52,7 @@ export function AppLayout() {
 
   useEffect(() => {
     setMenuOpen(false);
+    resetBodyScrollLock();
   }, [location.pathname]);
 
   useEffect(() => {

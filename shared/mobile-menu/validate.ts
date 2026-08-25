@@ -341,12 +341,30 @@ function parseComponent(value: unknown): MobileComponent | null {
     const indentPx = isNumber(value.indentPx)
       ? Math.max(0, Math.min(96, Math.round(value.indentPx)))
       : 0;
+    const borderLine: MobileSectionBorderLine =
+      value.borderLine === 'none' ||
+      value.borderLine === 'thin' ||
+      value.borderLine === 'medium' ||
+      value.borderLine === 'thick' ||
+      value.borderLine === 'dashed'
+        ? value.borderLine
+        : 'none';
+    const borderRound: MobileSectionBorderRound =
+      value.borderRound === 'none' ||
+      value.borderRound === 'sm' ||
+      value.borderRound === 'md' ||
+      value.borderRound === 'lg' ||
+      value.borderRound === 'xl'
+        ? value.borderRound
+        : 'none';
     return {
       id: value.id,
       type,
       text: value.text,
       listStyle,
       indentPx,
+      borderLine,
+      borderRound,
       animation: parseAnimation(value.animation),
       effect: parseEffect(value.effect),
       typography:

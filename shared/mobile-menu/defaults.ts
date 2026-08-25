@@ -142,6 +142,8 @@ export function createDefaultMobileComponent(type: MobileComponent['type']): Mob
         text: 'Texto descriptivo del menu.',
         listStyle: 'none',
         indentPx: 0,
+        borderLine: 'none',
+        borderRound: 'none',
         animation: defaultAnimation(),
         effect: defaultEffect(),
         typography: defaultTypography({ color: '#374151' }),

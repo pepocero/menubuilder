@@ -309,6 +309,10 @@ export interface MobileTextComponent extends MobileComponentBase {
   listStyle: 'none' | 'bullet' | 'number';
   /** Sangría izquierda en px (0–96). */
   indentPx: number;
+  /** Línea de borde. Por defecto: sin borde. */
+  borderLine?: MobileSectionBorderLine;
+  /** Redondeado de esquinas. Por defecto: sin redondeo. */
+  borderRound?: MobileSectionBorderRound;
 }
 
 export interface MobileImageComponent extends MobileComponentBase {

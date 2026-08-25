@@ -17,6 +17,8 @@ import { AssetManagerModal } from '@/components/editor/AssetManagerModal';
 import { PublishQrModal } from '@/components/editor/PublishQrModal';
 import { SaveTemplateModal } from '@/components/editor/SaveTemplateModal';
 import { useAuth } from '@/lib/auth-context';
+import { useBodyScrollLock } from '@/lib/use-body-scroll-lock';
+import { resetBodyScrollLock } from '@/lib/body-scroll-lock';
 import {
   describeTemplateSaveWarnings,
   scanTemplateContentForUser,
@@ -71,6 +73,7 @@ import {
   removeAllergenTag,
   listCustomAllergenTags,
   findMobileComponentById,
+  listSelectableActionAnchors,
   updateMobileComponentById,
   removeMobileComponentById,
   createAccordionFromTopLevelIds,
@@ -93,6 +96,7 @@ import {
   type DevicePresetId,
   type MobileAccordionChevronAnimation,
   type MobileAccordionChevronDirection,
+  type MobileActionAnchorKind,
   type MobileInteractionAction,
   type MobileInteractionActionType,
   type MobileMenuDocument,
@@ -290,6 +294,62 @@ function OutdentIcon() {
       <path fill="currentColor" d="M8 10.5H3v3h5v-3zM3 12l3 2.5v-5L3 12z" />
     </svg>
   );
+}
+
+function ActionAnchorAllIcon() {
+  return (
+    <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true">
+      <path fill="currentColor" d="M4 6h16v2H4V6zm0 5h16v2H4v-2zm0 5h16v2H4v-2z" />
+    </svg>
+  );
+}
+
+function ActionAnchorSectionIcon() {
+  return (
+    <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true">
+      <path
+        fill="currentColor"
+        d="M4 5h16a1 1 0 0 1 1 1v4H3V6a1 1 0 0 1 1-1zm-1 7h18v6a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1v-6zm3 2v2h8v-2H6z"
+      />
+    </svg>
+  );
+}
+
+function ActionAnchorTextIcon() {
+  return (
+    <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true">
+      <path fill="currentColor" d="M5 4h14v3h-2V6H13v12h2v2H9v-2h2V6H7v1H5V4z" />
+    </svg>
+  );
+}
+
+function ActionAnchorButtonIcon() {
+  return (
+    <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true">
+      <path
+        fill="currentColor"
+        d="M7 8h10a4 4 0 0 1 0 8H7a4 4 0 0 1 0-8zm0 2a2 2 0 0 0 0 4h10a2 2 0 0 0 0-4H7z"
+      />
+    </svg>
+  );
+}
+
+function ActionAnchorDishIcon() {
+  return (
+    <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true">
+      <path
+        fill="currentColor"
+        d="M12 3a8 8 0 0 1 8 8c0 3.2-2.4 5.9-5.5 6.7L15 21H9l.5-3.3C6.4 16.9 4 14.2 4 11a8 8 0 0 1 8-8zm0 2a6 6 0 1 0 0 12 6 6 0 0 0 0-12z"
+      />
+    </svg>
+  );
+}
+
+function ActionAnchorKindIcon({ kind }: { kind: MobileActionAnchorKind }) {
+  if (kind === 'section') return <ActionAnchorSectionIcon />;
+  if (kind === 'text') return <ActionAnchorTextIcon />;
+  if (kind === 'button') return <ActionAnchorButtonIcon />;
+  return <ActionAnchorDishIcon />;
 }
 
 function NumberStepper({
@@ -839,6 +899,7 @@ export function MobileEditorPage() {
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [multiSelectMode, setMultiSelectMode] = useState(false);
   const [accordionActionError, setAccordionActionError] = useState('');
+  const [actionAnchorKind, setActionAnchorKind] = useState<'all' | MobileActionAnchorKind>('all');
   const [menuTypoTarget, setMenuTypoTarget] = useState<
     'title' | 'description' | 'price' | 'ingredients'
   >('title');
@@ -919,14 +980,16 @@ export function MobileEditorPage() {
     return () => mq.removeEventListener('change', apply);
   }, []);
 
+  // Declarado antes de los locks: al desmontar se limpia al final (cleanups en orden inverso).
   useEffect(() => {
-    if (!isPhoneLayout || (!phoneSheet && !qrOpen && !ocrModalOpen && !livePreviewOpen)) return;
-    const prev = globalThis.document.body.style.overflow;
-    globalThis.document.body.style.overflow = 'hidden';
     return () => {
-      globalThis.document.body.style.overflow = prev;
+      resetBodyScrollLock();
     };
-  }, [isPhoneLayout, phoneSheet, qrOpen, ocrModalOpen, livePreviewOpen]);
+  }, []);
+
+  useBodyScrollLock(
+    isPhoneLayout && (!!phoneSheet || qrOpen || ocrModalOpen || livePreviewOpen),
+  );
 
   useEffect(() => {
     if (!menuId) return;
@@ -1009,42 +1072,25 @@ export function MobileEditorPage() {
     if (selectedIds.length < 2) return false;
     return areTopLevelIdsConsecutive(document.components, selectedIds).ok;
   }, [document.components, selectedIds]);
-  const selectableSections = useMemo(() => {
-    const components = document.components;
-    const anchors: Array<{ id: string; index: number; label: string; preview: string }> = [];
-    let sectionOrdinal = 0;
-    for (let i = 0; i < components.length; i++) {
-      const component = components[i];
-      if (component.type !== 'section') continue;
-      sectionOrdinal += 1;
-      const title = component.title.trim() || `Sección ${sectionOrdinal}`;
-      let preview = '';
-      for (let j = i + 1; j < components.length; j++) {
-        const next = components[j];
-        if (next.type === 'section') break;
-        if (next.type === 'heading' && next.text.trim()) {
-          preview = next.text.trim();
-          break;
-        }
-        if (next.type === 'text' && next.text.trim()) {
-          preview = next.text.trim();
-          break;
-        }
-        if (next.type === 'menuItem' && next.title.trim()) {
-          preview = next.title.trim();
-          break;
-        }
-      }
-      if (preview.length > 48) preview = `${preview.slice(0, 45).trimEnd()}…`;
-      anchors.push({
-        id: component.id,
-        index: sectionOrdinal,
-        label: title,
-        preview,
-      });
-    }
-    return anchors;
-  }, [document.components]);
+  const selectableActionAnchors = useMemo(
+    () => listSelectableActionAnchors(document.components),
+    [document.components],
+  );
+  const actionAnchorsForPicker = useMemo(() => {
+    const available = selectableActionAnchors.filter((anchor) => anchor.id !== selected?.id);
+    const visible =
+      actionAnchorKind === 'all'
+        ? available
+        : available.filter((anchor) => anchor.kind === actionAnchorKind);
+    return { available, visible };
+  }, [selectableActionAnchors, selected?.id, actionAnchorKind]);
+
+  useEffect(() => {
+    if (!selected || (selected.type !== 'button' && selected.type !== 'section')) return;
+    const targetId = selected.action?.sectionId?.trim();
+    const target = selectableActionAnchors.find((anchor) => anchor.id === targetId);
+    setActionAnchorKind(target?.kind ?? 'all');
+  }, [selected?.id]);
 
   /** Apply a picked image URL to the correct target field */
   function applyPickedImageUrl(
@@ -1453,13 +1499,13 @@ export function MobileEditorPage() {
       if (e.key === 'Escape') setLivePreviewOpen(false);
     }
     window.addEventListener('keydown', onKeyDown);
-    const prevOverflow = globalThis.document.body.style.overflow;
-    globalThis.document.body.style.overflow = 'hidden';
     return () => {
       window.removeEventListener('keydown', onKeyDown);
-      globalThis.document.body.style.overflow = prevOverflow;
     };
   }, [livePreviewOpen]);
+
+  // En escritorio el preview también bloquea scroll (en móvil ya lo hace useBodyScrollLock).
+  useBodyScrollLock(livePreviewOpen && !isPhoneLayout);
 
   async function persist(nextDoc: MobileMenuDocument, nextTitle = title) {
     if (!menuId) return;
@@ -1838,7 +1884,8 @@ export function MobileEditorPage() {
       return;
     }
     if (type === 'section') {
-      const fallbackSectionId = selectableSections.find((s) => s.id !== selected.id)?.id ?? '';
+      const fallbackSectionId =
+        selectableActionAnchors.find((anchor) => anchor.id !== selected.id)?.id ?? '';
       updateSelectedAction({ type, sectionId: fallbackSectionId, url: undefined, modal: undefined });
       return;
     }
@@ -2253,7 +2300,7 @@ export function MobileEditorPage() {
     updateDoc((current) => ({
       ...current,
       components: updateMobileComponentById(current.components, propsComponentId, (component) => {
-        if (component.type !== 'section') return component;
+        if (component.type !== 'section' && component.type !== 'text') return component;
         return { ...component, borderLine };
       }),
     }));
@@ -2264,7 +2311,7 @@ export function MobileEditorPage() {
     updateDoc((current) => ({
       ...current,
       components: updateMobileComponentById(current.components, propsComponentId, (component) => {
-        if (component.type !== 'section') return component;
+        if (component.type !== 'section' && component.type !== 'text') return component;
         return { ...component, borderRound };
       }),
     }));
@@ -3075,6 +3122,40 @@ export function MobileEditorPage() {
                         Una línea = un elemento. Sangría actual: {selected.indentPx ?? 0}px.
                       </small>
                     </div>
+                    <label>
+                      Línea de borde
+                      <select
+                        value={selected.borderLine ?? 'none'}
+                        onChange={(e) =>
+                          updateSelectedSectionBorderLine(
+                            e.target.value as MobileSectionBorderLine,
+                          )
+                        }
+                      >
+                        {MOBILE_SECTION_BORDER_LINE_OPTIONS.map((option) => (
+                          <option key={option.id} value={option.id}>
+                            {option.label}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                    <label>
+                      Bordes redondeados
+                      <select
+                        value={selected.borderRound ?? 'none'}
+                        onChange={(e) =>
+                          updateSelectedSectionBorderRound(
+                            e.target.value as MobileSectionBorderRound,
+                          )
+                        }
+                      >
+                        {MOBILE_SECTION_BORDER_ROUND_OPTIONS.map((option) => (
+                          <option key={option.id} value={option.id}>
+                            {option.label}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
                   )}
                   {'description' in selected && (
                     <label>
@@ -3711,7 +3792,7 @@ export function MobileEditorPage() {
                         >
                           <option value="none">Sin acción</option>
                           <option value="url">Abrir URL</option>
-                          <option value="section">Ir a sección</option>
+                          <option value="section">Ir a…</option>
                           <option value="modal">Abrir modal</option>
                         </select>
                       </label>
@@ -3727,39 +3808,87 @@ export function MobileEditorPage() {
                       )}
                       {(selected.action?.type ?? (selected.type === 'button' ? 'url' : 'none')) === 'section' && (
                         <div className="mobile-section-anchor-field">
-                          <span className="mobile-section-anchor-label">Sección destino</span>
-                          {selectableSections.filter((section) => section.id !== selected.id).length === 0 ? (
-                            <p className="panel-empty">No hay otras secciones para enlazar. Añade una sección primero.</p>
+                          <span className="mobile-section-anchor-label">Destino</span>
+                          <div
+                            className="wysiwyg-align-group mobile-section-anchor-filters"
+                            role="group"
+                            aria-label="Tipo de destino"
+                          >
+                            {(
+                              [
+                                { kind: 'all', label: 'Todos', icon: <ActionAnchorAllIcon /> },
+                                { kind: 'section', label: 'Sección', icon: <ActionAnchorSectionIcon /> },
+                                { kind: 'text', label: 'Texto', icon: <ActionAnchorTextIcon /> },
+                                { kind: 'button', label: 'Botón', icon: <ActionAnchorButtonIcon /> },
+                                { kind: 'menuItem', label: 'Plato', icon: <ActionAnchorDishIcon /> },
+                              ] as const
+                            ).map((filter) => (
+                              <button
+                                key={filter.kind}
+                                type="button"
+                                className={actionAnchorKind === filter.kind ? 'is-active' : undefined}
+                                aria-pressed={actionAnchorKind === filter.kind}
+                                title={filter.label}
+                                aria-label={filter.label}
+                                onClick={() => setActionAnchorKind(filter.kind)}
+                              >
+                                {filter.icon}
+                              </button>
+                            ))}
+                          </div>
+                          {actionAnchorsForPicker.available.length === 0 ? (
+                            <p className="panel-empty">
+                              No hay otros componentes para enlazar. Añade una sección, texto, botón o plato.
+                            </p>
+                          ) : actionAnchorsForPicker.visible.length === 0 ? (
+                            <p className="panel-empty">
+                              {actionAnchorKind === 'section'
+                                ? 'No hay otras secciones para enlazar.'
+                                : actionAnchorKind === 'text'
+                                  ? 'No hay bloques de texto para enlazar.'
+                                  : actionAnchorKind === 'button'
+                                    ? 'No hay botones para enlazar.'
+                                    : actionAnchorKind === 'menuItem'
+                                      ? 'No hay platos para enlazar.'
+                                      : 'No hay destinos en este filtro.'}
+                            </p>
                           ) : (
-                            <ul className="mobile-section-anchor-list" role="listbox" aria-label="Secciones destino">
-                              {selectableSections
-                                .filter((section) => section.id !== selected.id)
-                                .map((section) => {
-                                  const isActive = (selected.action?.sectionId ?? '') === section.id;
-                                  return (
-                                    <li key={section.id}>
-                                      <button
-                                        type="button"
-                                        role="option"
-                                        aria-selected={isActive}
-                                        className={`mobile-section-anchor-item${isActive ? ' is-active' : ''}`}
-                                        onClick={() =>
-                                          updateSelectedAction({ type: 'section', sectionId: section.id })
-                                        }
+                            <ul
+                              className="mobile-section-anchor-list"
+                              role="listbox"
+                              aria-label="Componentes destino"
+                            >
+                              {actionAnchorsForPicker.visible.map((anchor) => {
+                                const isActive = (selected.action?.sectionId ?? '') === anchor.id;
+                                return (
+                                  <li key={anchor.id}>
+                                    <button
+                                      type="button"
+                                      role="option"
+                                      aria-selected={isActive}
+                                      className={`mobile-section-anchor-item${isActive ? ' is-active' : ''}`}
+                                      onClick={() =>
+                                        updateSelectedAction({ type: 'section', sectionId: anchor.id })
+                                      }
+                                    >
+                                      <span
+                                        className="mobile-section-anchor-index"
+                                        title={anchor.typeLabel}
                                       >
-                                        <span className="mobile-section-anchor-index">{section.index}</span>
-                                        <span className="mobile-section-anchor-copy">
-                                          <strong>{section.label}</strong>
-                                          {section.preview ? (
-                                            <small>{section.preview}</small>
-                                          ) : (
-                                            <small>Sin contenido siguiente</small>
-                                          )}
-                                        </span>
-                                      </button>
-                                    </li>
-                                  );
-                                })}
+                                        <ActionAnchorKindIcon kind={anchor.kind} />
+                                      </span>
+                                      <span className="mobile-section-anchor-copy">
+                                        <strong>{anchor.label}</strong>
+                                        <small>
+                                          {anchor.preview
+                                            ? `${anchor.typeLabel} · ${anchor.preview}`
+                                            : anchor.typeLabel}
+                                        </small>
+                                      </span>
+                                    </button>
+                                  </li>
+                                );
+                              })}
                             </ul>
                           )}
                         </div>
